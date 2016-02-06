@@ -292,12 +292,11 @@ def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
         raise ValueError("Stack width and height must be same as im_ncorr width and height")
     visited = np.zeros_like(im_ncorr,dtype=int)#indicates visited pixels > 0
     conn_comps = []#list of correlation graphs
-    #loop over pixels and initiate bfs whenever we encouter
-    #a pixel that has neighborhood correlations and which has not yet been visited
+    #at each iteration we find the pixel with the highest neighborhood correlation,
+    #ignoring visited pixels, and use it as a source pixel for breadth first search
     curr_color = 1#id counter of connected components
-    for x in range(im_ncorr.shape[0]):
-        for y in range(im_ncorr.shape[1]):
-            if (not visited[x,y]) and im_ncorr[x,y]>corr_thresh:
-                conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
-                curr_color += 1
+    while np.max(im_ncorr * (visited==0)) > 0:
+        (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
+        conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
+        curr_color += 1
     return conn_comps, visited
