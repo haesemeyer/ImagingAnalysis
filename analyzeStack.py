@@ -61,14 +61,14 @@ if __name__ == "__main__":
         #we only want to consider time-series with at least min_phot photons
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
-        #compute neighborhood correlations of pixel-timeseries for segmentation seeds - 4-connected
-        im_ncorr = AvgNeighbhorCorrelations(rate_stack,1,consider)
+        #compute neighborhood correlations of pixel-timeseries for segmentation seeds
+        im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
         #display correlations and slice itself
         with sns.axes_style('white'):
             fig, (ax1, ax2) = pl.subplots(ncols=2)
             ax1.imshow(np.sum(stack,0),cmap='bone')
             ax1.set_title(f.split('/')[-1])
-            ax2.imshow(im_ncorr,vmin=0,vmax=corr_thresh,cmap="bone")
+            ax2.imshow(im_ncorr,vmin=0,vmax=im_ncorr.max(),cmap="bone")
             fig.tight_layout()
         #extract correlation graphs - 4-connected
         graph, colors = CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False)
