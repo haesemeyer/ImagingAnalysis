@@ -28,6 +28,22 @@ class CorrelationGraph:
     @property
     def NPixels(self):
         return len(self.V)
+
+    @property
+    def MinX(self):
+        return min(list(zip(*self.V))[0])
+
+    @property
+    def MinY(self):
+        return min(list(zip(*self.V))[1])
+
+    @property
+    def MaxX(self):
+        return max(list(zip(*self.V))[0])
+
+    @property
+    def MaxY(self):
+        return max(list(zip(*self.V))[1])
 #class CorrelationGraph
 
 
