@@ -319,32 +319,39 @@ def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
     return conn_comps, visited
 
 
-def ComputeAlignmentShifts(stack):
+def ComputeAlignmentShift(stack, index):
     """
-    For each image in stack tries to estimate the pixel-shift
-    necessary to align the image to a sum-stack that contains
-    every other image in the stack
+    For the slice in stack identified by index computes
+    the x (row) and y (column) shift that corresponds to
+    the best alignment of stack[index,:,:] to the re-
+    mainder of the stack
     """
-    shift_x = np.zeros(stack.shape[0])#best x-shift of each image
-    shift_y = np.zeros_like(shift_x)#best y-shift of each image
-    max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
+    #shift_x = np.zeros(stack.shape[0])#best x-shift of each image
+    #shift_y = np.zeros_like(shift_x)#best y-shift of each image
+    #max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
 
-    sum_stack = np.sum(stack,0)
+    if index == 0:
+        sum_stack = np.sum(stack[1:,:,:],0)
+    elif index == stack.shape[0]-1:
+        sum_stack = np.sum(stack[:-1,:,:],0)
+    else: 
+        sum_stack = np.sum(stack[:index,:,:],0) + np.sum(stack[index+1:,:,:],0)
 
-    exp_x, exp_y = stack.shape[1]-1, stack.shape[2]-1#these are the indices in the cross-correlation matrix that correspond to 0 shift
+    exp_x, exp_y = stack.shape[1]-1, stack.shape[2]-1#these are the indices in the cross-correlation matrix that correspond to 0 shift    
+    c = fftconvolve(sum_stack,stack[index,::-1,::-1])
+    x,y = np.unravel_index(np.argmax(c),c.shape)
+    shift_x = x-exp_x
+    shift_y = y-exp_y
+    return shift_x,shift_y
 
-    for t in range(stack.shape[0]):
-        c = fftconvolve(sum_stack-stack[t,:,:],stack[t,::-1,::-1])
-        x,y = np.unravel_index(np.argmax(c),c.shape)
-        shift_x[t] = x-exp_x
-        shift_y[t] = y-exp_y
-        max_corr[t] = np.max(c)
-    return shift_x,shift_y,max_corr
-
-def ReAlign(stack,xshifts,yshifts):
+def ReAlign(stack):
     """
-    Re-positions every slice in stack according to the shifts
-    in xshifts and yshifts, padding with 0s
+    Re-positions every slice in stack by the following iterative
+    procedure:
+    Compute sum over stack excluding current slice
+    Compute best-aligned x-shift and y-shift of current slice to sum-stack
+    Shift the slice by x-shift and y-shift within the stack
+    Increment current slice and repeat from top
     """
     def Shift2Index(shift,size):
         """
@@ -363,17 +370,22 @@ def ReAlign(stack,xshifts,yshifts):
             source = (0,size)
             target = (0,size)
         return source, target
-
-    for t in range(stack.shape[0]):
-        if xshifts[t] == 0 and yshifts[t] == 0:
+    x_shifts = np.zeros(stack.shape[0])
+    y_shifts = np.zeros_like(x_shifts)
+    re_aligned = stack.copy()
+    for t in range(re_aligned.shape[0]):
+        xshift, yshift = ComputeAlignmentShift(re_aligned,t)
+        x_shifts[t] = xshift
+        y_shifts[t] = yshift
+        if xshift == 0 and yshift == 0:
             continue
-        if np.abs(xshifts[t])>2 or np.abs(yshifts[t])>2:
+        if np.abs(xshift)>2 or np.abs(yshift)>2:
             print("Warning. Slice ",t," requires shift greater 2 pixels. Not shifted")
             continue
-        xs,xt = Shift2Index(xshifts[t],stack.shape[1])
-        ys,yt = Shift2Index(yshifts[t],stack.shape[2])
-        newImage = np.zeros((stack.shape[1],stack.shape[2]))
-        newImage[xt[0]:xt[1],yt[0]:yt[1]] = stack[t,xs[0]:xs[1],ys[0]:ys[1]]
-        stack[t,:,:] = newImage
-    return stack
+        xs,xt = Shift2Index(xshift,re_aligned.shape[1])
+        ys,yt = Shift2Index(yshift,re_aligned.shape[2])
+        newImage = np.zeros((re_aligned.shape[1],re_aligned.shape[2]))
+        newImage[xt[0]:xt[1],yt[0]:yt[1]] = re_aligned[t,xs[0]:xs[1],ys[0]:ys[1]]
+        re_aligned[t,:,:] = newImage
+    return re_aligned, x_shifts, y_shifts
             
