@@ -6,6 +6,7 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 from scipy.stats import poisson
 from scipy.ndimage.filters import gaussian_filter,gaussian_filter1d
+from scipy.signal import fftconvolve
 
 try:
     import Tkinter
@@ -316,3 +317,63 @@ def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
         conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
         curr_color += 1
     return conn_comps, visited
+
+
+def ComputeAlignmentShifts(stack):
+    """
+    For each image in stack tries to estimate the pixel-shift
+    necessary to align the image to a sum-stack that contains
+    every other image in the stack
+    """
+    shift_x = np.zeros(stack.shape[0])#best x-shift of each image
+    shift_y = np.zeros_like(shift_x)#best y-shift of each image
+    max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
+
+    sum_stack = np.sum(stack,0)
+
+    exp_x, exp_y = stack.shape[1]-1, stack.shape[2]-1#these are the indices in the cross-correlation matrix that correspond to 0 shift
+
+    for t in range(stack.shape[0]):
+        c = fftconvolve(sum_stack-stack[t,:,:],stack[t,::-1,::-1])
+        x,y = np.unravel_index(np.argmax(c),c.shape)
+        shift_x[t] = x-exp_x
+        shift_y[t] = y-exp_y
+        max_corr[t] = np.max(c)
+    return shift_x,shift_y,max_corr
+
+def ReAlign(stack,xshifts,yshifts):
+    """
+    Re-positions every slice in stack according to the shifts
+    in xshifts and yshifts, padding with 0s
+    """
+    def Shift2Index(shift,size):
+        """
+        Translates a given shift into the appropriate
+        source and target indices
+        """
+        if shift<0:
+            #coordinate n in source should be n-shift in target
+            source = (-1*shift,size)
+            target = (0,shift)
+        elif shift>0:
+            #coordinate n in source should be n+1 in target
+            source = (0,-1*shift)
+            target = (shift,size)
+        else:
+            source = (0,size)
+            target = (0,size)
+        return source, target
+
+    for t in range(stack.shape[0]):
+        if xshifts[t] == 0 and yshifts[t] == 0:
+            continue
+        if np.abs(xshifts[t])>2 or np.abs(yshifts[t])>2:
+            print("Warning. Slice ",t," requires shift greater 2 pixels. Not shifted")
+            continue
+        xs,xt = Shift2Index(xshifts[t],stack.shape[1])
+        ys,yt = Shift2Index(yshifts[t],stack.shape[2])
+        newImage = np.zeros((stack.shape[1],stack.shape[2]))
+        newImage[xt[0]:xt[1],yt[0]:yt[1]] = stack[t,xs[0]:xs[1],ys[0]:ys[1]]
+        stack[t,:,:] = newImage
+    return stack
+            
