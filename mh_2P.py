@@ -66,7 +66,7 @@ class CorrelationGraph:
             RETURNS:
                 List of connected component graphs
         """
-        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8=True):
+        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8):
             """
             Performs breadth first search on image
             given (sourceX,sourceY) as starting pixel
@@ -105,7 +105,7 @@ class CorrelationGraph:
         curr_color = 1#id counter of connected components
         while np.max(im_ncorr * (visited==0)) > 0:
             (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
-            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
+            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8))
             curr_color += 1
         return conn_comps, visited
 #class CorrelationGraph
