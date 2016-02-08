@@ -64,7 +64,7 @@ if __name__ == "__main__":
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
-        im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
+        im_ncorr = AvgNeighbhorCorrelations(rate_stack[pre_stim:pre_stim+stim,:,:],2,consider)
         #display correlations and slice itself
         with sns.axes_style('white'):
             fig, (ax1, ax2) = pl.subplots(ncols=2)
@@ -73,7 +73,7 @@ if __name__ == "__main__":
             ax2.imshow(im_ncorr,vmin=0,vmax=im_ncorr.max(),cmap="bone")
             fig.tight_layout()
         #extract correlation graphs - 4-connected
-        graph, colors = CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False)
+        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False,(pre_stim,pre_stim+stim))
         #plot largest three components onto projection
         projection = np.zeros((im_ncorr.shape[0],im_ncorr.shape[1],3),dtype=float)
         projection[:,:,0] = projection[:,:,2] = sum_stack / sum_stack.max()
