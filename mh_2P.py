@@ -45,6 +45,69 @@ class CorrelationGraph:
     @property
     def MaxY(self):
         return max(list(zip(*self.V))[1])
+
+    @staticmethod
+    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
+        """
+        Builds connected component graphs whereby components are
+        determined based on pixel-timeseries correlations. Pixels
+        with timeseries correlations >= corr_thresh are considered
+        as sources for a breadth-first-search which will incor-
+        porate new pixels into the graph if they are correlated
+        with at least corr_thresh to the summed trace of the
+        component. Every new pixel's timeseries will be added
+        to the sum-trace of the component.
+            stack: Image time-seried stack [t,x,y]
+            im_ncorr: Image with same x,y dimensions as stack
+              initialized to neighborhood correlations of each pixel
+            corr_thresh: Threshold correlation for source consideration
+              and pixel incorporation.
+            norm8: Use 8 or 4 connected components
+            RETURNS:
+                List of connected component graphs
+        """
+        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8=True):
+            """
+            Performs breadth first search on image
+            given (sourceX,sourceY) as starting pixel
+            coloring all visited pixels in color
+            """
+            pg = CorrelationGraph(color,np.zeros(stack.shape[0]))
+            Q = deque()
+            Q.append((sourceX,sourceY))
+            visited[sourceX,sourceY] = color#mark source as visited
+            while len(Q) > 0:
+                v = Q.popleft()
+                x = v[0]
+                y = v[1]
+                pg.V.append(v)#add current vertex to pixel graph
+                pg.Timeseries = pg.Timeseries + stack[:,x,y]#add current pixel's timeseries
+                #add non-visited neighborhood to queue
+                for xn in range(x-1,x+2):#x+1 inclusive!
+                    for yn in range(y-1,y+2):
+                        if xn<0 or yn<0 or xn>=stack.shape[1] or yn>=stack.shape[2] or visited[xn,yn]:#outside image dimensions or already visited
+                            continue
+                        if (not norm8) and xn!=x and yn!=y:
+                            continue
+                        #compute correlation of considered pixel's timeseries to full graphs timeseries
+                        c = np.corrcoef(pg.Timeseries,stack[:,xn,yn])[0,1]
+                        if c>=thresh:
+                            Q.append((xn,yn))#add non-visited above threshold neighbor
+                            visited[xn,yn] = color#mark as visited
+            return pg
+
+        if im_ncorr.shape[0] != stack.shape[1] or im_ncorr.shape[1] != stack.shape[2]:
+            raise ValueError("Stack width and height must be same as im_ncorr width and height")
+        visited = np.zeros_like(im_ncorr,dtype=int)#indicates visited pixels > 0
+        conn_comps = []#list of correlation graphs
+        #at each iteration we find the pixel with the highest neighborhood correlation,
+        #ignoring visited pixels, and use it as a source pixel for breadth first search
+        curr_color = 1#id counter of connected components
+        while np.max(im_ncorr * (visited==0)) > 0:
+            (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
+            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
+            curr_color += 1
+        return conn_comps, visited
 #class CorrelationGraph
 
 
@@ -254,69 +317,6 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
                 im_corr[x,y] = np.nanmean(c_sum)
     im_corr[np.isnan(im_corr)] = 0
     return im_corr
-
-
-def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
-    """
-    Builds connected component graphs whereby components are
-    determined based on pixel-timeseries correlations. Pixels
-    with timeseries correlations >= corr_thresh are considered
-    as sources for a breadth-first-search which will incor-
-    porate new pixels into the graph if they are correlated
-    with at least corr_thresh to the summed trace of the
-    component. Every new pixel's timeseries will be added
-    to the sum-trace of the component.
-        stack: Image time-seried stack [t,x,y]
-        im_ncorr: Image with same x,y dimensions as stack
-          initialized to neighborhood correlations of each pixel
-        corr_thresh: Threshold correlation for source consideration
-          and pixel incorporation.
-        norm8: Use 8 or 4 connected components
-        RETURNS:
-            List of connected component graphs
-    """
-    def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8=True):
-        """
-        Performs breadth first search on image
-        given (sourceX,sourceY) as starting pixel
-        coloring all visited pixels in color
-        """
-        pg = CorrelationGraph(color,np.zeros(stack.shape[0]))
-        Q = deque()
-        Q.append((sourceX,sourceY))
-        visited[sourceX,sourceY] = color#mark source as visited
-        while len(Q) > 0:
-            v = Q.popleft()
-            x = v[0]
-            y = v[1]
-            pg.V.append(v)#add current vertex to pixel graph
-            pg.Timeseries = pg.Timeseries + stack[:,x,y]#add current pixel's timeseries
-            #add non-visited neighborhood to queue
-            for xn in range(x-1,x+2):#x+1 inclusive!
-                for yn in range(y-1,y+2):
-                    if xn<0 or yn<0 or xn>=stack.shape[1] or yn>=stack.shape[2] or visited[xn,yn]:#outside image dimensions or already visited
-                        continue
-                    if (not norm8) and xn!=x and yn!=y:
-                        continue
-                    #compute correlation of considered pixel's timeseries to full graphs timeseries
-                    c = np.corrcoef(pg.Timeseries,stack[:,xn,yn])[0,1]
-                    if c>=thresh:
-                        Q.append((xn,yn))#add non-visited above threshold neighbor
-                        visited[xn,yn] = color#mark as visited
-        return pg
-
-    if im_ncorr.shape[0] != stack.shape[1] or im_ncorr.shape[1] != stack.shape[2]:
-        raise ValueError("Stack width and height must be same as im_ncorr width and height")
-    visited = np.zeros_like(im_ncorr,dtype=int)#indicates visited pixels > 0
-    conn_comps = []#list of correlation graphs
-    #at each iteration we find the pixel with the highest neighborhood correlation,
-    #ignoring visited pixels, and use it as a source pixel for breadth first search
-    curr_color = 1#id counter of connected components
-    while np.max(im_ncorr * (visited==0)) > 0:
-        (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
-        conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color))
-        curr_color += 1
-    return conn_comps, visited
 
 
 def ComputeAlignmentShift(stack, index):
