@@ -321,7 +321,7 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
                     if x+dx<0 or y+dy<0 or x+dx>=im_corr.shape[0] or y+dy>=im_corr.shape[1]:#outside of image
                         continue
                     c_sum.append(np.corrcoef(stack[:,x,y],stack[:,x+dx,y+dy])[0,1])
-            if len(c_sum)>0:
+            if len(c_sum)>0 and not np.all(np.isnan(c_sum)):
                 im_corr[x,y] = np.nanmean(c_sum)
     im_corr[np.isnan(im_corr)] = 0
     return im_corr
