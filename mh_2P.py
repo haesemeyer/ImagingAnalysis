@@ -47,7 +47,7 @@ class CorrelationGraph:
         return max(list(zip(*self.V))[1])
 
     @staticmethod
-    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True):
+    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True,limit=None):
         """
         Builds connected component graphs whereby components are
         determined based on pixel-timeseries correlations. Pixels
@@ -63,8 +63,11 @@ class CorrelationGraph:
             corr_thresh: Threshold correlation for source consideration
               and pixel incorporation.
             norm8: Use 8 or 4 connected components
+            limit: Optionally specify start and end of timeslice over
+              which correlations should be computed
             RETURNS:
-                List of connected component graphs
+                [0]: List of connected component graphs
+                [1]: Image numerically identifying each pixel of each graph
         """
         def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8):
             """
@@ -72,9 +75,10 @@ class CorrelationGraph:
             given (sourceX,sourceY) as starting pixel
             coloring all visited pixels in color
             """
+            nonlocal limit
             pg = CorrelationGraph(color,np.zeros(stack.shape[0]))
             Q = deque()
-            Q.append((sourceX,sourceY))
+            Q.append((sourceX,sourceY,0))
             visited[sourceX,sourceY] = color#mark source as visited
             while len(Q) > 0:
                 v = Q.popleft()
@@ -90,14 +94,18 @@ class CorrelationGraph:
                         if (not norm8) and xn!=x and yn!=y:
                             continue
                         #compute correlation of considered pixel's timeseries to full graphs timeseries
-                        c = np.corrcoef(pg.Timeseries,stack[:,xn,yn])[0,1]
+                        c = np.corrcoef(pg.Timeseries[limit[0]:limit[1]],stack[limit[0]:limit[1],xn,yn])[0,1]
                         if c>=thresh:
-                            Q.append((xn,yn))#add non-visited above threshold neighbor
+                            Q.append((xn,yn,v[2]+1))#add non-visited above threshold neighbor
                             visited[xn,yn] = color#mark as visited
             return pg
 
         if im_ncorr.shape[0] != stack.shape[1] or im_ncorr.shape[1] != stack.shape[2]:
             raise ValueError("Stack width and height must be same as im_ncorr width and height")
+        if limit is None:
+            limit = (0,stack.shape[0])
+        if len(limit) != 2:
+            raise ValueError("If set limit must be a 2-element tuple or list referencing start and end slice (exclusive)")
         visited = np.zeros_like(im_ncorr,dtype=int)#indicates visited pixels > 0
         conn_comps = []#list of correlation graphs
         #at each iteration we find the pixel with the highest neighborhood correlation,
