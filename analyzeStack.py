@@ -56,6 +56,8 @@ if __name__ == "__main__":
     for i,f in enumerate(filenames):
         #load stack
         stack = OpenStack(f).astype(float)
+        #re-align slices
+        stack, xshift, yshift = ReAlign(stack)
         #compute photon-rates using gaussian windowing
         rate_stack = gaussian_filter1d(stack,4.8,0)#standard deviation equal to 2s
         #we only want to consider time-series with at least min_phot photons
