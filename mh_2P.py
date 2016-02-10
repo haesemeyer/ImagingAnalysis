@@ -234,6 +234,9 @@ def ZScore_Stack(stack):
     """
     avg = np.mean(stack,0)[None,:,:]
     std = np.std(stack,0)[None,:,:]
+    #do not introduce NaN's in zero rows (which will have avg=std=0) but rather keep
+    #them as all zero
+    std[avg==0] = 1
     return (stack-avg.repeat(stack.shape[0],0))/std.repeat(stack.shape[0],0)
 
 def Threshold_Zsc(stack, nstd, plane):
