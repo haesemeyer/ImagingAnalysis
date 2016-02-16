@@ -140,6 +140,9 @@ if __name__ == "__main__":
         #save the re-aligned stack as uint8
         if save:
             np.save(f[:-4]+"_stack.npy",stack.astype(np.uint8))
+            #save alignment shifts
+            np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
+            np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
         print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
         #we only want to consider time-series with at least min_phot photons
         sum_stack = np.sum(stack,0)
