@@ -13,6 +13,8 @@ from scipy.ndimage.morphology import binary_fill_holes
 
 import pickle
 
+from tkinter import Label, Toplevel, Button, Entry, Tk
+
 
 def IsHeatActivated(trace,npre,nstim,npost):
     """
@@ -53,17 +55,78 @@ def AssignFourier(graph,startFrame,endFrame,suffix="pre"):
     setattr(graph,"fourier_ratio_"+suffix,mag[ix]/mag.sum())
 
 
+#User entry dialog of scipt settings
+class InputDialog:
+    def __init__(self,parent):
+        top = self.top = Toplevel(parent)
+        Label(top,text="Pre Stim Frames").grid(row=0)
+        Label(top,text="Stim Frames").grid(row=1)
+        Label(top,text="Post Stim Frames").grid(row=2)
+        Label(top,text="Stim fft gap").grid(row=3)
+        Label(top,text="Corr threshold").grid(row=4)
+        Label(top,text="Avg. cell diameter").grid(row=5)
+
+        self.e_preStim = Entry(top)
+        self.e_preStim.grid(row=0,column=1)
+        self.e_preStim.insert(0,144)
+
+        self.e_Stim = Entry(top)
+        self.e_Stim.grid(row=1,column=1)
+        self.e_Stim.insert(0,144)
+
+        self.e_postStim = Entry(top)
+        self.e_postStim.grid(row=2,column=1)
+        self.e_postStim.insert(0,144)
+
+        self.e_stimFftGap = Entry(top)
+        self.e_stimFftGap.grid(row=3,column=1)
+        self.e_stimFftGap.insert(0,24)
+
+        self.e_corrTh = Entry(top)
+        self.e_corrTh.grid(row=4,column=1)
+        self.e_corrTh.insert(0,0.2)
+
+        self.e_avgCdiam = Entry(top)
+        self.e_avgCdiam.grid(row=5,column=1)
+        self.e_avgCdiam.insert(0,8)
+
+        self.b = Button(top,text="OK",command = self.ok)
+        self.b.grid(row=7)
+
+    def ok(self):
+        self.pre_stim = int(self.e_preStim.get())
+        self.stim = int(self.e_Stim.get())
+        self.post_stim = int(self.e_postStim.get())
+        self.stim_fftGap = int(self.e_stimFftGap.get())
+        self.corrTh = float(self.e_corrTh.get())
+        self.cellDiam = int(self.e_avgCdiam.get())
+        self.top.destroy()
+
+
 if __name__ == "__main__":
     #warnings.simplefilter("error",RuntimeWarning)
     save = True
     #paradigm constants
-    pre_stim = 144#48
-    stim = 144#48
-    post_stim = 144#48
-    stim_fft_gap = 24#0#number of initial frames not to use for fft determination
+    #pre_stim = 144#144#48
+    #stim = 144#48
+    #post_stim = 144#144#48
+    #stim_fft_gap = 24#0#number of initial frames not to use for fft determination
     min_phot = 10#minimum number of photons to observe in a pixels timeseries to not discard series
     des_freq = 0.1#0.3#1/3##the stimulus frequency
-    corr_thresh = 0.025#0.2#correlation threshold for co-segmenting pixels
+    #corr_thresh = 0.2#0.5#0.1#0.025#correlation threshold for co-segmenting pixels - should probably be >0.5 if things actually worked
+
+    #obtain paradigm constants from user
+    root = Tk()
+    diag = InputDialog(root)
+    root.wait_window(diag.top)
+    pre_stim = diag.pre_stim
+    stim = diag.stim
+    post_stim = diag.post_stim
+    stim_fft_gap = diag.stim_fftGap
+    corr_thresh = diag.corrTh
+    cell_diam = diag.cellDiam
+    root.destroy()
+
 
     filenames = UiGetFile([('Tiff Stack', '.tif;.tiff')],multiple=True)
     
