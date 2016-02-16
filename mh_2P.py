@@ -401,4 +401,21 @@ def ReAlign(stack):
         newImage[xt[0]:xt[1],yt[0]:yt[1]] = re_aligned[t,xs[0]:xs[1],ys[0]:ys[1]]
         re_aligned[t,:,:] = newImage
     return re_aligned, x_shifts, y_shifts
+
+def ShuffleStackSpatioTemporal(stack):
+    """
+    Returns a version of stack that has been randomly shuffled
+    along it's spatial dimensions (axis 1 and 2) as well as
+    circularly permuted along it's temporal dimension (axis 0)
+    """
+    shuff = stack.copy()
+    s0,s1,s2 = stack.shape
+    for x in range(s1):
+        for y in range(s2):
+            xs = np.random.randint(s1)
+            ys = np.random.randint(s2)
+            temp = shuff[:,xs,ys].copy()#this copy is important since otherwise we are dealing with a view not actual values!!!
+            shuff[:,xs,ys] = shuff[:,x,y]
+            shuff[:,x,y] = np.roll(temp,np.random.randint(s0))
+    return shuff
             
