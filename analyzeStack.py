@@ -147,12 +147,15 @@ if __name__ == "__main__":
         #we only want to consider time-series with at least min_phot photons
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
-        #z-score entire stack
+        #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
+        rate_stack = gaussian_filter(stack,(1.2,cell_diam/8,cell_diam/8))#along time standard deviation of 0.5s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        #z-score entire stack and rate stack
         stack = ZScore_Stack(stack)
-        #compute photon-rates using gaussian windowing
-        rate_stack = gaussian_filter1d(stack,2.4,0)#standard deviation equal to 1s (increasing the standard deviation starts to filter out our 0.1Hz stimulus trace)
+        rate_stack = ZScore_Stack(rate_stack)
+        #rate_stack = gaussian_filter1d(stack,4.8,0)#standard deviation equal to 2s (increasing the standard deviation further starts to strongly filter out our 0.1Hz stimulus trace)
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
         im_ncorr = AvgNeighbhorCorrelations(rate_stack[pre_stim:pre_stim+stim,:,:],2,consider)
+        print('Maximum neighbor correlation in stack ',i,' = ',im_ncorr.max(),flush=True)
         #display correlations and slice itself
         #with sns.axes_style('white'):
         #    fig, (ax1, ax2) = pl.subplots(ncols=2)
@@ -163,6 +166,7 @@ if __name__ == "__main__":
         #extract correlation graphs - 4-connected
         graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False,(pre_stim,pre_stim+stim))
         print('Correlation graph of stack ',i,' of ',len(filenames)-1,' created',flush=True)
+        
         #plot largest three components onto projection
         #projection = np.zeros((im_ncorr.shape[0],im_ncorr.shape[1],3),dtype=float)
         #projection[:,:,0] = projection[:,:,2] = sum_stack / sum_stack.max()
