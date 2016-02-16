@@ -181,8 +181,8 @@ if __name__ == "__main__":
         #    ax.imshow(projection)
 
         #TODO: clean up graphs - potentially "fill holes" and remove very small connected components
-        graph = [g for g in graph if g.NPixels>=30]#remove compoments with less than 30 pixels
-
+        graph = [g for g in graph if g.NPixels>=50]#remove compoments with less than 50 pixels
+        print('Identified ',len(graph),'units in slice ',i,flush=True)
         #for each graph, create sum-trace which is only lightly filtered
         #assign to graph object and assign fft fraction at desired frequency
         #to pre, stim and post
@@ -211,12 +211,13 @@ if __name__ == "__main__":
             power_inc, increases = zip(*power_inc)
         else:
             power_inc = increases = []
-        #for all graphs that pass the power-increase threshold draw them into the image and save
+
+        #draw all graphs into the image and save
         projection = np.zeros((im_ncorr.shape[0],im_ncorr.shape[1],3),dtype=float)
         projection[:,:,0] = projection[:,:,2] = sum_stack / sum_stack.max()
         im_roi = np.zeros_like(im_ncorr)
-        for pi in power_inc:
-            for v in graph[pi].V:
+        for g in graph:
+            for v in g.V:
                 im_roi[v[0],v[1]] = 1
         im_roi = binary_fill_holes(im_roi)
         projection[:,:,1] = im_roi
@@ -225,35 +226,36 @@ if __name__ == "__main__":
             im_roi.save(f[:-3]+'png')
 
         #plot trace of graph in this plane with maximum increase
-        frames = np.arange(pre_stim+stim+post_stim)
-        m_graph = graph[power_inc[np.argmax(increases)]]
-        with sns.axes_style('white'):
-            fig, (ax1, ax2, ax3) = pl.subplots(ncols=3)
-            ax1.plot(frames[:pre_stim],m_graph.RawTimeseries[:pre_stim])
-            ax1.plot(frames[pre_stim+stim:pre_stim+stim+post_stim],m_graph.RawTimeseries[pre_stim+stim:pre_stim+stim+post_stim])
-            ax1.plot(frames[pre_stim:pre_stim+stim],m_graph.RawTimeseries[pre_stim:pre_stim+stim])
-            ax1.plot([pre_stim,pre_stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
-            ax1.plot([pre_stim+stim,pre_stim+stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
-            ax1.set_xlabel('Frames')
-            ax1.set_ylabel('ZScored photon count')
-            ax2.plot(m_graph.freqs_pre,np.absolute(m_graph.fft_pre**2),label="Pre")
-            ax2.plot(m_graph.freqs_post,np.absolute(m_graph.fft_post**2),label="Post")
-            ax2.plot(m_graph.freqs_stim,np.absolute(m_graph.fft_stim**2),label="Stim")
-            ax2.plot([des_freq,des_freq],[0,ax2.get_ylim()[1]],'k--',alpha=0.5)
-            ax2.set_xlabel('Frequency [Hz]')
-            ax2.set_ylabel('Power')
-            ax2.legend()
-            projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
-            projection[projection>0.8] = 0.8
-            for v in m_graph.V:
-                projection[v[0],v[1],0] = 1
-            ax3.imshow(projection)
-            sns.despine(ax=ax3,left=True,bottom=True)
-            fig.set_size_inches(15,5,5)
-            fig.tight_layout()
-        if save:
-            fig.savefig(f[:-3]+'pdf',type='pdf')
-            pl.close('all')
+        if len(graph) > 0 and len(power_inc) > 0:
+            frames = np.arange(pre_stim+stim+post_stim)
+            m_graph = graph[power_inc[np.argmax(increases)]]
+            with sns.axes_style('white'):
+                fig, (ax1, ax2, ax3) = pl.subplots(ncols=3)
+                ax1.plot(frames[:pre_stim],m_graph.RawTimeseries[:pre_stim])
+                ax1.plot(frames[pre_stim+stim:pre_stim+stim+post_stim],m_graph.RawTimeseries[pre_stim+stim:pre_stim+stim+post_stim])
+                ax1.plot(frames[pre_stim:pre_stim+stim],m_graph.RawTimeseries[pre_stim:pre_stim+stim])
+                ax1.plot([pre_stim,pre_stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
+                ax1.plot([pre_stim+stim,pre_stim+stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
+                ax1.set_xlabel('Frames')
+                ax1.set_ylabel('ZScored photon count')
+                ax2.plot(m_graph.freqs_pre,np.absolute(m_graph.fft_pre**2),label="Pre")
+                ax2.plot(m_graph.freqs_post,np.absolute(m_graph.fft_post**2),label="Post")
+                ax2.plot(m_graph.freqs_stim,np.absolute(m_graph.fft_stim**2),label="Stim")
+                ax2.plot([des_freq,des_freq],[0,ax2.get_ylim()[1]],'k--',alpha=0.5)
+                ax2.set_xlabel('Frequency [Hz]')
+                ax2.set_ylabel('Power')
+                ax2.legend()
+                projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
+                projection[projection>0.8] = 0.8
+                for v in m_graph.V:
+                    projection[v[0],v[1],0] = 1
+                ax3.imshow(projection)
+                sns.despine(ax=ax3,left=True,bottom=True)
+                fig.set_size_inches(15,5,5)
+                fig.tight_layout()
+            if save:
+                fig.savefig(f[:-3]+'pdf',type='pdf')
+                pl.close('all')
             
 
         #plot pre, stim and post fourier magnitude
