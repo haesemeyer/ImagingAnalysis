@@ -47,7 +47,7 @@ class CorrelationGraph:
         return max(list(zip(*self.V))[1])
 
     @staticmethod
-    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True,limit=None):
+    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True,limit=None,seed_limit=0):
         """
         Builds connected component graphs whereby components are
         determined based on pixel-timeseries correlations. Pixels
@@ -65,6 +65,8 @@ class CorrelationGraph:
             norm8: Use 8 or 4 connected components
             limit: Optionally specify start and end of timeslice over
               which correlations should be computed
+            seed_limit: For a pixel to be considered a valid seed, it's
+              neighborhood correlation needs to exceed this value
             RETURNS:
                 [0]: List of connected component graphs
                 [1]: Image numerically identifying each pixel of each graph
@@ -111,7 +113,7 @@ class CorrelationGraph:
         #at each iteration we find the pixel with the highest neighborhood correlation,
         #ignoring visited pixels, and use it as a source pixel for breadth first search
         curr_color = 1#id counter of connected components
-        while np.max(im_ncorr * (visited==0)) > 0:
+        while np.max(im_ncorr * (visited==0)) > seed_limit:
             (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
             conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8))
             curr_color += 1
