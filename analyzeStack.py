@@ -159,10 +159,7 @@ if __name__ == "__main__":
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
         rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
         rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
-        #z-score entire stack and rate stack
-        stack = ZScore_Stack(stack)
-        rate_stack = ZScore_Stack(rate_stack)
-        rs_shuff = ZScore_Stack(rs_shuff)
+        
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
         im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
         im_nc_shuff = AvgNeighbhorCorrelations(rs_shuff,2,consider)
