@@ -400,8 +400,8 @@ def ReAlign(stack):
         y_shifts[t] = yshift
         if xshift == 0 and yshift == 0:
             continue
-        if np.abs(xshift)>2 or np.abs(yshift)>2:
-            print("Warning. Slice ",t," requires shift greater 2 pixels. Not shifted")
+        if np.abs(xshift)>3 or np.abs(yshift)>3:
+            print("Warning. Slice ",t," requires shift greater 3 pixels. Not shifted")
             continue
         xs,xt = Shift2Index(xshift,re_aligned.shape[1])
         ys,yt = Shift2Index(yshift,re_aligned.shape[2])
