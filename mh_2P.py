@@ -314,6 +314,7 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
     if dist<1:
         raise ValueError('Dist has to be at least 1')
     im_corr = np.zeros((stack.shape[1],stack.shape[2]))
+    corr_buff = dict()#buffers computed correlations to avoid computing the same pairs multiple times!
     for x in range(stack.shape[1]):
         for y in range(stack.shape[2]):
             if (not predicate is None) and (not predicate(x,y)):#pixel is excluded
@@ -325,7 +326,14 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
                         continue
                     if x+dx<0 or y+dy<0 or x+dx>=im_corr.shape[0] or y+dy>=im_corr.shape[1]:#outside of image
                         continue
-                    c_sum.append(np.corrcoef(stack[:,x,y],stack[:,x+dx,y+dy])[0,1])
+                    p_src = (x,y)
+                    p_des = (x+dx,y+dy)
+                    if (p_src,p_des) in corr_buff:
+                        c_sum.append(corr_buff[(p_src,p_des)])
+                    else:
+                        cval = np.corrcoef(stack[:,x,y],stack[:,x+dx,y+dy])[0,1]
+                        corr_buff[(p_des,p_src)] = cval
+                        c_sum.append(cval)
             if len(c_sum)>0 and not np.all(np.isnan(c_sum)):
                 im_corr[x,y] = np.nanmean(c_sum)
     im_corr[np.isnan(im_corr)] = 0
