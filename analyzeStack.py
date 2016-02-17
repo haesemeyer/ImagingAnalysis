@@ -135,17 +135,21 @@ if __name__ == "__main__":
     if type(filenames) is str:
         filenames = [filenames]
     for i,f in enumerate(filenames):
-        #load stack
-        stack = OpenStack(f).astype(float)
-        #re-align slices
-        stack, xshift, yshift = ReAlign(stack)
-        #save the re-aligned stack as uint8
-        if save:
-            np.save(f[:-4]+"_stack.npy",stack.astype(np.uint8))
-            #save alignment shifts
-            np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
-            np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
-        print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
+        #load stack - first try to find aligned file
+        try:
+            stack = np.load(f[:-4]+"_stack.npy").astype('float')
+            print('Loaded aligned stack of slice ', i,flush=True)
+        except FileNotFoundError:
+            stack = OpenStack(f).astype(float)
+            #re-align slices
+            stack, xshift, yshift = ReAlign(stack)
+            #save the re-aligned stack as uint8
+            if save:
+                np.save(f[:-4]+"_stack.npy",stack.astype(np.uint8))
+                #save alignment shifts
+                np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
+                np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
+            print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
         #create shuffled stack to determine correlation seed cut-off
         st_shuff = ShuffleStackTemporal(stack)
         #we only want to consider time-series with at least min_phot photons
