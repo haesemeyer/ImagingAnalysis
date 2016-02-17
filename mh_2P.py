@@ -429,13 +429,13 @@ def ShuffleStackSpatioTemporal(stack):
 
 def ShuffleStackTemporal(stack):
     """
-    Returns a version of the stack that has been circularly
+    Returns a version of the stack that has been
     permuted at random along the time axis (axis 0)
     """
     shuff = np.empty_like(stack)
     s0,s1,s2 = stack.shape
     for x in range(s1):
         for y in range(s2):
-            shuff[:,x,y] = np.roll(stack[:,x,y],np.random.randint(s0//10)*10)
+            shuff[:,x,y] = np.random.choice(stack[:,x,y],size=s0,replace=False)
     return shuff
             
