@@ -16,6 +16,7 @@ import pickle
 from tkinter import Label, Toplevel, Button, Entry, Tk
 
 
+
 def IsHeatActivated(trace,npre,nstim,npost):
     """
     Identify pixels that have been activated by the heat stimulus.
@@ -129,6 +130,7 @@ if __name__ == "__main__":
 
 
     filenames = UiGetFile([('Tiff Stack', '.tif;.tiff')],multiple=True)
+
     
     if type(filenames) is str:
         filenames = [filenames]
@@ -144,27 +146,34 @@ if __name__ == "__main__":
             np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
             np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
         print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
+        #create shuffled stack to determine correlation seed cut-off
+        st_shuff = ShuffleStackTemporal(stack)
         #we only want to consider time-series with at least min_phot photons
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
-        rate_stack = gaussian_filter(stack,(1.2,cell_diam/8,cell_diam/8))#along time standard deviation of 0.5s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
         #z-score entire stack and rate stack
         stack = ZScore_Stack(stack)
         rate_stack = ZScore_Stack(rate_stack)
-        #rate_stack = gaussian_filter1d(stack,4.8,0)#standard deviation equal to 2s (increasing the standard deviation further starts to strongly filter out our 0.1Hz stimulus trace)
+        rs_shuff = ZScore_Stack(rs_shuff)
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
-        im_ncorr = AvgNeighbhorCorrelations(rate_stack[pre_stim:pre_stim+stim,:,:],2,consider)
+        im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
+        im_nc_shuff = AvgNeighbhorCorrelations(rs_shuff,2,consider)
         print('Maximum neighbor correlation in stack ',i,' = ',im_ncorr.max(),flush=True)
-        #display correlations and slice itself
-        #with sns.axes_style('white'):
-        #    fig, (ax1, ax2) = pl.subplots(ncols=2)
-        #    ax1.imshow(np.sum(stack,0),cmap='bone')
-        #    ax1.set_title(f.split('/')[-1])
-        #    ax2.imshow(im_ncorr,vmin=0,vmax=im_ncorr.max(),cmap="bone")
-        #    fig.tight_layout()
+
+        #determine correlation seed cutoff - find correlation value where correlations larger that value
+        #are enriched at least twenty times in the real dataset over the shuffled data-set
+        seed_cutoff = 0
+        for c in np.linspace(0,1,100):
+            if ((im_ncorr>c).sum() / (im_nc_shuff>c).sum()) >= 20:
+                seed_cutoff = c
+                break
+        print('Correlation seed cutoff in stack ',i,' = ',seed_cutoff,flush=True)
+
         #extract correlation graphs - 4-connected
-        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False,(pre_stim,pre_stim+stim))
+        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False,(0,rate_stack.shape[0]),seed_cutoff)
         print('Correlation graph of stack ',i,' of ',len(filenames)-1,' created',flush=True)
         
         #plot largest three components onto projection
