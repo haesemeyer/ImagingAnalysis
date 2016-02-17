@@ -46,8 +46,9 @@ def IsHeatActivated(trace,npre,nstim,npost):
 
 def AssignFourier(graph,startFrame,endFrame,suffix="pre"):
     global des_freq
-    ms = lambda x: x-np.mean(x)#mean subtract
-    fft = np.fft.rfft(ms(graph.RawTimeseries[startFrame:endFrame]))
+    #anti-aliasing
+    filtered = gaussian_filter1d(graph.RawTimeseries,1.2)
+    fft = np.fft.rfft(filtered[startFrame:endFrame])
     freqs = np.linspace(0,1.2,fft.shape[0])
     mag = np.absolute(fft)
     ix = np.argmin(np.absolute(des_freq-freqs))#index of bin which contains our desired frequency
@@ -200,10 +201,10 @@ if __name__ == "__main__":
         #assign to graph object and assign fft fraction at desired frequency
         #to pre, stim and post
         for g in graph:
+            g.SourceFile = f#store for convenience access
             g.RawTimeseries = np.zeros_like(g.Timeseries)
             for v in g.V:
                 g.RawTimeseries = g.RawTimeseries + stack[:,v[0],v[1]]
-            g.RawTimeseries = gaussian_filter1d(g.RawTimeseries,1.2)            
             #pre-stim
             AssignFourier(g,stim_fft_gap,pre_stim,"pre")
             #stim
