@@ -199,6 +199,14 @@ if __name__ == "__main__":
         #to pre, stim and post
         for g in graph:
             g.SourceFile = f#store for convenience access
+            g.FramesPre = pre_stim
+            g.FramesStim = stim
+            g.FramesPost = post_stim
+            g.FramesFFTGap = stim_fft_gap
+            g.StimFrequency = des_freq
+            g.CellDiam = cell_diam
+            g.CorrThresh = corr_thresh
+            g.CorrSeedCutoff = seed_cutoff
             g.RawTimeseries = np.zeros_like(g.Timeseries)
             for v in g.V:
                 g.RawTimeseries = g.RawTimeseries + stack[:,v[0],v[1]]
