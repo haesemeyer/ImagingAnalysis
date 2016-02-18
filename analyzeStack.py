@@ -192,7 +192,7 @@ if __name__ == "__main__":
         #    ax.imshow(projection)
 
         #TODO: clean up graphs - potentially "fill holes" and remove very small connected components
-        graph = [g for g in graph if g.NPixels>=50]#remove compoments with less than 50 pixels
+        graph = [g for g in graph if g.NPixels>=30]#remove compoments with less than 30 pixels
         print('Identified ',len(graph),'units in slice ',i,flush=True)
         #for each graph, create sum-trace which is only lightly filtered
         #assign to graph object and assign fft fraction at desired frequency
