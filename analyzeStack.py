@@ -86,7 +86,7 @@ class InputDialog:
 
         self.e_corrTh = Entry(top)
         self.e_corrTh.grid(row=4,column=1)
-        self.e_corrTh.insert(0,0.2)
+        self.e_corrTh.insert(0,0.4)
 
         self.e_avgCdiam = Entry(top)
         self.e_avgCdiam.grid(row=5,column=1)
