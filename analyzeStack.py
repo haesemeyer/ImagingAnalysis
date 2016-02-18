@@ -167,7 +167,7 @@ if __name__ == "__main__":
 
         #determine correlation seed cutoff - find correlation value where correlations larger that value
         #are enriched at least twenty times in the real dataset over the shuffled data-set
-        seed_cutoff = 0
+        seed_cutoff = 1
         for c in np.linspace(0,1,100):
             if ((im_ncorr>c).sum() / (im_nc_shuff>c).sum()) >= 20:
                 seed_cutoff = c
