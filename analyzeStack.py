@@ -86,7 +86,7 @@ class InputDialog:
 
         self.e_corrTh = Entry(top)
         self.e_corrTh.grid(row=4,column=1)
-        self.e_corrTh.insert(0,0.4)
+        self.e_corrTh.insert(0,0.1)
 
         self.e_avgCdiam = Entry(top)
         self.e_avgCdiam.grid(row=5,column=1)
@@ -157,8 +157,10 @@ if __name__ == "__main__":
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
-        rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
-        rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
+        #rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        #rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
+        rate_stack = gaussian_filter(stack,(2.4,0,0))#along time standard deviation of 1s
+        rs_shuff = gaussian_filter(st_shuff,(2.4,0,0))#NOTE: Removed spatial filtering, as it enforces strange correlations in shuffled stack
         
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
         im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
@@ -168,14 +170,20 @@ if __name__ == "__main__":
         #determine correlation seed cutoff - find correlation value where correlations larger that value
         #are enriched at least ten times in the real dataset over the shuffled data-set
         seed_cutoff = 1
-        for c in np.linspace(0,1,100):
+        for c in np.linspace(0,1,1001):
             if ((im_ncorr>c).sum() / (im_nc_shuff>c).sum()) >= 10:
                 seed_cutoff = c
                 break
         print('Correlation seed cutoff in stack ',i,' = ',seed_cutoff,flush=True)
 
         #extract correlation graphs - 4-connected
-        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,corr_thresh,False,(0,rate_stack.shape[0]),seed_cutoff)
+        #cap our growth correlation threshold at the seed-cutoff, i.e. if corr_thresh
+        #is larger than the significance threshold reduce it, when creating graph
+        if corr_thresh <= seed_cutoff:
+            ct_actual = corr_thresh
+        else:
+            ct_actual = seed_cutoff
+        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,ct_actual,False,(0,rate_stack.shape[0]),seed_cutoff)
         print('Correlation graph of stack ',i,' of ',len(filenames)-1,' created',flush=True)
         
         #plot largest three components onto projection
@@ -205,7 +213,7 @@ if __name__ == "__main__":
             g.FramesFFTGap = stim_fft_gap
             g.StimFrequency = des_freq
             g.CellDiam = cell_diam
-            g.CorrThresh = corr_thresh
+            g.CorrThresh = ct_actual
             g.CorrSeedCutoff = seed_cutoff
             g.RawTimeseries = np.zeros_like(g.Timeseries)
             for v in g.V:
