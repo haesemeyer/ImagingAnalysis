@@ -151,6 +151,22 @@ if __name__ == "__main__":
                 np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
                 np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
             print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
+        #perform quality control and save resulting plot
+        qualscore = CorrelationControl(stack,36)[0]
+        fig = pl.figure()
+        pl.plot(qualscore/np.mean(qualscore),'o')
+        pl.xlabel('Stack section')
+        pl.ylabel('Fraction of mean correlation')
+        #draw in 1.1 and 0.9 lines as potential relaxed cut-offs
+        pl.plot([-0.1,qualscore.size+0.1],[1.05,1.05],'k--',alpha=0.5)
+        pl.plot([-0.1,qualscore.size+0.1],[1.1,1.1],'k--')
+        pl.plot([-0.1,qualscore.size+0.1],[0.95,0.95],'k--',alpha=0.5)
+        pl.plot([-0.1,qualscore.size+0.1],[0.9,0.9],'k--')
+        sns.despine()
+        if save:
+            fig.savefig(f[:-4]+'_qualscores.pdf',type='pdf')
+            pl.close('all')
+
         #create shuffled stack to determine correlation seed cut-off
         st_shuff = ShuffleStackTemporal(stack)
         #we only want to consider time-series with at least min_phot photons
@@ -197,6 +213,9 @@ if __name__ == "__main__":
         #    fig, ax = pl.subplots()
         #    ax.imshow(projection)
 
+        max_qual_deviation = (np.max(qualscore)-np.min(qualscore))/np.mean(qualscore)
+        print("Maximum quality score deviation = ",max_qual_deviation,flush=True)
+
         #TODO: clean up graphs - potentially "fill holes" and remove very small connected components
         graph = [g for g in graph if g.NPixels>=30]#remove compoments with less than 30 pixels
         print('Identified ',len(graph),'units in slice ',i,flush=True)
@@ -214,6 +233,8 @@ if __name__ == "__main__":
             g.CorrThresh = ct_actual
             g.CorrSeedCutoff = seed_cutoff
             g.RawTimeseries = np.zeros_like(g.Timeseries)
+            #also save in graph the maximum absolute quality score deviation from the mean
+            g.MaxQualScoreDeviation = max_qual_deviation
             for v in g.V:
                 g.RawTimeseries = g.RawTimeseries + stack[:,v[0],v[1]]
             #pre-stim
