@@ -86,7 +86,7 @@ class InputDialog:
 
         self.e_corrTh = Entry(top)
         self.e_corrTh.grid(row=4,column=1)
-        self.e_corrTh.insert(0,0.1)
+        self.e_corrTh.insert(0,0.3)
 
         self.e_avgCdiam = Entry(top)
         self.e_avgCdiam.grid(row=5,column=1)
@@ -157,10 +157,8 @@ if __name__ == "__main__":
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
-        #rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
-        #rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
-        rate_stack = gaussian_filter(stack,(2.4,0,0))#along time standard deviation of 1s
-        rs_shuff = gaussian_filter(st_shuff,(2.4,0,0))#NOTE: Removed spatial filtering, as it enforces strange correlations in shuffled stack
+        rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
         
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
         im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
