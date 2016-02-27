@@ -48,7 +48,12 @@ def AssignFourier(graph,startFrame,endFrame,suffix="pre"):
     global des_freq
     #anti-aliasing
     filtered = gaussian_filter1d(graph.RawTimeseries,1.2)
-    fft = np.fft.rfft(filtered[startFrame:endFrame])
+    filtered = filtered[startFrame:endFrame]
+    #TODO: Somehow make the following noise reduction more generally applicable...
+    #if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
+    if filtered.size % 2 == 0:
+        filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
+    fft = np.fft.rfft(filtered)
     freqs = np.linspace(0,1.2,fft.shape[0])
     mag = np.absolute(fft)
     ix = np.argmin(np.absolute(des_freq-freqs))#index of bin which contains our desired frequency
