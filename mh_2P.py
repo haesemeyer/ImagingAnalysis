@@ -410,6 +410,28 @@ def ReAlign(stack):
         re_aligned[t,:,:] = newImage
     return re_aligned, x_shifts, y_shifts
 
+def CorrelationControl(stack, nFrames):
+    """
+    Sub-divides stack into nFrames blocks and cross-correlates
+    each summed block to first reporting the 0-shift correlation to id
+    potential movement artefacts. All slices will be z-scored to prevent
+    differences in (raw) correlation values based on intensity (bleaching etc)
+    """
+    def zsclice(slice):
+        return (slice-np.mean(slice))/np.std(slice)
+
+    nSlices,h,w = stack.shape
+    if nSlices//nFrames < 2:
+        raise ValueError("Need to identify at least two nFrames sized sub-stacks in the stack")
+    ix0_x, ix0_y = h-1, w-1#coordinates of 0-shift correlation
+    sum_slices = np.zeros((nSlices//nFrames,h,w))
+    correlations = np.zeros(nSlices//nFrames-1)
+    for i in range(nSlices//nFrames):
+        sum_slices[i,:,:] = np.sum(stack[nFrames*i:nFrames*(i+1),:,:],0)
+        if i > 0:
+            correlations[i-1] = fftconvolve(zsclice(sum_slices[0,:,:]),zsclice(sum_slices[i,::-1,::-1]))[ix0_x,ix0_y]
+    return correlations, sum_slices
+
 def ShuffleStackSpatioTemporal(stack):
     """
     Returns a version of stack that has been randomly shuffled
