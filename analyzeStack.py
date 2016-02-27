@@ -82,7 +82,7 @@ class InputDialog:
 
         self.e_stimFftGap = Entry(top)
         self.e_stimFftGap.grid(row=3,column=1)
-        self.e_stimFftGap.insert(0,24)
+        self.e_stimFftGap.insert(0,48)
 
         self.e_corrTh = Entry(top)
         self.e_corrTh.grid(row=4,column=1)
