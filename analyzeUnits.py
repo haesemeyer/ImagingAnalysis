@@ -10,6 +10,158 @@ from sklearn.cluster import KMeans
 
 import pickle
 
+def ShuffleGraph(graph):
+    g_shuff = CorrelationGraph(-1,np.roll(graph.RawTimeseries,np.random.randint(graph.FramesPre//2,graph.FramesPre+graph.FramesStim+graph.FramesPost//2)))
+    #copy necessary values
+    g_shuff.RawTimeseries = g_shuff.Timeseries
+    g_shuff.FramesPre = graph.FramesPre
+    g_shuff.FramesStim = graph.FramesStim
+    g_shuff.FramesFFTGap = graph.FramesFFTGap
+    g_shuff.FramesPost = graph.FramesPost
+    g_shuff.StimFrequency = graph.StimFrequency
+    g_shuff.freqs_pre = graph.freqs_pre
+    g_shuff.freqs_stim = graph.freqs_stim
+    g_shuff.freqs_post = graph.freqs_post
+    #re-compute fourier transforms on shuffled time-series
+    pre,stim,post = g_shuff.FramesPre,g_shuff.FramesStim,g_shuff.FramesPost
+    gap = g_shuff.FramesFFTGap
+    filtered = gaussian_filter1d(g_shuff.RawTimeseries,1.2)
+    g_shuff.fft_pre = np.fft.rfft(filtered[gap:pre])
+    g_shuff.fft_stim = np.fft.rfft(filtered[pre+gap:pre+stim])
+    g_shuff.fft_post = np.fft.rfft(filtered[pre+stim+gap:pre+stim+post])
+    return g_shuff
+
+
+
+def ComputeDFF(graph):
+    timeseries = graph.RawTimeseries
+    base_start = 0
+    base_end = graph.FramesPre
+    F = np.mean(timeseries[base_start:base_end])
+    return (timeseries-F)/F
+
+def ComputeFourierChangeRatio(graph):
+    f = graph.freqs_pre
+    #find index of stimulus frequency
+    ix = np.argmin(np.abs(f-graph.StimFrequency))
+    mag_stim_atFreq = np.absolute(graph.fft_stim)[ix]
+    mag_stim_other = np.sum(np.absolute(graph.fft_stim)[1:])#exclude 0-point, i.e. stimulus mean
+    ratio_stim = mag_stim_atFreq/mag_stim_other
+    mag_bg_atFreq = np.absolute(graph.fft_pre)[ix] + np.absolute(graph.fft_post)[ix]
+    mag_bg_other = np.sum(np.absolute(graph.fft_pre[1:])) + np.sum(np.absolute(graph.fft_post[1:]))
+    ratio_bg = mag_bg_atFreq / mag_bg_other
+    return ratio_stim / ratio_bg, ratio_stim
+
+def ComputeStimActivityIncrease(graph):
+    pre,stim,post = graph.FramesPre,graph.FramesStim,graph.FramesPost
+    avg_pre = np.mean(graph.RawTimeseries[:pre])
+    avg_stim = np.mean(graph.RawTimeseries[pre:pre+stim])
+    avg_post = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
+    return (avg_stim/avg_pre + avg_stim/avg_post)/2
+
+def PlotFltAverages(graph,ax=None):
+    dff = ComputeDFF(graph)
+    dff = gaussian_filter1d(dff,1.2)
+    pre,stim,post = graph.FramesPre,graph.FramesStim,graph.FramesPost
+    if pre!=stim or pre!=post or pre!=144:
+        raise NotImplementedError("Currently only equal phase-lengths of 144 frames are supported")
+    pre_trace = dff[:pre].reshape((6,144//6))
+    stim_trace = dff[pre:pre+stim].reshape((6,144//6))
+    post_trace = dff[pre+stim:pre+stim+post].reshape((6,144//6))
+    time = np.linspace(0,10,144//6,endpoint=False)
+    if ax is None:
+        pl.figure()
+        pl.plot(time-10,np.mean(pre_trace,0))
+        pl.plot(time+10,np.mean(post_trace,0))
+        pl.plot(time,np.mean(stim_trace,0))
+        sns.despine()
+    else:
+        ax.plot(time-10,np.mean(pre_trace,0))
+        ax.plot(time+10,np.mean(post_trace,0))
+        ax.plot(time,np.mean(stim_trace,0))
+        ax.set_xlabel('Time [s]')
+        ax.set_ylabel('dF/F trial average')
+        sns.despine(ax=ax)
+
+def PlotFFTMags(graph,ax=None):
+    mag_pre = np.absolute(graph.fft_pre)
+    mag_stim = np.absolute(graph.fft_stim)
+    mag_post = np.absolute(graph.fft_post)
+    freqs = graph.freqs_pre
+    if ax is None:
+        pl.figure()
+        pl.plot(freqs,mag_pre)
+        pl.plot(freqs,mag_post)
+        pl.plot(freqs,mag_stim)
+        pl.xlabel('Frequency [Hz]')
+        pl.ylabel('Magnitude')
+        sns.despine()
+    else:
+        ax.plot(freqs[1:],mag_pre[1:])
+        ax.plot(freqs[1:],mag_post[1:])
+        ax.plot(freqs[1:],mag_stim[1:])
+        ylm = ax.get_ylim()[1]
+        ax.plot([graph.StimFrequency,graph.StimFrequency],[0,ylm],'k--',alpha=0.6)
+        ax.set_xlabel('Frequency [Hz]')
+        ax.set_ylabel('Magnitude')
+        sns.despine(ax=ax)
+
+
+def PlotDFF(graph,ax=None):
+    dff = gaussian_filter1d(ComputeDFF(graph),1.2)
+    time = np.linspace(0,180,144*3,endpoint=False)
+    if ax is None:
+        pl.figure()
+        pl.plot(time[:145],dff[:145])
+        pl.plot(time[287:144*3],dff[287:144*3])
+        pl.plot(time[144:288],dff[144:288])
+        pl.ylabel('dF/F')
+        pl.xlabel('Time [s]')
+        sns.despine()
+    else:
+        ax.plot(time[:145],dff[:145])
+        ax.plot(time[287:144*3],dff[287:144*3])
+        ax.plot(time[144:288],dff[144:288])
+        ax.set_ylabel('dF/F')
+        ax.set_xlabel('Time [s]')
+        sns.despine(ax=ax)
+
+def PlotROI(graph,ax=None):
+    """
+    Plots graph location on slice sum of original stack
+    """
+    stack_file = graph.SourceFile[:-4]+"_stack.npy"
+    stack = np.load(stack_file).astype(float)
+    sum_stack = np.sum(stack,0)
+    projection = np.zeros((sum_stack.shape[0],sum_stack.shape[1],3))
+    projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
+    projection[projection>0.8] = 0.8
+    for v in graph.V:
+        projection[v[0],v[1],0] = 1
+    if ax is None:
+        with sns.axes_style("white"):
+            fig,ax  = pl.subplots()
+            ax.imshow(projection)
+            sns.despine(fig,ax,True,True,True,True)
+    else:
+        ax.imshow(projection)
+        sns.despine(None,ax,True,True,True,True)
+
+
+def PlotMajorInfo(graph):
+    with sns.axes_style('white'):
+        fig, axes = pl.subplots(ncols=4)
+        fig.set_size_inches(15,5,5)
+        PlotROI(graph,axes[0])
+        PlotDFF(graph,axes[1])
+        PlotFFTMags(graph,axes[2])
+        PlotFltAverages(graph,axes[3])
+        fig.tight_layout()
+
+
+    
+
+
 
 
 
@@ -25,13 +177,19 @@ if __name__ == "__main__":
         finally:
             f.close()
 
-    #use comparisons btw. pre- and post-stimulus distributions to find background
-    #distributions of magnitude at stimulus frequency as well as change in magnitude
-    #at stimulus frequency
-    stim_mag_bg = np.zeros(2*len(graph_list))
-    stim_mag_stim = np.zeros(len(graph_list))
-    stim_mag_ch_bg = np.zeros_like(stim_mag_bg)
-    stim_mag_ch_stim = np.zeros_like(stim_mag_stim)
+    #compute changes in fourier ratio and overall activity between stimulus
+    #and pre-post periods - both on each original graph and a time-series
+    #shuffled version of it to create a background distribution
+    stim_act_inc = np.zeros(len(graph_list))#increase in mean activity during stimulus period compared to pre-post
+    stim_act_inc_sh = np.zeros_like(stim_act_inc)
+    stim_frat = np.zeros_like(stim_act_inc)#fourier ratio at stimulus freqency during stimulus
+    stim_frat_sh = np.zeros_like(stim_act_inc)
+    stim_frat_inc = np.zeros_like(stim_act_inc)#change in fourier ratio at stimulus frequency during stimulus compared to non-stimulus
+    stim_frat_inc_sh = np.zeros_like(stim_frat_inc)
+
+    all_quality_scores = np.zeros(len(graph_list))#for each ROI the stacks movement quality score: 0 is best, <0.1 likely tolerable, >=0.1 problematic
+
+    pre_post_mean_change = np.zeros_like(all_quality_scores)#tracks the fold-change of post stimulus mean compared to pre-stimulus mean
 
     for i,graph in enumerate(graph_list):
         try:
@@ -48,37 +206,26 @@ if __name__ == "__main__":
             fft_gap = 24
             ix = np.argmin(np.absolute(0.1-graph.freqs_stim))
         
-        #re-compute fourier transforms on dF/F (mean(pre)=F) after 0.5s filtering
-        F = np.mean(graph.RawTimeseries[:pre])
-        dFF = (graph.RawTimeseries-F)/F
-        dFF = gaussian_filter1d(dFF,1.2)
-        graph.dFF = dFF
-        sig_pre = dFF[:pre]
-        sig_stm = dFF[pre:pre+stim]
-        sig_pos = dFF[pre+stim:pre+stim+post]
-        ms = lambda x: x-np.mean(x)
-        fft_pre = np.fft.rfft(ms(sig_pre[fft_gap:]))
-        fft_stm = np.fft.rfft(ms(sig_stm[fft_gap:]))
-        fft_pos = np.fft.rfft(ms(sig_pos[fft_gap:]))
-        assert(fft_pre.size == fft_stm.size and fft_stm.size == fft_pos.size and fft_pos.size == graph.fft_pre.size)
-        graph.fft_pre = fft_pre
-        graph.fft_stim = fft_stm
-        graph.fft_post = fft_pos
-        mags_pre = np.absolute(graph.fft_pre)
-        mags_stim = np.absolute(graph.fft_stim)
-        mags_post = np.absolute(graph.fft_post)
-
-        stim_mag_bg[i] = mags_pre[ix]
-        stim_mag_bg[i+len(graph_list)] = mags_post[ix]
-        stim_mag_stim[i] = mags_stim[ix]
-
-        stim_mag_ch_bg[i] = mags_pre[ix] - mags_post[ix]
-        stim_mag_ch_bg[i+len(graph_list)] = mags_post[ix] - mags_pre[ix]
-        stim_mag_ch_stim[i] = (mags_stim[ix] - mags_pre[ix] + mags_stim[ix] - mags_post[ix])/2
+        all_quality_scores[i] = graph.MaxQualScoreDeviation
+        g_shuffled = ShuffleGraph(graph)
+        stim_act_inc[i] = ComputeStimActivityIncrease(graph)
+        stim_act_inc_sh[i] = ComputeStimActivityIncrease(g_shuffled)
+        stim_frat_inc[i],stim_frat[i] = ComputeFourierChangeRatio(graph)
+        stim_frat_inc_sh[i],stim_frat_sh[i] = ComputeFourierChangeRatio(g_shuffled)
+        pre_mean = np.mean(graph.RawTimeseries[:pre])
+        post_mean = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
+        pre_post_mean_change[i] = post_mean/pre_mean
+        
 
 
 
     #for each change category get indices of graphs that have a change larger
     #than the 95th percentile of the respective background distribution
+    cut_frat_inc = np.percentile(stim_frat_inc_sh[all_quality_scores<0.1],95)
+    cut_frat = np.percentile(stim_frat_sh[all_quality_scores<0.1],95)
+    take = [g for i,g in enumerate(graph_list) if stim_frat_inc[i]>cut_frat_inc and stim_frat[i]>cut_frat and all_quality_scores[i]<0.1]
+
+    cut_inc = np.percentile(stim_act_inc_sh[all_quality_scores<0.1],95)
+    take_increase = [g for i,g in enumerate(graph_list) if stim_act_inc[i]>cut_inc and all_quality_scores[i]<0.1]
 
    
