@@ -311,38 +311,6 @@ if __name__ == "__main__":
                 pl.close('all')
             
 
-        #plot pre, stim and post fourier magnitude
         
-
-        ###########################################
-        ##"OLD" FOURIER AND ACTIVITY BASED ANALYSIS##
-        ###########################################
-        #f_stack = FilterStackGaussian(stack,1)#FilterStack(stack.copy())
-        ##threshold based on intensity - at least 5 photons over the whole time-series...
-        #sum_stack = np.sum(f_stack,0)
-        #for j in range(f_stack.shape[0]):
-        #    im = f_stack[j,:,:]
-        #    im[sum_stack<min_phot] = 0
-        #    f_stack[j,:,:] = im
-        #fft_stack = Per_PixelFourier(f_stack,pre_stim+stim_fft_gap,pre_stim+stim)[0]
-        #freqs = np.linspace(0,1.2,fft_stack.shape[0])
-        ##find the plane which most closely corresponds to our frequency
-        #dfs = np.absolute(des_freq-freqs)
-        #plane = np.argmin(dfs)
-        #im_thresh = Threshold_Zsc(fft_stack,1.5,plane)
-        #im_thresh[np.isnan(im_thresh)] = 0
-        ##find pixels which showed activation during the heat-on period
-        #im_activated = np.ones_like(im_thresh,dtype=float)
-        #for x in range(im_thresh.shape[0]):
-        #    for y in range(im_thresh.shape[1]):
-        #        if sum_stack[x,y]>=min_phot:
-        #            im_activated[x,y] = IsHeatActivated(stack[:,x,y],pre_stim,stim,post_stim)
-        ##set pixels in im_thresh to 0 if im_activated>0.05. TODO: We should somehow allow region growth out of activated pixels into their neighbors
-        #im_thresh[im_activated>0.2] = 0
-        #with sns.axes_style('white'):
-        #    fig, (ax1, ax2) = pl.subplots(ncols=2)
-        #    ax1.imshow(np.sum(stack,0),cmap='bone')
-        #    ax1.set_title(f.split('/')[-1])
-        #    ax2.imshow(im_thresh,cmap="bone")
-        #    fig.tight_layout()
+       
         print((i+1)/len(filenames)*100,'% done',flush=True)
