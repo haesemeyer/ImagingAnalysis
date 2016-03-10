@@ -44,17 +44,31 @@ def IsHeatActivated(trace,npre,nstim,npost):
     return p_pois
 
 
-def AssignFourier(graph,startFrame,endFrame,suffix="pre"):
+def AssignFourier(graph,startFrame,endFrame,suffix="pre",aggregate=True):
+    """
+        graph: The unit to which the timeseries fourier transform should be assigned
+        startFrame: The start-frame in the timeseries of the considered fragment
+        endFrame: The end-frame in the timeseries of the considered fragment
+        suffix: Gets added to the end of the attribute name to which transforms will be assigned
+        aggregate: If True AND the timeseries is a multiple of 2 period lengths
+        transforms will be computed on an average of beginning and end half of the timeseries
+    """
     global des_freq
+    global frame_rate
     #anti-aliasing
-    filtered = gaussian_filter1d(graph.RawTimeseries,1.2)
+    filtered = gaussian_filter1d(graph.RawTimeseries,frame_rate/2)
     filtered = filtered[startFrame:endFrame]
     #TODO: Somehow make the following noise reduction more generally applicable...
     #if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
-    if filtered.size % 2 == 0:
-        filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
+    if aggregate:
+        #Test if we can aggregate: Find the period length pl in frames. If the length of filtered
+        #is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
+        #and second half to reduce noise in transform (while at the same time reducing resolution)
+        pl = round(1 / des_freq * frame_rate)
+        if (filtered.size/pl) % 2 == 0:
+            filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
     fft = np.fft.rfft(filtered)
-    freqs = np.linspace(0,1.2,fft.shape[0])
+    freqs = np.linspace(0,frame_rate/2,fft.shape[0])
     mag = np.absolute(fft)
     ix = np.argmin(np.absolute(des_freq-freqs))#index of bin which contains our desired frequency
     setattr(graph,"fft_"+suffix,fft)
