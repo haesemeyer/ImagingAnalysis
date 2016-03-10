@@ -120,6 +120,7 @@ if __name__ == "__main__":
     #stim_fft_gap = 24#0#number of initial frames not to use for fft determination
     min_phot = 10#minimum number of photons to observe in a pixels timeseries to not discard series
     des_freq = 0.1#0.3#1/3##the stimulus frequency
+    frame_rate = 2.4# imaging frame-rate in Hz
     #corr_thresh = 0.2#0.5#0.1#0.025#correlation threshold for co-segmenting pixels - should probably be >0.5 if things actually worked
 
     #obtain paradigm constants from user
@@ -178,8 +179,8 @@ if __name__ == "__main__":
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
-        rate_stack = gaussian_filter(stack,(2.4,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
-        rs_shuff = gaussian_filter(st_shuff,(2.4,cell_diam/8,cell_diam/8))
+        rate_stack = gaussian_filter(stack,(frame_rate,cell_diam/8,cell_diam/8))#along time standard deviation of 1s, 1/8 of cell diameter along spatial dimension - i.e. filter drops to ~0 after cell radius
+        rs_shuff = gaussian_filter(st_shuff,(frame_rate,cell_diam/8,cell_diam/8))
         
         #compute neighborhood correlations of pixel-timeseries for segmentation seeds
         im_ncorr = AvgNeighbhorCorrelations(rate_stack,2,consider)
@@ -238,6 +239,7 @@ if __name__ == "__main__":
             g.CorrThresh = ct_actual
             g.CorrSeedCutoff = seed_cutoff
             g.RawTimeseries = np.zeros_like(g.Timeseries)
+            g.FrameRate = frame_rate
             #also save in graph the maximum absolute quality score deviation from the mean
             g.MaxQualScoreDeviation = max_qual_deviation
             for v in g.V:
