@@ -8,6 +8,11 @@ from scipy.stats import poisson
 from scipy.ndimage.filters import gaussian_filter,gaussian_filter1d
 from scipy.signal import fftconvolve
 
+import sys
+sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
+
+import mhba_basic as mb
+
 try:
     import Tkinter
     import tkFileDialog
@@ -134,8 +139,79 @@ class PixelGraph:
 #class PixelGraph
 
 
+#compiled acceleration
+from numba import jit
+import numba
+from numpy import std,zeros
 
+@jit(numba.float64[:](numba.float64[:],numba.int32))
+def Vigor(cumAngle,winlen=10):
+    """
+    Computes the swim vigor based on a cumulative angle trace
+    as the windowed standard deviation of the cumAngles
+    """
+    s = cumAngle.size
+    vig = zeros(s)
+    for i in range(winlen,s):
+        vig[i] = std(cumAngle[i-winlen+1:i+1])
+    return vig
 
+class TailData:
+
+    def __init__(self,fileData,ca_timeconstant,frameRate):
+        """
+        Creates a new TailData object
+            fileData: Matrix loaded from tailfile
+        """
+        self.scanning = fileData[:,0] == 1
+        self.scanFrame = fileData[:,1]
+        self.scanFrame[np.logical_not(self.scanning)] = -1
+        self.cumAngle = np.rad2deg(fileData[:,2])
+        self.vigor = Vigor(self.cumAngle)
+        self.bouts = mb.DetectTailBouts(self.cumAngles,threshold=5,frameRate=frameRate,vigor = self.vigor)
+        bs = self.bouts[:,0].astype(int)
+        self.boutFrames = self.scanFrame[bs]
+        self.ca_kernel = TailData.CaKernel(ca_timeconstant,frameRate)
+        self.frameRate = frameRate
+
+    @property
+    def PerFrameVigor(self):
+        """
+        For each scan frame returns the average
+        swim vigor
+        """
+        sf = np.unique(self.scanFrame)
+        sf = sf[sf!=-1]
+        sf = np.sort(sf)
+        #TODO: vigor should be convolved with the appropriate calcium kernel
+        conv_vigor = np.convolve(self.vigor,self.ca_kernel)
+        pfv = np.zeros(sf.size)
+        for i,s in enumerate(sf):
+            pfv[i] = np.mean(conv_vigor[self.scanFrame==s])
+        return pfv
+
+    @staticmethod
+    def LoadTailData(filename,ca_timeConstant,frameRate=100):
+        try:
+            data = np.genfromtxt(filename,delimiter='\t')
+        except (IOError, OSError):
+            return None
+        return TailData(data,ca_timeConstant,frameRate)
+
+    @staticmethod
+    def CaKernel(tau,frameRate):
+        """
+        Creates a calcium decay kernel for the given frameRate
+        with the given half-life in seconds
+        """
+        fold_length = 4#make kernel length equal to 4 half-times (decay to 6%)
+        klen = fold_length*tau*frameRate
+        tk = np.linspace(0,fold_length*tau,klen,endpoint=False)
+        k = 2**(-1*tk/tau)
+        k = k / k.sum()
+        return k
+
+#TailData
 
 
 def UiGetFile(filetypes = [('Tiff stack', '.tif;.tiff')],multiple=False):
