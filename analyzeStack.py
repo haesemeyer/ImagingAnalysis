@@ -13,7 +13,7 @@ from scipy.ndimage.morphology import binary_fill_holes
 
 import pickle
 
-from tkinter import Label, Toplevel, Button, Entry, Tk
+from tkinter import Label, Toplevel, Button, Entry, Tk, Radiobutton, IntVar, StringVar, mainloop
 
 
 
@@ -86,6 +86,7 @@ class InputDialog:
         Label(top,text="Stim fft gap").grid(row=3)
         Label(top,text="Corr threshold").grid(row=4)
         Label(top,text="Avg. cell diameter").grid(row=5)
+        Label(top,text="Indicator").grid(row=6)
 
         self.e_preStim = Entry(top)
         self.e_preStim.grid(row=0,column=1)
@@ -112,7 +113,12 @@ class InputDialog:
         self.e_avgCdiam.insert(0,8)
 
         self.b = Button(top,text="OK",command = self.ok)
-        self.b.grid(row=7)
+        self.b.grid(row=10)
+
+        self.indicator = IntVar()
+        self.indicator.set(400)
+        Radiobutton(top,text="Gcamp6f",variable=self.indicator,value=400).grid(row=7)
+        Radiobutton(top,text="Gcamp6s",variable=self.indicator,value=1796).grid(row=8)
 
     def ok(self):
         self.pre_stim = int(self.e_preStim.get())
@@ -121,6 +127,7 @@ class InputDialog:
         self.stim_fftGap = int(self.e_stimFftGap.get())
         self.corrTh = float(self.e_corrTh.get())
         self.cellDiam = int(self.e_avgCdiam.get())
+        self.timeConstant = self.indicator.get()/1000
         self.top.destroy()
 
 
@@ -147,7 +154,8 @@ if __name__ == "__main__":
     stim_fft_gap = diag.stim_fftGap
     corr_thresh = diag.corrTh
     cell_diam = diag.cellDiam
-    root.destroy()
+    ca_time_const = diag.timeConstant
+    root.withdraw()
 
 
     filenames = UiGetFile([('Tiff Stack', '.tif;.tiff')],multiple=True)
@@ -171,6 +179,13 @@ if __name__ == "__main__":
                 np.save(f[:-4]+"_xshift.npy",xshift.astype(np.int32))
                 np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
             print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
+        #try to load corresponding tail-tracking-data
+        tfile = f[:-4]+".tail"
+        t_data = TailData.LoadTailData(tfile,ca_time_const,100)
+        if t_data is None:
+            print("No tail tracking file found",flush=True)
+        else:
+            print("Tail tracking data loaded",flush=True)
         #perform quality control and save resulting plot
         qualscore = CorrelationControl(stack,36)[0]
         fig = pl.figure()
@@ -254,6 +269,9 @@ if __name__ == "__main__":
             g.CorrSeedCutoff = seed_cutoff
             g.RawTimeseries = np.zeros_like(g.Timeseries)
             g.FrameRate = frame_rate
+            g.CaTimeConstant = ca_time_const
+            if not (t_data is None):
+                g.PerFrameVigor = t_data.PerFrameVigor
             #also save in graph the maximum absolute quality score deviation from the mean
             g.MaxQualScoreDeviation = max_qual_deviation
             for v in g.V:
