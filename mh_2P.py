@@ -2,11 +2,13 @@ from collections import deque
 import numpy as np
 from PIL import Image
 
+from collections import Counter
+
 import matplotlib.pyplot as pl
 import seaborn as sns
 from scipy.stats import poisson
 from scipy.ndimage.filters import gaussian_filter,gaussian_filter1d
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, lfilter
 
 import sys
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
@@ -166,13 +168,27 @@ class TailData:
         self.scanning = fileData[:,0] == 1
         self.scanFrame = fileData[:,1]
         self.scanFrame[np.logical_not(self.scanning)] = -1
-        self.cumAngle = np.rad2deg(fileData[:,2])
-        self.vigor = Vigor(self.cumAngle)
+        #after the last frame is scanned, the scanImageIndex will be incremented further
+        #and the isScanning indicator will not immediately switch off. Therefore, if
+        #the highest index frame has less than 75% of the average per-index frame-number
+        #set it to -1 as well
+        c = Counter(self.scanFrame[self.scanFrame!=-1])
+        avgCount = np.mean(list(c.values()))
+        maxFrame = np.max(self.scanFrame)
+        if np.sum(self.scanFrame==maxFrame) < 0.75*avgCount:
+            self.scanFrame[self.scanFrame==maxFrame] = -1
+        self.cumAngles = np.rad2deg(fileData[:,2])
+        self.vigor = Vigor(self.cumAngles,5)
         self.bouts = mb.DetectTailBouts(self.cumAngles,threshold=5,frameRate=frameRate,vigor = self.vigor)
         bs = self.bouts[:,0].astype(int)
         self.boutFrames = self.scanFrame[bs]
         self.ca_kernel = TailData.CaKernel(ca_timeconstant,frameRate)
+        self.ca_timeconstant = ca_timeconstant
         self.frameRate = frameRate
+        #compute tail velocities based on 10-window filtered cumulative angle trace
+        fca = lfilter(np.ones(10)/10,1,self.cumAngles)
+        self.velocity = np.hstack((0,np.diff(fca)))
+        self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
 
     @property
     def PerFrameVigor(self):
