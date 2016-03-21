@@ -13,7 +13,7 @@ from scipy.ndimage.morphology import binary_fill_holes
 
 import pickle
 
-from tkinter import Label, Toplevel, Button, Entry, Tk, Radiobutton, IntVar, StringVar, mainloop
+from tkinter import Label, Toplevel, Button, Entry, Tk, Radiobutton, IntVar, StringVar
 
 
 
@@ -180,7 +180,7 @@ if __name__ == "__main__":
                 np.save(f[:-4]+"_yshift.npy",yshift.astype(np.int32))
             print('Stack ',i,' of ',len(filenames)-1,' realigned',flush=True)
         #try to load corresponding tail-tracking-data
-        tfile = f[:-4]+".tail"
+        tfile = f[:-6]+".tail"
         t_data = TailData.LoadTailData(tfile,ca_time_const,100)
         if t_data is None:
             print("No tail tracking file found",flush=True)
@@ -272,6 +272,7 @@ if __name__ == "__main__":
             g.CaTimeConstant = ca_time_const
             if not (t_data is None):
                 g.PerFrameVigor = t_data.PerFrameVigor
+                g.BoutStartTrace = t_data.FrameBoutStarts(frame_rate)
             #also save in graph the maximum absolute quality score deviation from the mean
             g.MaxQualScoreDeviation = max_qual_deviation
             for v in g.V:
