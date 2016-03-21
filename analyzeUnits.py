@@ -10,6 +10,11 @@ from sklearn.cluster import KMeans
 
 import pickle
 
+import sys
+sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
+
+import mhba_basic as mb
+
 def ShuffleGraph(graph):
     g_shuff = CorrelationGraph(-1,np.roll(graph.RawTimeseries,np.random.randint(graph.FramesPre//2,graph.FramesPre+graph.FramesStim+graph.FramesPost//2)))
     #copy necessary values
@@ -59,7 +64,7 @@ def ComputeStimActivityIncrease(graph):
     avg_post = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
     return (avg_stim/avg_pre + avg_stim/avg_post)/2
 
-def PlotFltAverages(graph,ax=None):
+def GetFltAverages(graph):
     dff = ComputeDFF(graph)
     dff = gaussian_filter1d(dff,1.2)
     pre,stim,post = graph.FramesPre,graph.FramesStim,graph.FramesPost
@@ -68,7 +73,11 @@ def PlotFltAverages(graph,ax=None):
     pre_trace = dff[:pre].reshape((6,144//6))
     stim_trace = dff[pre:pre+stim].reshape((6,144//6))
     post_trace = dff[pre+stim:pre+stim+post].reshape((6,144//6))
-    time = np.linspace(0,10,144//6,endpoint=False)
+    return pre_trace, stim_trace, post_trace
+
+def PlotFltAverages(graph,ax=None):
+    pre_trace, stim_trace, post_trace = GetFltAverages(graph)
+    time = np.linspace(0,10,pre_trace.shape[1],endpoint=False)
     if ax is None:
         pl.figure()
         pl.plot(time-10,np.mean(pre_trace,0))
@@ -161,12 +170,19 @@ def PlotMajorInfo(graph):
 
     
 
-
+def LoadGraphTailData(graph):
+    name = graph.SourceFile[:-6]+".tail"
+    return TailData.LoadTailData(name,graph.CaTimeConstant)
 
 
 
 if __name__ == "__main__":
     graphFiles = UiGetFile([('PixelGraphs','.graph')],multiple=True)
+
+    #gcamp6f
+    #qual_cut = 0.1
+    #gcamp6s (TB confirmed)
+    qual_cut = 0.2
 
     graph_list = []
 
@@ -186,6 +202,9 @@ if __name__ == "__main__":
     stim_frat_sh = np.zeros_like(stim_act_inc)
     stim_frat_inc = np.zeros_like(stim_act_inc)#change in fourier ratio at stimulus frequency during stimulus compared to non-stimulus
     stim_frat_inc_sh = np.zeros_like(stim_frat_inc)
+
+    motor_corr = np.zeros_like(stim_frat_inc)#the correlation of the graph's time-series to motor events
+    motor_corr_sh = np.zeros_like(motor_corr)
 
     all_quality_scores = np.zeros(len(graph_list))#for each ROI the stacks movement quality score: 0 is best, <0.1 likely tolerable, >=0.1 problematic
 
@@ -215,17 +234,49 @@ if __name__ == "__main__":
         pre_mean = np.mean(graph.RawTimeseries[:pre])
         post_mean = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
         pre_post_mean_change[i] = post_mean/pre_mean
+        if graph.BoutStartTrace.size == graph.RawTimeseries.size:
+            motor_corr[i] = np.corrcoef(graph.BoutStartTrace,graph.RawTimeseries)[0,1]
+            motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace,g_shuffled.RawTimeseries)[0,1]
+        else:#left-over frame not removed
+            motor_corr[i] = np.corrcoef(graph.BoutStartTrace[:-1],graph.RawTimeseries)[0,1]
+            motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace[:-1],g_shuffled.RawTimeseries)[0,1]
         
 
 
 
     #for each change category get indices of graphs that have a change larger
     #than the 95th percentile of the respective background distribution
-    cut_frat_inc = np.percentile(stim_frat_inc_sh[all_quality_scores<0.1],95)
-    cut_frat = np.percentile(stim_frat_sh[all_quality_scores<0.1],95)
-    take = [g for i,g in enumerate(graph_list) if stim_frat_inc[i]>cut_frat_inc and stim_frat[i]>cut_frat and all_quality_scores[i]<0.1]
+    cut_frat_inc = np.percentile(stim_frat_inc_sh[all_quality_scores<qual_cut],95)
+    cut_frat = np.percentile(stim_frat_sh[all_quality_scores<qual_cut],95)
+    take = [g for i,g in enumerate(graph_list) if stim_frat_inc[i]>cut_frat_inc and stim_frat[i]>cut_frat and all_quality_scores[i]<qual_cut]
 
-    cut_inc = np.percentile(stim_act_inc_sh[all_quality_scores<0.1],95)
-    take_increase = [g for i,g in enumerate(graph_list) if stim_act_inc[i]>cut_inc and all_quality_scores[i]<0.1]
+    cut_inc = np.percentile(stim_act_inc_sh[all_quality_scores<qual_cut],95)
+    take_increase = [g for i,g in enumerate(graph_list) if stim_act_inc[i]>cut_inc and all_quality_scores[i]<qual_cut]#ignore for now
+
+    #identify potential motor-correlated units
+    cut_mc = np.percentile(motor_corr_sh[all_quality_scores<qual_cut],99)
+    take_mc = [g for i,g in enumerate(graph_list) if motor_corr[i]>cut_mc and all_quality_scores[i]<qual_cut]
+
+    #get set of all graphs that are in either take_increase and/or take_mc
+    take_all = set(take + take_mc)
+
+    #for clustering create a matrix with take_all.size rows. Each row contains the concatenatio
+    #of the per-period average stimulus trace (10s, 24 frames) as well as the bout triggered
+    #average response (4 pre and 4 post frames, total of 9 frames, 3.75 seonds)
+    #zscore each segment but give bout triggered average a standard-deviation of 2 to compensate
+    #for having less frames in this segment...
+
+    #create dictionary with tail data for each relevant slice
+    taildata = dict()
+    for g in take_all:
+        if g.SourceFile in taildata:
+            continue;
+        else:
+            taildata[g.SourceFile] = LoadGraphTailData(g)
+
+
+    #separate motor-correlated units out (?) - motor likely correlated to stimulus - so how to separate properly??
+
+    #cluster potential sensory driven units(?) / separate by phase (?)
 
    
