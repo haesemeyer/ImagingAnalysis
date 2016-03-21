@@ -205,6 +205,35 @@ class TailData:
             pfv[i] = np.mean(conv_vigor[self.scanFrame==s])
         return pfv
 
+    @property
+    def BoutStartsEnds(self):
+        return self.bouts[:,0].astype(int), self.bouts[:,1].astype(int)
+
+    def FrameBoutStarts(self,image_freq):
+        """
+        Returns a convolved per-frame bout-start trace
+            image_freq: Imaging frequency
+        """
+        bf = self.boutFrames.astype(int)
+        bf = bf[bf!=-1]
+        starting = np.zeros(self.scanFrame.max()+1)
+        for s in bf:
+            #loop to allow double bouts in one frame to be counted
+            starting[s] += 1.0
+        frameKernel = TailData.CaKernel(self.ca_timeconstant,image_freq)
+        return np.convolve(starting,frameKernel,mode='full')[:starting.size]
+
+    def PlotBouts(self):
+        bs, be = self.BoutStartsEnds
+        with sns.axes_style('white'):
+            pl.figure()
+            pl.plot(self.cumAngles,label='Angle trace')
+            pl.plot(bs,self.cumAngles[bs],'r*',label='Starts')
+            pl.plot(be,self.cumAngles[be],'k*',label='Ends')
+            pl.ylabel('Cumulative tail angle')
+            pl.xlabel('Frames')
+            sns.despine()
+
     @staticmethod
     def LoadTailData(filename,ca_timeConstant,frameRate=100):
         try:
@@ -220,11 +249,12 @@ class TailData:
         with the given half-life in seconds
         """
         fold_length = 4#make kernel length equal to 4 half-times (decay to 6%)
-        klen = fold_length*tau*frameRate
+        klen = int(fold_length*tau*frameRate)
         tk = np.linspace(0,fold_length*tau,klen,endpoint=False)
         k = 2**(-1*tk/tau)
         k = k / k.sum()
         return k
+
 
 #TailData
 
