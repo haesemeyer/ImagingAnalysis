@@ -199,8 +199,7 @@ class TailData:
         sf = np.unique(self.scanFrame)
         sf = sf[sf!=-1]
         sf = np.sort(sf)
-        #TODO: vigor should be convolved with the appropriate calcium kernel
-        conv_vigor = np.convolve(self.vigor,self.ca_kernel)
+        conv_vigor = np.convolve(self.vigor,self.ca_kernel,mode='full')[:self.vigor.size]
         pfv = np.zeros(sf.size)
         for i,s in enumerate(sf):
             pfv[i] = np.mean(conv_vigor[self.scanFrame==s])
