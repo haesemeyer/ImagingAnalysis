@@ -46,7 +46,7 @@ def IsHeatActivated(trace,npre,nstim,npost):
     return p_pois
 
 
-def AssignFourier(graph,startFrame,endFrame,suffix="pre",aggregate=True):
+def AssignFourier(graph,startFrame,endFrame,des_freq,frame_rate,suffix="pre",aggregate=True):
     """
         graph: The unit to which the timeseries fourier transform should be assigned
         startFrame: The start-frame in the timeseries of the considered fragment
@@ -55,10 +55,8 @@ def AssignFourier(graph,startFrame,endFrame,suffix="pre",aggregate=True):
         aggregate: If True AND the timeseries is a multiple of 2 period lengths
         transforms will be computed on an average of beginning and end half of the timeseries
     """
-    global des_freq
-    global frame_rate
     #anti-aliasing
-    filtered = gaussian_filter1d(graph.RawTimeseries,frame_rate/2)
+    filtered = gaussian_filter1d(graph.RawTimeseries,frame_rate/4)#,frame_rate/2)
     filtered = filtered[startFrame:endFrame]
     #TODO: Somehow make the following noise reduction more generally applicable...
     #if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
@@ -281,11 +279,11 @@ if __name__ == "__main__":
             for v in g.V:
                 g.RawTimeseries = g.RawTimeseries + stack[:,v[0],v[1]]
             #pre-stim
-            AssignFourier(g,stim_fft_gap,pre_stim,"pre")
+            AssignFourier(g,stim_fft_gap,pre_stim,des_freq,frame_rate,"pre")
             #stim
-            AssignFourier(g,pre_stim+stim_fft_gap,pre_stim+stim,"stim")
+            AssignFourier(g,pre_stim+stim_fft_gap,pre_stim+stim,des_freq,frame_rate,"stim")
             #post-stim
-            AssignFourier(g,pre_stim+stim+stim_fft_gap,pre_stim+stim+post_stim,"post")
+            AssignFourier(g,pre_stim+stim+stim_fft_gap,pre_stim+stim+post_stim,des_freq,frame_rate,"post")
 
         #save graph list
         if save:
