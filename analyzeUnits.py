@@ -95,9 +95,9 @@ def PlotFltAverages(graph,ax=None):
         pl.plot(time,np.mean(stim_trace,0))
         sns.despine()
     else:
-        ax.plot(time-10,np.mean(pre_trace,0))
-        ax.plot(time+10,np.mean(post_trace,0))
-        ax.plot(time,np.mean(stim_trace,0))
+        ax.plot(time-10,np.mean(pre_trace[2:,:],0))
+        ax.plot(time+10,np.mean(post_trace[2:,:],0))
+        ax.plot(time,np.mean(stim_trace[2:,:],0))
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('dF/F trial average')
         sns.despine(ax=ax)
