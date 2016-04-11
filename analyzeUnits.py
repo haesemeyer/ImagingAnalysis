@@ -60,6 +60,13 @@ def ComputeFourierChangeRatio(graph):
     ratio_bg = mag_bg_atFreq / mag_bg_other
     return ratio_stim / ratio_bg, ratio_stim
 
+def ComputeAnglesAtStim(graph):
+    f = graph.freqs_pre
+    #find index of stimulus frequency
+    ix = np.argmin(np.abs(f-graph.StimFrequency))
+    return np.angle(graph.fft_pre)[ix], np.angle(graph.fft_stim)[ix], np.angle(graph.fft_post)[ix]
+
+
 def ComputeStimActivityIncrease(graph):
     pre,stim,post = graph.FramesPre,graph.FramesStim,graph.FramesPost
     avg_pre = np.mean(graph.RawTimeseries[:pre])
