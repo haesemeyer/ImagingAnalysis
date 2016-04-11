@@ -10,10 +10,14 @@ from sklearn.cluster import KMeans
 
 import pickle
 
+
+from analyzeStack import AssignFourier
+
 import sys
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 
 import mhba_basic as mb
+
 
 def ShuffleGraph(graph):
     g_shuff = CorrelationGraph(-1,np.roll(graph.RawTimeseries,np.random.randint(graph.FramesPre//2,graph.FramesPre+graph.FramesStim+graph.FramesPost//2)))
@@ -30,10 +34,9 @@ def ShuffleGraph(graph):
     #re-compute fourier transforms on shuffled time-series
     pre,stim,post = g_shuff.FramesPre,g_shuff.FramesStim,g_shuff.FramesPost
     gap = g_shuff.FramesFFTGap
-    filtered = gaussian_filter1d(g_shuff.RawTimeseries,1.2)
-    g_shuff.fft_pre = np.fft.rfft(filtered[gap:pre])
-    g_shuff.fft_stim = np.fft.rfft(filtered[pre+gap:pre+stim])
-    g_shuff.fft_post = np.fft.rfft(filtered[pre+stim+gap:pre+stim+post])
+    AssignFourier(g_shuff,gap,pre,des_freq,frame_rate,'pre',True)
+    AssignFourier(g_shuff,pre+gap,pre+stim,des_freq,frame_rate,'stim',True)
+    AssignFourier(g_shuff,pre+stim+gap,pre+stim+post,des_freq,frame_rate,'post',True)
     return g_shuff
 
 
