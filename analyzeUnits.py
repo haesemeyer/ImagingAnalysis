@@ -148,7 +148,7 @@ def PlotDFF(graph,ax=None):
         ax.set_xlabel('Time [s]')
         sns.despine(ax=ax)
 
-def PlotROI(graph,ax=None):
+def PlotROI(graph,ax=None,motor=False):
     """
     Plots graph location on slice sum of original stack
     """
@@ -158,8 +158,12 @@ def PlotROI(graph,ax=None):
     projection = np.zeros((sum_stack.shape[0],sum_stack.shape[1],3))
     projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
     projection[projection>0.8] = 0.8
-    for v in graph.V:
-        projection[v[0],v[1],0] = 1
+    if motor:
+        for v in graph.V:
+            projection[v[0],v[1],2] = 1
+    else:
+        for v in graph.V:
+            projection[v[0],v[1],0] = 1
     if ax is None:
         with sns.axes_style("white"):
             fig,ax  = pl.subplots()
@@ -170,11 +174,11 @@ def PlotROI(graph,ax=None):
         sns.despine(None,ax,True,True,True,True)
 
 
-def PlotMajorInfo(graph):
-    with sns.axes_style('white'):
+def PlotMajorInfo(graph,motor=False):
+    with sns.axes_style('ticks'):
         fig, axes = pl.subplots(ncols=4)
         fig.set_size_inches(15,5,5)
-        PlotROI(graph,axes[0])
+        PlotROI(graph,axes[0],motor)
         PlotDFF(graph,axes[1])
         PlotFFTMags(graph,axes[2])
         PlotFltAverages(graph,axes[3])
