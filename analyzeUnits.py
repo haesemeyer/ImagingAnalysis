@@ -251,12 +251,15 @@ if __name__ == "__main__":
         pre_mean = np.mean(graph.RawTimeseries[:pre])
         post_mean = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
         pre_post_mean_change[i] = post_mean/pre_mean
-        if graph.BoutStartTrace.size == graph.RawTimeseries.size:
-            motor_corr[i] = np.corrcoef(graph.BoutStartTrace,graph.RawTimeseries)[0,1]
-            motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace,g_shuffled.RawTimeseries)[0,1]
-        else:#left-over frame not removed
-            motor_corr[i] = np.corrcoef(graph.BoutStartTrace[:-1],graph.RawTimeseries)[0,1]
-            motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace[:-1],g_shuffled.RawTimeseries)[0,1]
+        if not graph.BoutStartTrace is None and np.any(graph.BoutStartTrace!=0):
+            if graph.BoutStartTrace.size == graph.RawTimeseries.size:
+                motor_corr[i] = np.corrcoef(graph.BoutStartTrace,graph.RawTimeseries)[0,1]
+                motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace,g_shuffled.RawTimeseries)[0,1]
+            else:#left-over frame not removed
+                motor_corr[i] = np.corrcoef(graph.BoutStartTrace[:-1],graph.RawTimeseries)[0,1]
+                motor_corr_sh[i] = np.corrcoef(graph.BoutStartTrace[:-1],g_shuffled.RawTimeseries)[0,1]
+        else:
+            motor_corr[i] = motor_corr_sh[i] = 0
         
 
 
