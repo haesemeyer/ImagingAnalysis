@@ -104,8 +104,11 @@ def PlotFltAverages(graph,ax=None):
 
 def PlotFFTMags(graph,ax=None):
     mag_pre = np.absolute(graph.fft_pre)
+    mag_pre /= mag_pre.size
     mag_stim = np.absolute(graph.fft_stim)
+    mag_stim /= mag_stim.size
     mag_post = np.absolute(graph.fft_post)
+    mag_post /= mag_post.size
     freqs = graph.freqs_pre
     if ax is None:
         pl.figure()
