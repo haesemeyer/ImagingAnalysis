@@ -178,10 +178,16 @@ class TailData:
         if np.sum(self.scanFrame==maxFrame) < 0.75*avgCount:
             self.scanFrame[self.scanFrame==maxFrame] = -1
         self.cumAngles = np.rad2deg(fileData[:,2])
-        self.vigor = Vigor(self.cumAngles,5)
-        self.bouts = mb.DetectTailBouts(self.cumAngles,threshold=5,frameRate=frameRate,vigor = self.vigor)
-        bs = self.bouts[:,0].astype(int)
-        self.boutFrames = self.scanFrame[bs]
+        #self.RemoveTrackErrors()
+        self.vigor = Vigor(self.cumAngles,8)
+        self.bouts = mb.DetectTailBouts(self.cumAngles,threshold=10,frameRate=frameRate,vigor = self.vigor)
+        if not self.bouts is None and self.bouts.size == 0:
+            self.bouts = None
+        if not self.bouts is None:
+            bs = self.bouts[:,0].astype(int)
+            self.boutFrames = self.scanFrame[bs]
+        else:
+            self.boutFrames = []
         self.ca_kernel = TailData.CaKernel(ca_timeconstant,frameRate)
         self.ca_timeconstant = ca_timeconstant
         self.frameRate = frameRate
@@ -189,6 +195,19 @@ class TailData:
         fca = lfilter(np.ones(10)/10,1,self.cumAngles)
         self.velocity = np.hstack((0,np.diff(fca)))
         self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
+
+    def RemoveTrackErrors(self):
+        """
+        If part of the agarose gel boundary is visible in the frame
+        the tracker will occasionally latch onto it for single frames.
+        Tries to detect this instances and corrects them
+        """
+        for i in range(1,self.cumAngles.size-1):
+            d_pre = self.cumAngles[i] - self.cumAngles[i-1]
+            d_post = self.cumAngles[i+1] - self.cumAngles[i]
+            if (d_pre>45 and d_post<-45) or (d_pre<-45 and d_post>45):#the current point is surrounded by two similar cumulative angles that are both 45 degrees away in the same direction
+                if np.abs(self.cumAngles[i-1] - self.cumAngles[i+1]) < 10:#the angles before and after the current point are similar
+                    self.cumAngles[i] = (self.cumAngles[i-1] + self.cumAngles[i+1])/2
 
     @property
     def PerFrameVigor(self):
@@ -207,13 +226,18 @@ class TailData:
 
     @property
     def BoutStartsEnds(self):
-        return self.bouts[:,0].astype(int), self.bouts[:,1].astype(int)
+        if self.bouts is None:
+            return None, None
+        else:
+            return self.bouts[:,0].astype(int), self.bouts[:,1].astype(int)
 
     def FrameBoutStarts(self,image_freq):
         """
         Returns a convolved per-frame bout-start trace
             image_freq: Imaging frequency
         """
+        if self.bouts is None:
+            return None
         bf = self.boutFrames.astype(int)
         bf = bf[bf!=-1]
         starting = np.zeros(self.scanFrame.max()+1)
@@ -228,8 +252,9 @@ class TailData:
         with sns.axes_style('white'):
             pl.figure()
             pl.plot(self.cumAngles,label='Angle trace')
-            pl.plot(bs,self.cumAngles[bs],'r*',label='Starts')
-            pl.plot(be,self.cumAngles[be],'k*',label='Ends')
+            if not bs is None:
+                pl.plot(bs,self.cumAngles[bs],'r*',label='Starts')
+                pl.plot(be,self.cumAngles[be],'k*',label='Ends')
             pl.ylabel('Cumulative tail angle')
             pl.xlabel('Frames')
             sns.despine()
