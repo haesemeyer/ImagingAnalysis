@@ -15,6 +15,8 @@ import pickle
 
 from tkinter import Label, Toplevel, Button, Entry, Tk, Radiobutton, IntVar, StringVar
 
+from time import perf_counter
+
 
 
 def IsHeatActivated(trace,npre,nstim,npost):
@@ -164,6 +166,7 @@ if __name__ == "__main__":
     if type(filenames) is str:
         filenames = [filenames]
     for i,f in enumerate(filenames):
+        t_start = perf_counter()
         #load stack - first try to find aligned file
         try:
             stack = np.load(f[:-4]+"_stack.npy").astype('float')
@@ -345,5 +348,6 @@ if __name__ == "__main__":
             
 
         
-       
+        elapsed = perf_counter() - t_start
         print((i+1)/len(filenames)*100,'% done',flush=True)
+        print('Elapsed time = '+str(elapsed)+' s',flush=True)
