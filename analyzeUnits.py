@@ -34,6 +34,8 @@ def ShuffleGraph(graph):
     #re-compute fourier transforms on shuffled time-series
     pre,stim,post = g_shuff.FramesPre,g_shuff.FramesStim,g_shuff.FramesPost
     gap = g_shuff.FramesFFTGap
+    des_freq = graph.StimFrequency
+    frame_rate = graph.FrameRate;
     AssignFourier(g_shuff,gap,pre,des_freq,frame_rate,'pre',True)
     AssignFourier(g_shuff,pre+gap,pre+stim,des_freq,frame_rate,'stim',True)
     AssignFourier(g_shuff,pre+stim+gap,pre+stim+post,des_freq,frame_rate,'post',True)
