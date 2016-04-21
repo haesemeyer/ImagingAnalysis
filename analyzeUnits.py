@@ -50,15 +50,19 @@ def ComputeDFF(graph):
     F = np.mean(timeseries[base_start:base_end])
     return (timeseries-F)/F
 
-def ComputeFourierChangeRatio(graph):
+def ComputeFourierChangeRatio(graph,usePost=True):
     f = graph.freqs_pre
     #find index of stimulus frequency
     ix = np.argmin(np.abs(f-graph.StimFrequency))
     mag_stim_atFreq = np.absolute(graph.fft_stim)[ix]
     mag_stim_other = np.sum(np.absolute(graph.fft_stim)[1:])#exclude 0-point, i.e. stimulus mean
     ratio_stim = mag_stim_atFreq/mag_stim_other
-    mag_bg_atFreq = np.absolute(graph.fft_pre)[ix] + np.absolute(graph.fft_post)[ix]
-    mag_bg_other = np.sum(np.absolute(graph.fft_pre[1:])) + np.sum(np.absolute(graph.fft_post[1:]))
+    if usePost:
+        mag_bg_atFreq = np.absolute(graph.fft_pre)[ix] + np.absolute(graph.fft_post)[ix]
+        mag_bg_other = np.sum(np.absolute(graph.fft_pre[1:])) + np.sum(np.absolute(graph.fft_post[1:]))
+    else:
+        mag_bg_atFreq = np.absolute(graph.fft_pre)[ix]
+        mag_bg_other = np.sum(np.absolute(graph.fft_pre[1:]))
     ratio_bg = mag_bg_atFreq / mag_bg_other
     return ratio_stim / ratio_bg, ratio_stim
 
@@ -69,12 +73,15 @@ def ComputeAnglesAtStim(graph):
     return np.angle(graph.fft_pre)[ix], np.angle(graph.fft_stim)[ix], np.angle(graph.fft_post)[ix]
 
 
-def ComputeStimActivityIncrease(graph):
+def ComputeStimActivityIncrease(graph,usePost=False):
     pre,stim,post = graph.FramesPre,graph.FramesStim,graph.FramesPost
     avg_pre = np.mean(graph.RawTimeseries[:pre])
     avg_stim = np.mean(graph.RawTimeseries[pre:pre+stim])
     avg_post = np.mean(graph.RawTimeseries[pre+stim:pre+stim+post])
-    return (avg_stim/avg_pre + avg_stim/avg_post)/2
+    if usePost:
+        return (avg_stim/avg_pre + avg_stim/avg_post)/2
+    else:
+        return avg_stim/avg_pre
 
 def GetFltAverages(graph):
     dff = ComputeDFF(graph)
