@@ -511,7 +511,7 @@ def ComputeAlignmentShift(stack, index):
     shift_y = y-exp_y
     return shift_x,shift_y
 
-def ReAlign(stack):
+def ReAlign(stack, filterT=0):
     """
     Re-positions every slice in stack by the following iterative
     procedure:
@@ -519,6 +519,8 @@ def ReAlign(stack):
     Compute best-aligned x-shift and y-shift of current slice to sum-stack
     Shift the slice by x-shift and y-shift within the stack
     Increment current slice and repeat from top
+    In addition to decrease the influence of imaging noise on shifts
+    allows temporal filtering of the stack by filterT slices
     """
     def Shift2Index(shift,size):
         """
@@ -540,6 +542,9 @@ def ReAlign(stack):
     x_shifts = np.zeros(stack.shape[0])
     y_shifts = np.zeros_like(x_shifts)
     re_aligned = stack.copy()
+    align_source = stack.copy()
+    if filterT > 0:
+        align_source = gaussian_filter1d(align_source,filterT,0)
     for t in range(re_aligned.shape[0]):
         xshift, yshift = ComputeAlignmentShift(re_aligned,t)
         x_shifts[t] = xshift

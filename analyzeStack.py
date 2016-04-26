@@ -172,7 +172,7 @@ if __name__ == "__main__":
         except FileNotFoundError:
             stack = OpenStack(f).astype(float)
             #re-align slices
-            stack, xshift, yshift = ReAlign(stack)
+            stack, xshift, yshift = ReAlign(stack,frame_rate)#make filtering before alignment prop. to frame-rate with the idea that faster acquisition = noisier data...
             #save the re-aligned stack as uint8
             if save:
                 np.save(f[:-4]+"_stack.npy",stack.astype(np.uint8))
