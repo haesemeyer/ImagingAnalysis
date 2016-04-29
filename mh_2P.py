@@ -511,7 +511,7 @@ def ComputeAlignmentShift(stack, index):
     shift_y = y-exp_y
     return shift_x,shift_y
 
-def ReAlign(stack, filterT=0):
+def ReAlign(stack, filterT=0, filterXY=1):
     """
     Re-positions every slice in stack by the following iterative
     procedure:
@@ -544,7 +544,7 @@ def ReAlign(stack, filterT=0):
     re_aligned = stack.copy()
     align_source = stack.copy()
     if filterT > 0:
-        align_source = gaussian_filter1d(align_source,filterT,0)
+        align_source = gaussian_filter(align_source,(filterT,filterXY,filterXY))
     for t in range(re_aligned.shape[0]):
         xshift, yshift = ComputeAlignmentShift(re_aligned,t)
         x_shifts[t] = xshift
