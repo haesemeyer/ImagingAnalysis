@@ -253,7 +253,8 @@ if __name__ == "__main__":
         print("Maximum quality score deviation = ",max_qual_deviation,flush=True)
 
         #TODO: clean up graphs - potentially "fill holes" and remove very small connected components
-        graph = [g for g in graph if g.NPixels>=30]#remove compoments with less than 30 pixels
+        min_size = np.pi*(cell_diam/2)**2 / 2#half of a circle with the given average cell diameter
+        graph = [g for g in graph if g.NPixels>=min_size]#remove compoments with less than 30 pixels
         print('Identified ',len(graph),'units in slice ',i,flush=True)
         #for each graph, create sum-trace which is only lightly filtered
         #assign to graph object and assign fft fraction at desired frequency
