@@ -53,6 +53,15 @@ class CorrelationGraph:
     def MaxY(self):
         return max(list(zip(*self.V))[1])
 
+    def ComputeGraphShuffles(self,nshuffles):
+        min_shuff = self.FramesPre // 2
+        max_shuff = self.RawTimeseries.size// 3
+        shuff_ts = np.zeros((nshuffles,self.RawTimeseries.size))
+        rolls = np.random.randint(min_shuff,max_shuff,size=nshuffles)
+        for i in range(nshuffles):
+            shuff_ts[i,:] = np.roll(self.RawTimeseries,rolls[i])
+        self.shuff_ts = shuff_ts
+
     @staticmethod
     def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True,limit=None,seed_limit=0):
         """
