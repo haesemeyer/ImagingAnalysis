@@ -355,8 +355,8 @@ if __name__ == "__main__":
 
 
     #prepare some overview plots, using only graphs selected based on step responses
-    all_on = np.vstack([ZScore(g.AveragedTimeseries) for g in graph_on])
-    all_off = np.vstack([ZScore(g.AveragedTimeseries) for g in graph_off])
+    all_on = np.vstack([ComputeDFF(g.AveragedTimeseries) for g in graph_on])
+    all_off = np.vstack([ComputeDFF(g.AveragedTimeseries) for g in graph_off])
     phases_on = np.hstack([g.ang_atStim for g in graph_on])/np.pi*5+5
     phases_off = np.hstack([g.ang_atStim for g in graph_off])/np.pi*5+5
 
@@ -371,13 +371,13 @@ if __name__ == "__main__":
         pl.title('Phase of response to sine stimulus for ON/OFF units')
 
     pl.figure()
-    sns.heatmap(all_off[np.argsort([g.CorrOff for g in graph_off]),:],vmin=-4,vmax=4,center=0,xticklabels=48,yticklabels=25)
+    sns.heatmap(all_off[np.argsort([g.CorrOff for g in graph_off]),:],vmin=-1,vmax=1,center=0,xticklabels=48,yticklabels=25)
     pl.xlabel('Frames - 48=20s')
     pl.ylabel('Ind. units')
     pl.title('OFF or cold-sensitive units')
 
     pl.figure()
-    sns.heatmap(all_on[np.argsort([g.CorrOn for g in graph_on]),:],vmin=-4,vmax=4,center=0,xticklabels=48,yticklabels=25)
+    sns.heatmap(all_on[np.argsort([g.CorrOn for g in graph_on]),:],vmin=-1,vmax=1,center=0,xticklabels=48,yticklabels=25)
     pl.xlabel('Frames - 48=20s')
     pl.ylabel('Ind. units')
     pl.title('ON or heat-sensitive units')
