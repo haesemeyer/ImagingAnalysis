@@ -233,7 +233,7 @@ if __name__ == "__main__":
             ct_actual = corr_thresh
         else:
             ct_actual = seed_cutoff
-        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,ct_actual,False,(0,rate_stack.shape[0]),seed_cutoff)
+        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,ct_actual,consider,False,(0,rate_stack.shape[0]),seed_cutoff)
         print('Correlation graph of stack ',i,' of ',len(filenames)-1,' created',flush=True)
         
         #plot largest three components onto projection

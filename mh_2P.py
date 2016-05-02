@@ -63,7 +63,7 @@ class CorrelationGraph:
         self.shuff_ts = shuff_ts
 
     @staticmethod
-    def CorrelationConnComps(stack,im_ncorr,corr_thresh,norm8=True,limit=None,seed_limit=0):
+    def CorrelationConnComps(stack,im_ncorr,corr_thresh,predicate,norm8=True,limit=None,seed_limit=0):
         """
         Builds connected component graphs whereby components are
         determined based on pixel-timeseries correlations. Pixels
@@ -87,7 +87,7 @@ class CorrelationGraph:
                 [0]: List of connected component graphs
                 [1]: Image numerically identifying each pixel of each graph
         """
-        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8):
+        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8,predicate):
             """
             Performs breadth first search on image
             given (sourceX,sourceY) as starting pixel
@@ -111,6 +111,8 @@ class CorrelationGraph:
                             continue
                         if (not norm8) and xn!=x and yn!=y:
                             continue
+                        if not predicate(xn,yn):
+                            continue
                         #compute correlation of considered pixel's timeseries to full graphs timeseries
                         c = np.corrcoef(pg.Timeseries[limit[0]:limit[1]],stack[limit[0]:limit[1],xn,yn])[0,1]
                         if c>=thresh:
@@ -131,7 +133,7 @@ class CorrelationGraph:
         curr_color = 1#id counter of connected components
         while np.max(im_ncorr * (visited==0)) > seed_limit:
             (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
-            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8))
+            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8,predicate))
             curr_color += 1
         return conn_comps, visited
 #class CorrelationGraph
