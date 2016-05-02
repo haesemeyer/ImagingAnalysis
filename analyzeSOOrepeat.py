@@ -89,7 +89,7 @@ def ComputeStimInducedNoise(graph,avg_timeseries):
     and stimulus-presentation frames (stim+post)
     """
     s_pre = np.std(avg_timeseries[:graph.FramesPre])
-    s_stim = np.std(avg_timeseries)
+    s_stim = np.std(avg_timeseries[graph.FramesPre:])
     return s_stim / s_pre
 
 def CaConvolve(trace,ca_timeconstant,frame_rate):
