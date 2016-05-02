@@ -92,6 +92,10 @@ def ComputeStimInducedNoise(graph,avg_timeseries):
     s_stim = np.std(avg_timeseries[graph.FramesPre:])
     return s_stim / s_pre
 
+def ComputeDFF(avg_timeseries):
+    f0 = np.mean(avg_timeseries[:72])
+    return (avg_timeseries-f0)/f0
+
 def CaConvolve(trace,ca_timeconstant,frame_rate):
     kernel = TailData.CaKernel(ca_timeconstant,frame_rate)
     return np.convolve(trace,kernel)[:trace.size]
@@ -121,6 +125,94 @@ def PlotROI(graph,ax=None,motor=False):
     else:
         ax.imshow(projection)
         sns.despine(None,ax,True,True,True,True)
+
+def PlotAvgDff(graph,ax=None):
+    if ax is None:
+        fig,ax = pl.subplots()
+    dff = ComputeDFF(graph.AveragedTimeseries)
+    time = np.arange(dff.size)/graph.FrameRate
+    ax.plot(time,dff,'r',label='Response')
+    ax.plot(time,graph.StimOn*dff.max(),label='Stimulus')
+    ax.set_xlabel('Time [s]')
+    ax.set_ylabel('DFF')
+    ax.set_title('Repeat average activity')
+    ax.legend()
+
+def PlotMotorRelation(graph,ax=None):
+    if ax is None:
+        fig, ax = pl.subplots()
+    #zs_act = ZScore(graph.RawTimeseries)
+    zs_act = (graph.RawTimeseries - np.percentile(graph.RawTimeseries,20)) / np.percentile(graph.RawTimeseries,20)
+    zs_mot = ZScore(graph.PerFrameVigor)
+    zs_mot = zs_mot / zs_mot.max() * zs_act.max()
+    time = np.arange(zs_act.size)/graph.FrameRate
+    ax.plot(time,zs_act,'r',label='Response')
+    ax.plot(time,zs_mot,label='Swim vigor')
+    ax.set_xlabel('Time [s]')
+    ax.set_ylabel('Act: DFF / Mot: AU')
+    ax.set_title('Raw activity vs. motor output')
+    ax.legend()
+
+def PlotMetrics(graph,ax=None,index=None):
+    if ax is None:
+        fig, ax = pl.subplots()
+    ax.text(0.1,0.8,str.format('Stimulus induction {0:.2f}',graph.StimIndFluct),transform=ax.transAxes)
+    ax.text(0.1,0.7,str.format('Motor correlation {0:.2f}',graph.MotorCorrelation),transform=ax.transAxes)
+    ax.text(0.1,0.6,str.format('ON Correlation {0:.2f}',graph.CorrOn),transform=ax.transAxes)
+    ax.text(0.1,0.5,str.format('OFF Correlation {0:.2f}',graph.CorrOff),transform=ax.transAxes)
+    ax.text(0.1,0.4,str.format('Magnitude fraction {0:.2f}',graph.mfrac_atStim),transform=ax.transAxes)
+    #shuffle cutoffs
+    ax.text(0.6,0.8,str.format('{0:.2f}',graph.sh_m_StIndFluct+2*graph.sh_std_StIndFluct),transform=ax.transAxes,color='r')
+    ax.text(0.6,0.6,str.format('{0:.2f}',graph.sh_m_CorrOn+2*graph.sh_std_CorrOn),transform=ax.transAxes,color='r')
+    ax.text(0.6,0.5,str.format('{0:.2f}',graph.sh_m_CorrOff+2*graph.sh_std_CorrOff),transform=ax.transAxes,color='r')
+    ax.text(0.6,0.4,str.format('{0:.2f}',graph.sh_m_mfrac+2*graph.sh_std_mfrac),transform=ax.transAxes,color='r')
+
+    if not index is None:
+        ax.text(0.1,0.3,str.format('Array index {0}',index),transform=ax.transAxes)
+    ax.text(0.1,0.2,str.format('Sourcefile {0}',graph.SourceFile.split('/')[-1]),transform=ax.transAxes)
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+def PlotGraphInfo(graph,index=None):
+    with sns.axes_style('white'):
+        fig, axes = pl.subplots(2,2,figsize=(15,10))
+        PlotROI(graph,axes[0,0])
+        PlotAvgDff(graph,axes[0,1])
+        PlotMotorRelation(graph,axes[1,0])
+        PlotMetrics(graph,axes[1,1],index)
+        sns.despine(fig)
+        fig.tight_layout()
+
+def PlotCycleGraphList(glist):
+    from matplotlib.pyplot import pause
+    skip_dic = dict()
+    for i,g in enumerate(glist):
+        if g.SourceFile in skip_dic:
+            continue
+        PlotGraphInfo(g,i)
+        pause(0.5)
+        inp = ""
+        while inp!="s" and inp!="p" and inp!="c":
+            inp = input("[c]ontinue/[s]kip plane/sto[p]:")
+        if inp=="p":
+            break
+        elif inp=="s":
+            skip_dic[g.SourceFile] = 1
+        pl.close('all')
+        print(i/len(glist),flush=True)
+
+def restFreq(tail_d):
+    if tail_d.bouts is None:
+        return 0
+    st_b = np.sum(phase[tail_d.boutFrames.astype(int)]==0)
+    return st_b/150
+
+
+def stimFreq(tail_d):
+    if tail_d.bouts is None:
+        return 0
+    st_b = np.sum(phase[tail_d.boutFrames.astype(int)]==1)
+    return st_b/180
 
 
 if __name__ == "__main__":
