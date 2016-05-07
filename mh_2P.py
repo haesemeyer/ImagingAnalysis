@@ -54,7 +54,7 @@ class CorrelationGraph:
         return max(list(zip(*self.V))[1])
 
     def ComputeGraphShuffles(self,nshuffles):
-        min_shuff = self.FramesPre // 2
+        min_shuff = self.FramesPre
         max_shuff = self.RawTimeseries.size// 3
         shuff_ts = np.zeros((nshuffles,self.RawTimeseries.size))
         rolls = np.random.randint(min_shuff,max_shuff,size=nshuffles)
