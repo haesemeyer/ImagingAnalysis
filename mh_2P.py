@@ -496,6 +496,7 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
     im_corr[np.isnan(im_corr)] = 0
     return im_corr
 
+from scipy.ndimage.measurements import center_of_mass
 
 def ComputeAlignmentShift(stack, index):
     """
@@ -508,6 +509,9 @@ def ComputeAlignmentShift(stack, index):
     #shift_y = np.zeros_like(shift_x)#best y-shift of each image
     #max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
 
+    def ms(slice):
+        return slice-np.mean(slice)
+
     if index == 0:
         sum_stack = np.sum(stack[1:,:,:],0)
     elif index == stack.shape[0]-1:
@@ -516,10 +520,17 @@ def ComputeAlignmentShift(stack, index):
         sum_stack = np.sum(stack[:index,:,:],0) + np.sum(stack[index+1:,:,:],0)
 
     exp_x, exp_y = stack.shape[1]-1, stack.shape[2]-1#these are the indices in the cross-correlation matrix that correspond to 0 shift    
-    c = fftconvolve(sum_stack,stack[index,::-1,::-1])
-    x,y = np.unravel_index(np.argmax(c),c.shape)
-    shift_x = x-exp_x
-    shift_y = y-exp_y
+    c = fftconvolve(ms(sum_stack),ms(stack[index,::-1,::-1]))
+    #NOTE: Center of mass instead of maximum may be better IFF the eye has been
+    #masked out of the stack. But it seems to lead to quite large distortions
+    #otherwise. Namely, quality scores get substantially worse in slices with
+    #the eye present after center-of-mass alignment than after peak alignment.
+    #However, after masking out the eye, center-of-mass does seem to produce
+    #slightly better alignments
+    #c[c<0] = 0 #this line is necessary when using center-of-mass for shift!
+    x,y = np.unravel_index(np.argmax(c),c.shape)#center_of_mass(c)#
+    shift_x = int(x-exp_x)
+    shift_y = int(y-exp_y)
     return shift_x,shift_y
 
 def ReAlign(stack, filterT=0, filterXY=1):
