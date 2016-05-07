@@ -171,8 +171,20 @@ if __name__ == "__main__":
             print('Loaded aligned stack of slice ', i,flush=True)
         except FileNotFoundError:
             stack = OpenStack(f).astype(float)
-            #re-align slices
-            stack, xshift, yshift = ReAlign(stack,frame_rate)#make filtering before alignment prop. to frame-rate with the idea that faster acquisition = noisier data...
+            #re-align slices - mask out potential eye-pixels
+            #which will show up with very high single-instance photon counts
+            mask = np.sum(stack>7,0)
+            mask[mask>0] = 1
+            mask = 1 - mask
+            mask = mask[None,:,:]
+            stack = stack * np.repeat(mask,stack.shape[0],0)
+            maxshift = cell_diam//2
+            stack, xshift, yshift = ReAlign(stack,maxshift,frame_rate)#make filtering before alignment prop. to frame-rate with the idea that faster acquisition = noisier data...
+            #remove border from stack that corresponds to our max-shift size
+            stack[:,:maxshift,:] = 0
+            stack[:,:,:maxshift] = 0
+            stack[:,stack.shape[1]-maxshift:,:] = 0
+            stack[:,:,stack.shape[2]-maxshift] = 0
             #save the re-aligned stack as uint8
             if save:
                 np.save(f[:-4]+"_stack.npy",stack.astype(np.uint8))
