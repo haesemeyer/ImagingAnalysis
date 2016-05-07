@@ -533,7 +533,7 @@ def ComputeAlignmentShift(stack, index):
     shift_y = int(y-exp_y)
     return shift_x,shift_y
 
-def ReAlign(stack, filterT=0, filterXY=1):
+def ReAlign(stack, maxShift, filterT=0, filterXY=1):
     """
     Re-positions every slice in stack by the following iterative
     procedure:
@@ -573,9 +573,16 @@ def ReAlign(stack, filterT=0, filterXY=1):
         y_shifts[t] = yshift
         if xshift == 0 and yshift == 0:
             continue
-        if np.abs(xshift)>3 or np.abs(yshift)>3:
-            print("Warning. Slice ",t," requires shift greater 3 pixels. Not shifted")
-            continue
+        if np.abs(xshift)>maxShift or np.abs(yshift)>maxShift:
+            print("Warning. Slice ",t," requires shift greater ",maxShift," pixels. Maximally shifted")
+            if xshift>maxShift:
+                xshift = maxShift
+            elif xshift<-1*maxShift:
+                xshift = -1*maxShift
+            if yshift>maxShift:
+                yshift = maxShift
+            elif yshift<-1*maxShift:
+                yshift = -1*maxShift
         xs,xt = Shift2Index(xshift,re_aligned.shape[1])
         ys,yt = Shift2Index(yshift,re_aligned.shape[2])
         newImage = np.zeros((re_aligned.shape[1],re_aligned.shape[2]))
