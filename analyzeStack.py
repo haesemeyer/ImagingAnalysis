@@ -218,6 +218,7 @@ if __name__ == "__main__":
         #create shuffled stack to determine correlation seed cut-off
         st_shuff = ShuffleStackTemporal(stack)
         #we only want to consider time-series with at least min_phot photons
+        min_phot = stack.shape[0]*0.02
         sum_stack = np.sum(stack,0)
         consider = lambda x,y: sum_stack[x,y]>=min_phot
         #compute photon-rates using gaussian windowing - since we also filter spatially, needs to be done BEFORE zscoring!!!
