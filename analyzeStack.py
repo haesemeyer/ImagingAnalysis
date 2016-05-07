@@ -90,7 +90,7 @@ class InputDialog:
 
         self.e_preStim = Entry(top)
         self.e_preStim.grid(row=0,column=1)
-        self.e_preStim.insert(0,144)
+        self.e_preStim.insert(0,72)
 
         self.e_Stim = Entry(top)
         self.e_Stim.grid(row=1,column=1)
@@ -98,7 +98,7 @@ class InputDialog:
 
         self.e_postStim = Entry(top)
         self.e_postStim.grid(row=2,column=1)
-        self.e_postStim.insert(0,144)
+        self.e_postStim.insert(0,180)
 
         self.e_stimFftGap = Entry(top)
         self.e_stimFftGap.grid(row=3,column=1)
@@ -106,7 +106,7 @@ class InputDialog:
 
         self.e_corrTh = Entry(top)
         self.e_corrTh.grid(row=4,column=1)
-        self.e_corrTh.insert(0,0.3)
+        self.e_corrTh.insert(0,0.5)
 
         self.e_avgCdiam = Entry(top)
         self.e_avgCdiam.grid(row=5,column=1)
