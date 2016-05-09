@@ -312,7 +312,7 @@ def OpenStack(filename):
     Load image stack from tiff-file
     """
     im = Image.open(filename)
-    stack = np.empty((im.n_frames,im.size[0],im.size[1]))
+    stack = np.empty((im.n_frames,im.size[1],im.size[0]))
     #loop over frames and assign
     for i in range(im.n_frames):
         im.seek(i)
