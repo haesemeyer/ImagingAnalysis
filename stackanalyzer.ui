@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>600</height>
+    <height>677</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -34,24 +34,60 @@
      </rect>
     </property>
     <property name="text">
-     <string>Load Stacks</string>
+     <string>Load Stack</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="chkSumSlices">
+   <widget class="QGroupBox" name="groupBox">
     <property name="geometry">
      <rect>
-      <x>110</x>
-      <y>530</y>
-      <width>70</width>
-      <height>17</height>
+      <x>100</x>
+      <y>520</y>
+      <width>181</width>
+      <height>131</height>
      </rect>
     </property>
-    <property name="toolTip">
-     <string>Select to display slice sum</string>
+    <property name="title">
+     <string>Display options</string>
     </property>
-    <property name="text">
-     <string>Sum slices</string>
-    </property>
+    <widget class="QRadioButton" name="rbSlices">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>121</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Individual slices</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="rbSumProj">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>82</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Sum slices</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="rbROIOverlay">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>82</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>ROI overlay</string>
+     </property>
+    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">

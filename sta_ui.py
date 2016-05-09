@@ -25,7 +25,7 @@ except AttributeError:
 class Ui_StackAnalyzer(object):
     def setupUi(self, StackAnalyzer):
         StackAnalyzer.setObjectName(_fromUtf8("StackAnalyzer"))
-        StackAnalyzer.resize(800, 600)
+        StackAnalyzer.resize(800, 677)
         self.centralwidget = QtGui.QWidget(StackAnalyzer)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.sliceView = ImageView(self.centralwidget)
@@ -34,9 +34,18 @@ class Ui_StackAnalyzer(object):
         self.btnLoad = QtGui.QPushButton(self.centralwidget)
         self.btnLoad.setGeometry(QtCore.QRect(10, 530, 75, 23))
         self.btnLoad.setObjectName(_fromUtf8("btnLoad"))
-        self.chkSumSlices = QtGui.QCheckBox(self.centralwidget)
-        self.chkSumSlices.setGeometry(QtCore.QRect(110, 530, 70, 17))
-        self.chkSumSlices.setObjectName(_fromUtf8("chkSumSlices"))
+        self.groupBox = QtGui.QGroupBox(self.centralwidget)
+        self.groupBox.setGeometry(QtCore.QRect(100, 520, 181, 131))
+        self.groupBox.setObjectName(_fromUtf8("groupBox"))
+        self.rbSlices = QtGui.QRadioButton(self.groupBox)
+        self.rbSlices.setGeometry(QtCore.QRect(10, 20, 121, 17))
+        self.rbSlices.setObjectName(_fromUtf8("rbSlices"))
+        self.rbSumProj = QtGui.QRadioButton(self.groupBox)
+        self.rbSumProj.setGeometry(QtCore.QRect(10, 40, 82, 17))
+        self.rbSumProj.setObjectName(_fromUtf8("rbSumProj"))
+        self.rbROIOverlay = QtGui.QRadioButton(self.groupBox)
+        self.rbROIOverlay.setGeometry(QtCore.QRect(10, 60, 82, 17))
+        self.rbROIOverlay.setObjectName(_fromUtf8("rbROIOverlay"))
         StackAnalyzer.setCentralWidget(self.centralwidget)
         self.menubar = QtGui.QMenuBar(StackAnalyzer)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 21))
@@ -48,8 +57,10 @@ class Ui_StackAnalyzer(object):
 
     def retranslateUi(self, StackAnalyzer):
         StackAnalyzer.setWindowTitle(_translate("StackAnalyzer", "2P Stack analyzer", None))
-        self.btnLoad.setText(_translate("StackAnalyzer", "Load Stacks", None))
-        self.chkSumSlices.setToolTip(_translate("StackAnalyzer", "Select to display slice sum", None))
-        self.chkSumSlices.setText(_translate("StackAnalyzer", "Sum slices", None))
+        self.btnLoad.setText(_translate("StackAnalyzer", "Load Stack", None))
+        self.groupBox.setTitle(_translate("StackAnalyzer", "Display options", None))
+        self.rbSlices.setText(_translate("StackAnalyzer", "Individual slices", None))
+        self.rbSumProj.setText(_translate("StackAnalyzer", "Sum slices", None))
+        self.rbROIOverlay.setText(_translate("StackAnalyzer", "ROI overlay", None))
 
 from pyqtgraph import ImageView
