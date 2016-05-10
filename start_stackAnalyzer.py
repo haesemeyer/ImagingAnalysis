@@ -135,10 +135,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             grouped[i, :, :] = np.sum(self.currentStack[i*groupSize:(i+1)*groupSize, :, :], 0)
         return grouped
 
-    def sliceCorrelations(self, filterWin=(1,3,3)):
+    def sliceCorrelations(self, filterWin=(5, 1, 1)):
         slc = np.zeros(self.currentStack.shape[0])
-        fstack = gaussian_filter(self.currentStack, (1, 3, 3))
-        st = np.sum(fstack, 0).flatten()
+        fstack = gaussian_filter(self.currentStack, filterWin)
+        st = np.sum(self.currentStack, 0).flatten()
         for i in range(self.currentStack.shape[0]):
             slc[i] = np.corrcoef(st, fstack[i, :, :].flatten())[0, 1]
         return slc
