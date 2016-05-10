@@ -4,7 +4,7 @@ from sta_ui import Ui_StackAnalyzer
 from mh_2P import *
 import numpy as np
 import pickle
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import warnings
 
 class StartStackAnalyzer(QtGui.QMainWindow):
@@ -135,6 +135,14 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             grouped[i, :, :] = np.sum(self.currentStack[i*groupSize:(i+1)*groupSize, :, :], 0)
         return grouped
 
+    def sliceCorrelations(self, filterWin=(1,3,3)):
+        slc = np.zeros(self.currentStack.shape[0])
+        fstack = gaussian_filter(self.currentStack, (1, 3, 3))
+        st = np.sum(fstack, 0).flatten()
+        for i in range(self.currentStack.shape[0]):
+            slc[i] = np.corrcoef(st, fstack[i, :, :].flatten())[0, 1]
+        return slc
+
     def clearPlots(self):
         self.ui.graphDFF.plotItem.clear()
         self.ui.graphBStarts.plotItem.clear()
@@ -186,6 +194,17 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         pi.setLabel("left", "Slice dF/F0")
         pi.setLabel("bottom", "Frames")
         pi.setTitle("Slice average dF/F0")
+        pi = self.ui.graphFFT.plotItem
+        if "stack_slcorr" in self._cash:
+            sliceCorr = self._cash["stack_slcorr"]
+        else:
+            sliceCorr = self.sliceCorrelations()
+            self._cash["stack_slcorr"] = sliceCorr
+        pi.plot(sliceCorr, pen=(50, 150, 50))
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "Correlation")
+        pi.setLabel("bottom", "Frames")
+        pi.setTitle("Slice correlation to mean stack")
 
 
     # Signals #
@@ -212,6 +231,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                 self.ui.rbROIOverlay.setEnabled(False)
             self.ui.sliceView.setImage(self.currentStack)
             self.ui.lblFile.setText(fname)
+            # clear our cash
+            self._cash.clear()
             # reset ui options and clear unit graphs
             self.ui.rbSumProj.setCheckable(True)
             self.ui.rbSumProj.setEnabled(True)
@@ -220,8 +241,6 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.ui.rbSlices.setChecked(True)
             self.clearPlots()
             self.plotStackAverageFluorescence()
-            # clear our cash
-            self._cash.clear()
 
         else:
             print("No file selected")
