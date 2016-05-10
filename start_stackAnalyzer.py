@@ -4,7 +4,8 @@ from sta_ui import Ui_StackAnalyzer
 from mh_2P import *
 import numpy as np
 import pickle
-from PIL import Image
+from scipy.ndimage import gaussian_filter1d
+import warnings
 
 class StartStackAnalyzer(QtGui.QMainWindow):
     def __init__(self, parent=None):
@@ -73,6 +74,94 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         f0 = np.percentile(timeseries, percentile)
         return (timeseries - f0) / f0
 
+    @staticmethod
+    def computeAveragedTrace(graph, overhang=1):
+        """
+        Uses information in the graph class to try and determine how many per-plane
+        repetitions where performed within the experiment and then computes
+        a repeat-averaged version of the timeseries.
+        Args:
+            graph: Unit graph
+            overhang: Number of 'extra frames' recorded
+
+        Returns:
+            A repetition averaged version of the graph's raw timeseries
+        """
+        l = graph.RawTimeseries.size
+        perRep = graph.FramesPre + graph.FramesStim + graph.FramesPost
+        nRep = (l - overhang) / perRep
+        return np.sum(np.reshape(graph.RawTimeseries[0:l-overhang], (nRep, (l-overhang)//nRep)), 0)
+
+    @staticmethod
+    def computeStimFourier(graph, aggregate=True):
+
+        def ZScore(t):
+            return (t - np.mean(t)) / np.std(t)
+
+        # anti-aliasing
+        a = StartStackAnalyzer.computeAveragedTrace(graph)
+        filtered = gaussian_filter1d(a, graph.FrameRate / 8)
+        sf = graph.FramesPre + graph.FramesFFTGap
+        ef = graph.FramesPre + graph.FramesStim
+        filtered = filtered[sf:ef]
+        # TODO: Somehow make the following noise reduction more generally applicable...
+        # if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
+        if aggregate:
+            # Test if we can aggregate: Find the period length pl in frames. If the length of filtered
+            # is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
+            # and second half to reduce noise in transform (while at the same time reducing resolution)
+            plen = round(1 / graph.StimFrequency * graph.FrameRate)
+            if (filtered.size / plen) % 2 == 0:
+                filtered = np.mean(filtered.reshape((2, filtered.size // 2)), 0)
+            else:
+                warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
+        fft = np.fft.rfft(ZScore(filtered))
+        freqs = np.linspace(0, graph.FrameRate / 2, fft.shape[0])
+        ix = np.argmin(np.absolute(graph.StimFrequency - freqs))  # index of bin which contains our desired frequency
+        return freqs, fft, ix
+
+    def clearGraphs(self):
+        self.ui.graphDFF.plotItem.clear()
+        self.ui.graphBStarts.plotItem.clear()
+        self.ui.graphFFT.plotItem.clear()
+
+    def plotGraphInfo(self, graph):
+        self.clearGraphs()
+        # plot dff
+        pi = self.ui.graphDFF.plotItem
+        pi.plot(self.percentileDff(graph.RawTimeseries), pen=(255, 0, 0))
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "dF/F0")
+        pi.setLabel("bottom", "Frames")
+        pi.setTitle("Raw dF/F0")
+        # plot bout starts
+        pi = self.ui.graphBStarts.plotItem
+        if graph.BoutStartTrace is not None:
+            pi.plot(graph.BoutStartTrace, pen=(0, 0, 255))
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "Bout starts")
+        pi.setLabel("bottom", "Frames")
+        pi.setTitle("Convolved bout start trace")
+        freqs, fft, ix = self.computeStimFourier(graph)
+        mags = np.absolute(fft)
+        pi = self.ui.graphFFT.plotItem
+        pi.plot(freqs, mags, pen=(255, 0, 0))
+        pi.plot([freqs[ix], freqs[ix]], [0, mags.max()])
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "Magnitude")
+        pi.setLabel("bottom", "Frequency", "Hz")
+        pi.setTitle("Stimulus fourier transform")
+
+    def plotStackAverageFluorescence(self):
+        pi = self.ui.graphDFF.plotItem
+        ts = np.sum(self.currentStack, 2)
+        ts = np.sum(ts, 1)
+        pi.plot(self.percentileDff(ts), pen=(150, 50, 50))
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "dF/F0")
+        pi.setLabel("bottom", "Frames")
+        pi.setTitle("Slice summed dF/F0")
+
 
     # Signals #
 
@@ -97,8 +186,13 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                 self.ui.rbROIOverlay.setCheckable(False)
                 self.ui.rbROIOverlay.setEnabled(False)
             self.ui.sliceView.setImage(self.currentStack)
+            self.ui.lblFile.setText(fname)
+            # reset ui options and clear unit graphs
             self.ui.rbSumProj.setCheckable(True)
             self.ui.rbSumProj.setEnabled(True)
+            self.ui.rbSlices.setChecked(True)
+            self.clearGraphs()
+            self.plotStackAverageFluorescence()
 
         else:
             print("No file selected")
@@ -109,8 +203,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             return
         if self.ui.rbSlices.isChecked():
             self.ui.sliceView.setImage(self.currentStack)
+            self.plotStackAverageFluorescence()
         elif self.ui.rbSumProj.isChecked():
             self.ui.sliceView.setImage(np.sum(self.currentStack, 0))
+            self.plotStackAverageFluorescence()
         elif self.ui.rbROIOverlay.isChecked():
             proj = self.getROIProjection()
             if proj is None:
@@ -132,13 +228,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             g = self.findROIByPixel(x, y)
             if g is not None:
                 print("Graph size = ", g.NPixels)
-                pi = self.ui.graphDFF.plotItem
-                pi.clear()
-                pi.plot(self.percentileDff(g.RawTimeseries), pen=(255, 0, 0))
-                pi.showGrid(x=True, y=True)
-                pi.setLabel("left", "dF/F0")
-                pi.setLabel("bottom", "Frames")
-                pi.setTitle("Raw dF/F0")
+                self.plotGraphInfo(g)
 
 
 
