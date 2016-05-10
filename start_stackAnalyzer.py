@@ -50,6 +50,25 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                         return g
         return None
 
+    def getROIProjection(self):
+        if len(self.graphList) == 0:
+            return None
+        proj = np.zeros((self.currentStack.shape[1], self.currentStack.shape[2], 3))
+        s = np.sum(self.currentStack, 0)
+        s /= (np.max(s) * 1.2)
+        proj[:, :, 0] = proj[:, :, 1] = proj[:, :, 2] = s
+        for g in self.graphList:
+            colChoice = np.random.randint(0, 6)
+            for v in g.V:
+                if colChoice == 0 or colChoice == 3 or colChoice == 4:
+                    proj[v[0], v[1], 0] = 1
+                if colChoice == 1 or colChoice == 3 or colChoice == 5:
+                    proj[v[0], v[1], 1] = 1
+                if colChoice == 2 or colChoice == 4 or colChoice == 5:
+                    proj[v[0], v[1], 2] = 1
+        return proj
+
+
     # Signals #
 
     def load(self):
@@ -88,16 +107,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         elif self.ui.rbSumProj.isChecked():
             self.ui.sliceView.setImage(np.sum(self.currentStack, 0))
         elif self.ui.rbROIOverlay.isChecked():
-            if len(self.graphList) == 0:
+            proj = self.getROIProjection()
+            if proj is None:
                 print("No ROIs in graph-list")
                 return
-            proj = np.zeros((self.currentStack.shape[1], self.currentStack.shape[2], 3))
-            s = np.sum(self.currentStack, 0)
-            s /= (np.max(s) * 1.2)
-            proj[:, :, 0] = proj[:, :, 1] = proj[:, :, 2] = s
-            for g in self.graphList:
-                for v in g.V:
-                    proj[v[0], v[1], 0] = 1
             self.ui.sliceView.setImage(proj)
         else:
             print("Unknown display option")
