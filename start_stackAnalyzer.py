@@ -30,6 +30,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.rbSlices, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
         # react to click on pixel
         self.ui.sliceView.getImageItem().mouseClickEvent = self.sliceViewClick
+        # create our cash dictionary
+        self._cash = dict()
 
     # Helper functions #
     @staticmethod
@@ -157,15 +159,19 @@ class StartStackAnalyzer(QtGui.QMainWindow):
 
     def plotStackAverageFluorescence(self):
         pi = self.ui.graphDFF.plotItem
-        ts = np.sum(self.currentStack, 2)
-        ts = np.sum(ts, 1)
+        if "stack_ts" in self._cash:
+            ts = self._cash["stack_ts"]
+        else:
+            ts = np.sum(self.currentStack, 2)
+            ts = np.sum(ts, 1)
+            self._cash["stack_ts"] = ts
         pi.plot(ts, pen=(150, 50, 50))
         pi.showGrid(x=True, y=True)
         pi.setLabel("left", "Photon count")
         pi.setLabel("bottom", "Frames")
         pi.setTitle("Slice summed photon count")
         pi = self.ui.graphBStarts.plotItem
-        pi.plot(self.percentileDff(ts), pen=(150, 50 , 50))
+        pi.plot(self.percentileDff(ts), pen=(150, 50, 50))
         pi.showGrid(x=True, y=True)
         pi.setLabel("left", "Slice dF/F0")
         pi.setLabel("bottom", "Frames")
@@ -202,6 +208,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.ui.rbSlices.setChecked(True)
             self.clearGraphs()
             self.plotStackAverageFluorescence()
+            # clear our cash
+            self._cash.clear()
 
         else:
             print("No file selected")
@@ -216,10 +224,19 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.plotStackAverageFluorescence()
         elif self.ui.rbSumProj.isChecked():
             self.clearGraphs()
-            self.ui.sliceView.setImage(np.sum(self.currentStack, 0))
+            if "sumStack" in self._cash:
+                self.ui.sliceView.setImage(self._cash["sumStack"])
+            else:
+                sumStack = np.sum(self.currentStack, 0)
+                self.ui.sliceView.setImage(sumStack)
+                self._cash["sumStack"] = sumStack
             self.plotStackAverageFluorescence()
         elif self.ui.rbROIOverlay.isChecked():
-            proj = self.getROIProjection()
+            if "roiProjection" in self._cash:
+                proj = self._cash["roiProjection"]
+            else:
+                proj = self.getROIProjection()
+                self._cash["roiProjection"] = proj
             if proj is None:
                 print("No ROIs in graph-list")
                 return
