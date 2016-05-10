@@ -159,11 +159,17 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         pi = self.ui.graphDFF.plotItem
         ts = np.sum(self.currentStack, 2)
         ts = np.sum(ts, 1)
-        pi.plot(self.percentileDff(ts), pen=(150, 50, 50))
+        pi.plot(ts, pen=(150, 50, 50))
         pi.showGrid(x=True, y=True)
-        pi.setLabel("left", "dF/F0")
+        pi.setLabel("left", "Photon count")
         pi.setLabel("bottom", "Frames")
-        pi.setTitle("Slice summed dF/F0")
+        pi.setTitle("Slice summed photon count")
+        pi = self.ui.graphBStarts.plotItem
+        pi.plot(self.percentileDff(ts), pen=(150, 50 , 50))
+        pi.showGrid(x=True, y=True)
+        pi.setLabel("left", "Slice dF/F0")
+        pi.setLabel("bottom", "Frames")
+        pi.setTitle("Slice average dF/F0")
 
 
     # Signals #
