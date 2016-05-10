@@ -72,6 +72,9 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     @staticmethod
     def percentileDff(timeseries, percentile=20):
         f0 = np.percentile(timeseries, percentile)
+        if f0 == 0:
+            print("F0 was 0")
+            f0 = 1
         return (timeseries - f0) / f0
 
     @staticmethod
