@@ -25,7 +25,7 @@ except AttributeError:
 class Ui_StackAnalyzer(object):
     def setupUi(self, StackAnalyzer):
         StackAnalyzer.setObjectName(_fromUtf8("StackAnalyzer"))
-        StackAnalyzer.resize(800, 677)
+        StackAnalyzer.resize(1024, 677)
         self.centralwidget = QtGui.QWidget(StackAnalyzer)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.sliceView = ImageView(self.centralwidget)
@@ -46,13 +46,23 @@ class Ui_StackAnalyzer(object):
         self.rbROIOverlay = QtGui.QRadioButton(self.groupBox)
         self.rbROIOverlay.setGeometry(QtCore.QRect(10, 60, 82, 17))
         self.rbROIOverlay.setObjectName(_fromUtf8("rbROIOverlay"))
+        self.tabWidget = QtGui.QTabWidget(self.centralwidget)
+        self.tabWidget.setGeometry(QtCore.QRect(600, 10, 421, 501))
+        self.tabWidget.setObjectName(_fromUtf8("tabWidget"))
+        self.infoTab = QtGui.QWidget()
+        self.infoTab.setObjectName(_fromUtf8("infoTab"))
+        self.tabWidget.addTab(self.infoTab, _fromUtf8(""))
+        self.tab_2 = QtGui.QWidget()
+        self.tab_2.setObjectName(_fromUtf8("tab_2"))
+        self.tabWidget.addTab(self.tab_2, _fromUtf8(""))
         StackAnalyzer.setCentralWidget(self.centralwidget)
         self.menubar = QtGui.QMenuBar(StackAnalyzer)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 21))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 1024, 21))
         self.menubar.setObjectName(_fromUtf8("menubar"))
         StackAnalyzer.setMenuBar(self.menubar)
 
         self.retranslateUi(StackAnalyzer)
+        self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(StackAnalyzer)
 
     def retranslateUi(self, StackAnalyzer):
@@ -62,5 +72,7 @@ class Ui_StackAnalyzer(object):
         self.rbSlices.setText(_translate("StackAnalyzer", "Individual slices", None))
         self.rbSumProj.setText(_translate("StackAnalyzer", "Sum slices", None))
         self.rbROIOverlay.setText(_translate("StackAnalyzer", "ROI overlay", None))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.infoTab), _translate("StackAnalyzer", "Info", None))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("StackAnalyzer", "Tab 2", None))
 
 from pyqtgraph import ImageView
