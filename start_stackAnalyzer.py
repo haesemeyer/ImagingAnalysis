@@ -39,6 +39,17 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     def getGraphName(tiffname):
         return tiffname[:-3]+"graph"
 
+    def findROIByPixel(self, x, y):
+        if len(self.graphList) == 0:
+            return
+        for g in self.graphList:
+            if g.MinX <= x <= g.MaxX and g.MinY <= y <= g.MaxY:
+                # possible overlap
+                for v in g.V:
+                    if v[0] == x and v[1] == y:
+                        return g
+        return None
+
     # Signals #
 
     def load(self):
@@ -97,6 +108,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         x, y = int(pos.x()), int(pos.y())
         print(x, y)
         print(np.sum(self.currentStack[:, x, y]))
+        if self.ui.rbROIOverlay.isChecked():
+            g = self.findROIByPixel(x, y)
+            if g is not None:
+                print("Graph size = ", g.NPixels)
 
 
 
