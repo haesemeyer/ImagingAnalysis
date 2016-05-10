@@ -79,13 +79,51 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>60</y>
+       <y>100</y>
        <width>82</width>
        <height>17</height>
       </rect>
      </property>
      <property name="text">
       <string>ROI overlay</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="rbGroupPr">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>71</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Grouped projection</string>
+     </property>
+     <property name="text">
+      <string>Grouped</string>
+     </property>
+    </widget>
+    <widget class="QSpinBox" name="spnGSize">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>60</y>
+       <width>71</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Group size</string>
+     </property>
+     <property name="minimum">
+      <number>5</number>
+     </property>
+     <property name="maximum">
+      <number>50</number>
+     </property>
+     <property name="value">
+      <number>12</number>
      </property>
     </widget>
    </widget>
@@ -183,5 +221,22 @@
   </customwidget>
  </customwidgets>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>rbGroupPr</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>spnGSize</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>145</x>
+     <y>609</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>235</x>
+     <y>611</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

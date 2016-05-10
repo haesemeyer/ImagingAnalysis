@@ -18,7 +18,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.rbSumProj.setCheckable(False)
         self.ui.rbROIOverlay.setCheckable(False)
         self.ui.rbSumProj.setEnabled(False)
+        self.ui.rbGroupPr.setEnabled(False)
         self.ui.rbROIOverlay.setEnabled(False)
+        self.ui.rbGroupPr.setEnabled(False)
+        self.ui.spnGSize.setEnabled(False)
         self.ui.rbSlices.setChecked(True)
         # hide menu and roi button on image view
         self.ui.sliceView.ui.roiBtn.hide()
@@ -125,13 +128,20 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         ix = np.argmin(np.absolute(graph.StimFrequency - freqs))  # index of bin which contains our desired frequency
         return freqs, fft, ix
 
-    def clearGraphs(self):
+    def groupedProjection(self, groupSize):
+        nSlices = self.currentStack.shape[0] // groupSize
+        grouped = np.zeros((nSlices, self.currentStack.shape[1], self.currentStack.shape[2]))
+        for i in range(nSlices):
+            grouped[i, :, :] = np.sum(self.currentStack[i*groupSize:(i+1)*groupSize, :, :], 0)
+        return grouped
+
+    def clearPlots(self):
         self.ui.graphDFF.plotItem.clear()
         self.ui.graphBStarts.plotItem.clear()
         self.ui.graphFFT.plotItem.clear()
 
     def plotGraphInfo(self, graph):
-        self.clearGraphs()
+        self.clearPlots()
         # plot dff
         pi = self.ui.graphDFF.plotItem
         pi.plot(self.percentileDff(graph.RawTimeseries), pen=(255, 0, 0))
@@ -205,8 +215,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             # reset ui options and clear unit graphs
             self.ui.rbSumProj.setCheckable(True)
             self.ui.rbSumProj.setEnabled(True)
+            self.ui.rbGroupPr.setEnabled(True)
+            self.ui.rbGroupPr.setCheckable(True)
             self.ui.rbSlices.setChecked(True)
-            self.clearGraphs()
+            self.clearPlots()
             self.plotStackAverageFluorescence()
             # clear our cash
             self._cash.clear()
@@ -219,11 +231,11 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             print("No proper stack loaded")
             return
         if self.ui.rbSlices.isChecked():
-            self.clearGraphs()
+            self.clearPlots()
             self.ui.sliceView.setImage(self.currentStack)
             self.plotStackAverageFluorescence()
         elif self.ui.rbSumProj.isChecked():
-            self.clearGraphs()
+            self.clearPlots()
             if "sumStack" in self._cash:
                 self.ui.sliceView.setImage(self._cash["sumStack"])
             else:
@@ -241,6 +253,14 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                 print("No ROIs in graph-list")
                 return
             self.ui.sliceView.setImage(proj)
+        elif self.ui.rbGroupPr.isChecked():
+            if ("grProj", self.ui.spnGSize.value()) in self._cash:
+                proj = self._cash[("grProj", self.ui.spnGSize.value())]
+            else:
+                proj = self.groupedProjection(self.ui.spnGSize.value())
+                self._cash[("grProj", self.ui.spnGSize.value())] = proj
+            self.ui.sliceView.setImage(proj)
+
         else:
             print("Unknown display option")
 

@@ -44,8 +44,17 @@ class Ui_StackAnalyzer(object):
         self.rbSumProj.setGeometry(QtCore.QRect(10, 40, 82, 17))
         self.rbSumProj.setObjectName(_fromUtf8("rbSumProj"))
         self.rbROIOverlay = QtGui.QRadioButton(self.groupBox)
-        self.rbROIOverlay.setGeometry(QtCore.QRect(10, 60, 82, 17))
+        self.rbROIOverlay.setGeometry(QtCore.QRect(10, 100, 82, 17))
         self.rbROIOverlay.setObjectName(_fromUtf8("rbROIOverlay"))
+        self.rbGroupPr = QtGui.QRadioButton(self.groupBox)
+        self.rbGroupPr.setGeometry(QtCore.QRect(10, 60, 71, 17))
+        self.rbGroupPr.setObjectName(_fromUtf8("rbGroupPr"))
+        self.spnGSize = QtGui.QSpinBox(self.groupBox)
+        self.spnGSize.setGeometry(QtCore.QRect(100, 60, 71, 22))
+        self.spnGSize.setMinimum(5)
+        self.spnGSize.setMaximum(50)
+        self.spnGSize.setProperty("value", 12)
+        self.spnGSize.setObjectName(_fromUtf8("spnGSize"))
         self.tabWidget = QtGui.QTabWidget(self.centralwidget)
         self.tabWidget.setGeometry(QtCore.QRect(600, 10, 421, 501))
         self.tabWidget.setObjectName(_fromUtf8("tabWidget"))
@@ -77,6 +86,7 @@ class Ui_StackAnalyzer(object):
 
         self.retranslateUi(StackAnalyzer)
         self.tabWidget.setCurrentIndex(0)
+        QtCore.QObject.connect(self.rbGroupPr, QtCore.SIGNAL(_fromUtf8("toggled(bool)")), self.spnGSize.setEnabled)
         QtCore.QMetaObject.connectSlotsByName(StackAnalyzer)
 
     def retranslateUi(self, StackAnalyzer):
@@ -86,6 +96,9 @@ class Ui_StackAnalyzer(object):
         self.rbSlices.setText(_translate("StackAnalyzer", "Individual slices", None))
         self.rbSumProj.setText(_translate("StackAnalyzer", "Sum slices", None))
         self.rbROIOverlay.setText(_translate("StackAnalyzer", "ROI overlay", None))
+        self.rbGroupPr.setToolTip(_translate("StackAnalyzer", "Grouped projection", None))
+        self.rbGroupPr.setText(_translate("StackAnalyzer", "Grouped", None))
+        self.spnGSize.setToolTip(_translate("StackAnalyzer", "Group size", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.infoTab), _translate("StackAnalyzer", "Info", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("StackAnalyzer", "Tab 2", None))
 
