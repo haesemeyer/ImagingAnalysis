@@ -205,9 +205,11 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             print("No proper stack loaded")
             return
         if self.ui.rbSlices.isChecked():
+            self.clearGraphs()
             self.ui.sliceView.setImage(self.currentStack)
             self.plotStackAverageFluorescence()
         elif self.ui.rbSumProj.isChecked():
+            self.clearGraphs()
             self.ui.sliceView.setImage(np.sum(self.currentStack, 0))
             self.plotStackAverageFluorescence()
         elif self.ui.rbROIOverlay.isChecked():
