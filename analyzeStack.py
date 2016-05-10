@@ -173,7 +173,7 @@ if __name__ == "__main__":
             stack = OpenStack(f).astype(float)
             #re-align slices - mask out potential eye-pixels
             #which will show up with very high single-instance photon counts
-            mask = np.sum(stack>7,0)
+            mask = np.sum(stack > 10, 0)
             mask[mask>0] = 1
             mask = 1 - mask
             mask = mask[None,:,:]
