@@ -68,6 +68,11 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                     proj[v[0], v[1], 2] = 1
         return proj
 
+    @staticmethod
+    def percentileDff(timeseries, percentile=20):
+        f0 = np.percentile(timeseries, percentile)
+        return (timeseries - f0) / f0
+
 
     # Signals #
 
@@ -116,6 +121,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             print("Unknown display option")
 
     def sliceViewClick(self, event):
+        if not self.ui.rbROIOverlay.isChecked():
+            return
         event.accept()
         pos = event.pos()
         x, y = int(pos.x()), int(pos.y())
@@ -125,6 +132,15 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             g = self.findROIByPixel(x, y)
             if g is not None:
                 print("Graph size = ", g.NPixels)
+                pi = self.ui.graphDFF.plotItem
+                pi.clear()
+                pi.plot(self.percentileDff(g.RawTimeseries), pen=(255, 0, 0))
+                pi.showGrid(x=True, y=True)
+                pi.setLabel("left", "dF/F0")
+                pi.setLabel("bottom", "Frames")
+                pi.setTitle("Raw dF/F0")
+
+
 
 
 

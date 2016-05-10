@@ -51,6 +51,9 @@ class Ui_StackAnalyzer(object):
         self.tabWidget.setObjectName(_fromUtf8("tabWidget"))
         self.infoTab = QtGui.QWidget()
         self.infoTab.setObjectName(_fromUtf8("infoTab"))
+        self.graphDFF = PlotWidget(self.infoTab)
+        self.graphDFF.setGeometry(QtCore.QRect(10, 10, 401, 131))
+        self.graphDFF.setObjectName(_fromUtf8("graphDFF"))
         self.tabWidget.addTab(self.infoTab, _fromUtf8(""))
         self.tab_2 = QtGui.QWidget()
         self.tab_2.setObjectName(_fromUtf8("tab_2"))
@@ -75,4 +78,4 @@ class Ui_StackAnalyzer(object):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.infoTab), _translate("StackAnalyzer", "Info", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("StackAnalyzer", "Tab 2", None))
 
-from pyqtgraph import ImageView
+from pyqtgraph import ImageView, PlotWidget
