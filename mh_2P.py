@@ -11,9 +11,13 @@ from scipy.ndimage.filters import gaussian_filter,gaussian_filter1d
 from scipy.signal import fftconvolve, lfilter
 
 import sys
-sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 
-import mhba_basic as mb
+try:
+    sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
+    import mhba_basic as mb
+except ImportError:
+    sys.path.append('/Users/mhaesemeyer/Documents/Python/BehaviorAnalysis')
+    import mhba_basic as mb
 
 try:
     import Tkinter
