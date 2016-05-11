@@ -26,6 +26,18 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.rbROIOverlay.setEnabled(False)
         self.ui.rbGroupPr.setEnabled(False)
         self.ui.rbSlices.setChecked(True)
+        self.ui.tbPreFrames.setText("72")
+        self.ui.tbStimFrames.setText("144")
+        self.ui.tbPostFrames.setText("180")
+        self.ui.tbFFTGap.setText("48")
+        self.ui.rb6s.setChecked(True)
+        self.ui.tbCorrTh.setText("0.5")
+        self.ui.tbCellDiam.setText("8")
+        self.ui.tbStimFreq.setText("0.1")
+        self.ui.tbFrameRate("2.4")
+        self.ui.tabWidget.setCurrentIndex(0)
+        self.ui.btnSeg.setEnabled(False)
+        self.ui.btnSegSave.setEnabled(False)
         # hide menu and roi button on image view
         self.ui.sliceView.ui.roiBtn.hide()
         self.ui.sliceView.ui.menuBtn.hide()
@@ -34,6 +46,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         QtCore.QObject.connect(self.ui.rbROIOverlay, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
         QtCore.QObject.connect(self.ui.rbSumProj, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
         QtCore.QObject.connect(self.ui.rbSlices, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
+        QtCore.QObject.connect(self.ui.btnSeg, QtCore.SIGNAL("clicked()"), self.segment)
+        QtCore.QObject.connect(self.ui.btnSegSave, QtCore.SIGNAL("clicked()"), self.saveSegmentation)
         # react to click on pixel
         self.ui.sliceView.getImageItem().mouseClickEvent = self.sliceViewClick
         # create our cash dictionary
@@ -248,9 +262,12 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.graphList = []
             try:
                 self.currentStack = np.load(self.getAlignedName(fname)).astype(float)
+                # if we found an aligned stack, set the corresponding segmentation option to false
+                self.ui.chkRealign.setChecked(False)
                 print("Loaded pre-aligned stack")
             except FileNotFoundError:
                 self.currentStack = OpenStack(fname)
+                self.ui.chkRealign.setChecked(True)
             try:
                 f = open(self.getGraphName(fname), 'rb')
                 self.graphList = pickle.load(f)
@@ -270,6 +287,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.ui.rbGroupPr.setEnabled(True)
             self.ui.rbGroupPr.setCheckable(True)
             self.ui.rbSlices.setChecked(True)
+            self.ui.btnSeg.setEnabled(True)
             self.clearPlots()
             self.plotStackAverageFluorescence()
 
@@ -327,6 +345,16 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             if g is not None:
                 print("Graph size = ", g.NPixels)
                 self.plotGraphInfo(g)
+
+    def segment(self):
+        if self.ui.twSegment.currentIndex() == 0:
+            # correlation based segmentation
+            pass
+        else:
+            print("Not implemented segmentation option selected")
+
+    def saveSegmentation(self):
+        pass
 
 
 # parallel pool helpers

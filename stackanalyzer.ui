@@ -140,7 +140,7 @@
      <enum>QTabWidget::South</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="infoTab">
      <attribute name="title">
@@ -193,13 +193,321 @@
       </property>
      </widget>
     </widget>
-    <widget class="QWidget" name="corrTab">
+    <widget class="QWidget" name="segTab">
      <attribute name="title">
-      <string>Corr. segmentation</string>
+      <string>Segmentation</string>
      </attribute>
-     <attribute name="toolTip">
-      <string>Correlation based analysis</string>
-     </attribute>
+     <widget class="QGroupBox" name="groupBox_2">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>10</y>
+        <width>581</width>
+        <height>131</height>
+       </rect>
+      </property>
+      <property name="title">
+       <string>Experiment settings</string>
+      </property>
+      <widget class="QLabel" name="label_3">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>20</y>
+         <width>61</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Pre Frames</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbPreFrames">
+       <property name="geometry">
+        <rect>
+         <x>80</x>
+         <y>20</y>
+         <width>113</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_4">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>50</y>
+         <width>61</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Stim Frames</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_5">
+       <property name="geometry">
+        <rect>
+         <x>200</x>
+         <y>20</y>
+         <width>61</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Post Frames</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbStimFrames">
+       <property name="geometry">
+        <rect>
+         <x>80</x>
+         <y>50</y>
+         <width>113</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbPostFrames">
+       <property name="geometry">
+        <rect>
+         <x>270</x>
+         <y>20</y>
+         <width>113</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbFFTGap">
+       <property name="geometry">
+        <rect>
+         <x>270</x>
+         <y>50</y>
+         <width>61</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_6">
+       <property name="geometry">
+        <rect>
+         <x>200</x>
+         <y>50</y>
+         <width>61</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>StimFFT Gap</string>
+       </property>
+      </widget>
+      <widget class="QGroupBox" name="groupBox_3">
+       <property name="geometry">
+        <rect>
+         <x>390</x>
+         <y>10</y>
+         <width>181</width>
+         <height>80</height>
+        </rect>
+       </property>
+       <property name="title">
+        <string>Indicator</string>
+       </property>
+       <widget class="QRadioButton" name="rb6f">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>20</y>
+          <width>82</width>
+          <height>17</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Gcamp 6f</string>
+        </property>
+       </widget>
+       <widget class="QRadioButton" name="rb6s">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>50</y>
+          <width>82</width>
+          <height>17</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Gcamp 6s</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QLabel" name="label_9">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>80</y>
+         <width>101</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Stimulus frequency</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbFrameRate">
+       <property name="geometry">
+        <rect>
+         <x>270</x>
+         <y>80</y>
+         <width>61</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_10">
+       <property name="geometry">
+        <rect>
+         <x>200</x>
+         <y>80</y>
+         <width>61</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Frame rate</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbStimFreq">
+       <property name="geometry">
+        <rect>
+         <x>112</x>
+         <y>80</y>
+         <width>81</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QPushButton" name="btnSegSave">
+      <property name="geometry">
+       <rect>
+        <x>520</x>
+        <y>630</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Save aligned stack and graphs</string>
+      </property>
+      <property name="text">
+       <string>Save</string>
+      </property>
+     </widget>
+     <widget class="QTabWidget" name="twSegment">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>150</y>
+        <width>581</width>
+        <height>471</height>
+       </rect>
+      </property>
+      <property name="tabPosition">
+       <enum>QTabWidget::West</enum>
+      </property>
+      <widget class="QWidget" name="corTab">
+       <attribute name="title">
+        <string>Correlation</string>
+       </attribute>
+       <widget class="QLabel" name="label_8">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>81</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Corr. threshold</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="tbCorrTh">
+        <property name="geometry">
+         <rect>
+          <x>90</x>
+          <y>10</y>
+          <width>113</width>
+          <height>20</height>
+         </rect>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_7">
+        <property name="geometry">
+         <rect>
+          <x>220</x>
+          <y>10</y>
+          <width>71</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Cell diameter</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="tbCellDiam">
+        <property name="geometry">
+         <rect>
+          <x>290</x>
+          <y>10</y>
+          <width>113</width>
+          <height>20</height>
+         </rect>
+        </property>
+       </widget>
+       <widget class="QCheckBox" name="chkRealign">
+        <property name="geometry">
+         <rect>
+          <x>420</x>
+          <y>10</y>
+          <width>91</width>
+          <height>17</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Realign stack</string>
+        </property>
+       </widget>
+       <widget class="QPlainTextEdit" name="plainTextEdit">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>40</y>
+          <width>531</width>
+          <height>181</height>
+         </rect>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="tab_2">
+       <attribute name="title">
+        <string>Tab 2</string>
+       </attribute>
+      </widget>
+     </widget>
+     <widget class="QPushButton" name="btnSeg">
+      <property name="geometry">
+       <rect>
+        <x>40</x>
+        <y>630</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Segment</string>
+      </property>
+     </widget>
     </widget>
    </widget>
    <widget class="QLabel" name="label">
