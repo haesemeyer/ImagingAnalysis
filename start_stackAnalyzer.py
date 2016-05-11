@@ -21,7 +21,6 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.rbGroupPr.setEnabled(False)
         self.ui.rbROIOverlay.setEnabled(False)
         self.ui.rbGroupPr.setEnabled(False)
-        self.ui.spnGSize.setEnabled(False)
         self.ui.rbSlices.setChecked(True)
         # hide menu and roi button on image view
         self.ui.sliceView.ui.roiBtn.hide()

@@ -86,7 +86,6 @@ class Ui_StackAnalyzer(object):
 
         self.retranslateUi(StackAnalyzer)
         self.tabWidget.setCurrentIndex(0)
-        QtCore.QObject.connect(self.rbGroupPr, QtCore.SIGNAL(_fromUtf8("toggled(bool)")), self.spnGSize.setEnabled)
         QtCore.QMetaObject.connectSlotsByName(StackAnalyzer)
 
     def retranslateUi(self, StackAnalyzer):

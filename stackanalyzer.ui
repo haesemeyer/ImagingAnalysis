@@ -221,22 +221,5 @@
   </customwidget>
  </customwidgets>
  <resources/>
- <connections>
-  <connection>
-   <sender>rbGroupPr</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>spnGSize</receiver>
-   <slot>setEnabled(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>145</x>
-     <y>609</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>235</x>
-     <y>611</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>
