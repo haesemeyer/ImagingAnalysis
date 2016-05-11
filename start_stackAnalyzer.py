@@ -1,4 +1,3 @@
-import sys
 from PyQt4 import QtCore, QtGui
 from sta_ui import Ui_StackAnalyzer
 from mh_2P import *
@@ -6,6 +5,11 @@ import numpy as np
 import pickle
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import warnings
+from time import perf_counter
+try:
+    from ipyparallel import Client
+except NameError:
+    from IPython.parallel import Client
 
 class StartStackAnalyzer(QtGui.QMainWindow):
     def __init__(self, parent=None):
@@ -34,6 +38,13 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.sliceView.getImageItem().mouseClickEvent = self.sliceViewClick
         # create our cash dictionary
         self._cash = dict()
+        # try connecting to ipython pool
+        try:
+            self._rc = Client(timeout=0.5)
+        except OSError:
+            self._rc = []
+            print("No parallel pool found")
+        self.ui.lcdEngines.display(str(len(self._rc)))
 
     # Helper functions #
     @staticmethod
@@ -135,12 +146,33 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         return grouped
 
     def sliceCorrelations(self, filterWin=(5, 1, 1)):
-        slc = np.zeros(self.currentStack.shape[0])
+        # NOTE: No performance is gained by parallelizing this operation. Too much overhead, corrcoef already parallel
         fstack = gaussian_filter(self.currentStack, filterWin)
         st = np.sum(self.currentStack, 0).flatten()
+        slc = np.zeros(self.currentStack.shape[0])
         for i in range(self.currentStack.shape[0]):
             slc[i] = np.corrcoef(st, fstack[i, :, :].flatten())[0, 1]
         return slc
+
+    def chunkWork(self, a, axis=0, nchunks=None):
+        """
+        Takes the array a and divides it into chunks for each parallel
+        pool engine along indicated axis
+        Args:
+            a: The array to divide
+            axis: The axis of division
+
+        Returns: List of chunks for each engine or None if no engines exist
+
+        """
+        if len(self._rc) == 0:
+            return None
+        if nchunks is None:
+            poolsize = len(self._rc)
+        else:
+            poolsize = nchunks
+        return np.array_split(a, poolsize, axis=axis)
+
 
     def clearPlots(self):
         self.ui.graphDFF.plotItem.clear()
@@ -297,7 +329,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                 self.plotGraphInfo(g)
 
 
-
+# parallel pool helpers
 
 
 if __name__ == "__main__":
