@@ -478,13 +478,13 @@
          <string>Realign stack</string>
         </property>
        </widget>
-       <widget class="QPlainTextEdit" name="plainTextEdit">
+       <widget class="PlotWidget" name="graphAlgnSh">
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>40</y>
-          <width>531</width>
-          <height>181</height>
+          <y>60</y>
+          <width>541</width>
+          <height>111</height>
          </rect>
         </property>
        </widget>

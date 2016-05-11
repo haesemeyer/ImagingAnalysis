@@ -34,7 +34,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.tbCorrTh.setText("0.5")
         self.ui.tbCellDiam.setText("8")
         self.ui.tbStimFreq.setText("0.1")
-        self.ui.tbFrameRate("2.4")
+        self.ui.tbFrameRate.setText("2.4")
         self.ui.tabWidget.setCurrentIndex(0)
         self.ui.btnSeg.setEnabled(False)
         self.ui.btnSegSave.setEnabled(False)
@@ -251,6 +251,24 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         pi.setLabel("bottom", "Frames")
         pi.setTitle("Slice correlation to mean stack")
 
+    def segmentByCorrelation(self):
+        if self.ui.chkRealign.checkState():
+            maxshift = int(self.ui.tbCellDiam.text()) // 2
+            self.currentStack, xshift, yshift = ReAlign(self.currentStack, maxshift, float(self.ui.tbFrameRate.text()))
+            # remove borders that may have been affected by the realignment
+            self.currentStack[:, :maxshift, :] = 0
+            self.currentStack[:, :, :maxshift] = 0
+            self.currentStack[:, self.currentStack.shape[1] - maxshift:, :] = 0
+            self.currentStack[:, :, self.currentStack.shape[2] - maxshift] = 0
+            pi = self.ui.graphAlgnSh.plotItem
+            pi.clear()
+            pi.plot(xshift, pen=(150, 0, 0))
+            pi.plot(yshift, pen=(0, 150, 50))
+            pi.showGrid(x=True, y=True)
+            pi.setLabel("left", "Shift [px]")
+            pi.setLabel("bottom", "Frames")
+            pi.setTitle("Slice shifts in x and y direction")
+        return []
 
     # Signals #
 
@@ -277,19 +295,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             except FileNotFoundError:
                 self.ui.rbROIOverlay.setCheckable(False)
                 self.ui.rbROIOverlay.setEnabled(False)
-            self.ui.sliceView.setImage(self.currentStack)
             self.ui.lblFile.setText(fname)
-            # clear our cash
-            self._cash.clear()
-            # reset ui options and clear unit graphs
-            self.ui.rbSumProj.setCheckable(True)
-            self.ui.rbSumProj.setEnabled(True)
-            self.ui.rbGroupPr.setEnabled(True)
-            self.ui.rbGroupPr.setCheckable(True)
-            self.ui.rbSlices.setChecked(True)
-            self.ui.btnSeg.setEnabled(True)
-            self.clearPlots()
-            self.plotStackAverageFluorescence()
+            self.resetAfterLoad()
 
         else:
             print("No file selected")
@@ -349,12 +356,29 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     def segment(self):
         if self.ui.twSegment.currentIndex() == 0:
             # correlation based segmentation
-            pass
+            self.graphList = self.segmentByCorrelation()
+            self.ui.rbROIOverlay.setCheckable(True)
+            self.ui.rbROIOverlay.setEnabled(True)
+            self.resetAfterLoad()
         else:
             print("Not implemented segmentation option selected")
 
     def saveSegmentation(self):
         pass
+
+    def resetAfterLoad(self):
+        self.ui.sliceView.setImage(self.currentStack)
+        # clear our cash
+        self._cash.clear()
+        # reset ui options and clear unit graphs
+        self.ui.rbSumProj.setCheckable(True)
+        self.ui.rbSumProj.setEnabled(True)
+        self.ui.rbGroupPr.setEnabled(True)
+        self.ui.rbGroupPr.setCheckable(True)
+        self.ui.rbSlices.setChecked(True)
+        self.ui.btnSeg.setEnabled(True)
+        self.clearPlots()
+        self.plotStackAverageFluorescence()
 
 
 # parallel pool helpers
