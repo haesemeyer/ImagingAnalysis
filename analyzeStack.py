@@ -17,6 +17,10 @@ from tkinter import Label, Toplevel, Button, Entry, Tk, Radiobutton, IntVar, Str
 
 from time import perf_counter
 
+from scipy.ndimage import gaussian_filter1d
+
+from scipy.stats import poisson
+
 
 
 def IsHeatActivated(trace,npre,nstim,npost):
@@ -110,7 +114,7 @@ class InputDialog:
 
         self.e_avgCdiam = Entry(top)
         self.e_avgCdiam.grid(row=5,column=1)
-        self.e_avgCdiam.insert(0,8)
+        self.e_avgCdiam.insert(0,15)
 
         self.b = Button(top,text="OK",command = self.ok)
         self.b.grid(row=10)
