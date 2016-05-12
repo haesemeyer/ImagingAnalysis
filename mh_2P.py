@@ -6,9 +6,15 @@ from collections import Counter
 
 import matplotlib.pyplot as pl
 import seaborn as sns
-from scipy.stats import poisson
-from scipy.ndimage.filters import gaussian_filter,gaussian_filter1d
-from scipy.signal import fftconvolve, lfilter
+
+from scipy.ndimage.filters import gaussian_filter
+from scipy.signal import lfilter
+
+from numba import jit
+import numba
+from numpy import std, zeros
+
+import cv2
 
 import sys
 
@@ -140,8 +146,7 @@ class CorrelationGraph:
             conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8,predicate))
             curr_color += 1
         return conn_comps, visited
-#class CorrelationGraph
-
+# class CorrelationGraph
 
 
 class PixelGraph:
@@ -153,13 +158,11 @@ class PixelGraph:
     @property
     def NPixels(self):
         return len(self.V)
-#class PixelGraph
+# class PixelGraph
 
 
-#compiled acceleration
-from numba import jit
-import numba
-from numpy import std,zeros
+# compiled acceleration
+
 
 @jit(numba.float64[:](numba.float64[:],numba.int32))
 def Vigor(cumAngle,winlen=10):
@@ -183,17 +186,17 @@ class TailData:
         self.scanning = fileData[:,0] == 1
         self.scanFrame = fileData[:,1]
         self.scanFrame[np.logical_not(self.scanning)] = -1
-        #after the last frame is scanned, the scanImageIndex will be incremented further
-        #and the isScanning indicator will not immediately switch off. Therefore, if
-        #the highest index frame has less than 75% of the average per-index frame-number
-        #set it to -1 as well
+        # after the last frame is scanned, the scanImageIndex will be incremented further
+        # and the isScanning indicator will not immediately switch off. Therefore, if
+        # the highest index frame has less than 75% of the average per-index frame-number
+        # set it to -1 as well
         c = Counter(self.scanFrame[self.scanFrame!=-1])
         avgCount = np.mean(list(c.values()))
         maxFrame = np.max(self.scanFrame)
         if np.sum(self.scanFrame==maxFrame) < 0.75*avgCount:
             self.scanFrame[self.scanFrame==maxFrame] = -1
         self.cumAngles = np.rad2deg(fileData[:,2])
-        #self.RemoveTrackErrors()
+        # self.RemoveTrackErrors()
         self.vigor = Vigor(self.cumAngles,8)
         self.bouts = mb.DetectTailBouts(self.cumAngles,threshold=10,frameRate=frameRate,vigor = self.vigor)
         if not self.bouts is None and self.bouts.size == 0:
@@ -206,7 +209,7 @@ class TailData:
         self.ca_kernel = TailData.CaKernel(ca_timeconstant,frameRate)
         self.ca_timeconstant = ca_timeconstant
         self.frameRate = frameRate
-        #compute tail velocities based on 10-window filtered cumulative angle trace
+        # compute tail velocities based on 10-window filtered cumulative angle trace
         fca = lfilter(np.ones(10)/10,1,self.cumAngles)
         self.velocity = np.hstack((0,np.diff(fca)))
         self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
@@ -220,8 +223,8 @@ class TailData:
         for i in range(1,self.cumAngles.size-1):
             d_pre = self.cumAngles[i] - self.cumAngles[i-1]
             d_post = self.cumAngles[i+1] - self.cumAngles[i]
-            if (d_pre>45 and d_post<-45) or (d_pre<-45 and d_post>45):#the current point is surrounded by two similar cumulative angles that are both 45 degrees away in the same direction
-                if np.abs(self.cumAngles[i-1] - self.cumAngles[i+1]) < 10:#the angles before and after the current point are similar
+            if (d_pre>45 and d_post<-45) or (d_pre<-45 and d_post>45):# the current point is surrounded by two similar cumulative angles that are both 45 degrees away in the same direction
+                if np.abs(self.cumAngles[i-1] - self.cumAngles[i+1]) < 10:# the angles before and after the current point are similar
                     self.cumAngles[i] = (self.cumAngles[i-1] + self.cumAngles[i+1])/2
 
     @property
@@ -231,12 +234,12 @@ class TailData:
         swim vigor
         """
         sf = np.unique(self.scanFrame)
-        sf = sf[sf!=-1]
+        sf = sf[sf != -1]
         sf = np.sort(sf)
-        conv_vigor = np.convolve(self.vigor,self.ca_kernel,mode='full')[:self.vigor.size]
+        conv_vigor = np.convolve(self.vigor, self.ca_kernel, mode='full')[:self.vigor.size]
         pfv = np.zeros(sf.size)
-        for i,s in enumerate(sf):
-            pfv[i] = np.mean(conv_vigor[self.scanFrame==s])
+        for i, s in enumerate(sf):
+            pfv[i] = np.mean(conv_vigor[self.scanFrame == s])
         return pfv
 
     @property
@@ -244,9 +247,9 @@ class TailData:
         if self.bouts is None:
             return None, None
         else:
-            return self.bouts[:,0].astype(int), self.bouts[:,1].astype(int)
+            return self.bouts[:, 0].astype(int), self.bouts[:, 1].astype(int)
 
-    def FrameBoutStarts(self,image_freq):
+    def FrameBoutStarts(self, image_freq):
         """
         Returns a convolved per-frame bout-start trace
             image_freq: Imaging frequency
@@ -257,40 +260,40 @@ class TailData:
         bf = bf[bf!=-1]
         starting = np.zeros(self.scanFrame.max()+1)
         for s in bf:
-            #loop to allow double bouts in one frame to be counted
+            # loop to allow double bouts in one frame to be counted
             starting[s] += 1.0
-        frameKernel = TailData.CaKernel(self.ca_timeconstant,image_freq)
-        return np.convolve(starting,frameKernel,mode='full')[:starting.size]
+        frameKernel = TailData.CaKernel(self.ca_timeconstant, image_freq)
+        return np.convolve(starting, frameKernel, mode='full')[:starting.size]
 
     def PlotBouts(self):
         bs, be = self.BoutStartsEnds
         with sns.axes_style('white'):
             pl.figure()
             pl.plot(self.cumAngles,label='Angle trace')
-            if not bs is None:
-                pl.plot(bs,self.cumAngles[bs],'r*',label='Starts')
-                pl.plot(be,self.cumAngles[be],'k*',label='Ends')
+            if bs is not None:
+                pl.plot(bs, self.cumAngles[bs], 'r*', label='Starts')
+                pl.plot(be, self.cumAngles[be], 'k*', label='Ends')
             pl.ylabel('Cumulative tail angle')
             pl.xlabel('Frames')
             sns.despine()
 
     @staticmethod
-    def LoadTailData(filename,ca_timeConstant,frameRate=100):
+    def LoadTailData(filename, ca_timeConstant, frameRate=100):
         try:
-            data = np.genfromtxt(filename,delimiter='\t')
+            data = np.genfromtxt(filename, delimiter='\t')
         except (IOError, OSError):
             return None
-        return TailData(data,ca_timeConstant,frameRate)
+        return TailData(data, ca_timeConstant, frameRate)
 
     @staticmethod
-    def CaKernel(tau,frameRate):
+    def CaKernel(tau, frameRate):
         """
         Creates a calcium decay kernel for the given frameRate
         with the given half-life in seconds
         """
-        fold_length = 4#make kernel length equal to 4 half-times (decay to 6%)
+        fold_length = 4  # make kernel length equal to 4 half-times (decay to 6%)
         klen = int(fold_length*tau*frameRate)
-        tk = np.linspace(0,fold_length*tau,klen,endpoint=False)
+        tk = np.linspace(0, fold_length*tau, klen, endpoint=False)
         k = 2**(-1*tk/tau)
         k = k / k.sum()
         return k
@@ -299,16 +302,16 @@ class TailData:
 #TailData
 
 
-def UiGetFile(filetypes = [('Tiff stack', '.tif;.tiff')],multiple=False):
+def UiGetFile(filetypes=[('Tiff stack', '.tif;.tiff')], multiple=False):
     """
     Shows a file selection dialog and returns the path to the selected file(s)
     """
     options = {}
     options['filetypes'] = filetypes
     options['multiple'] = multiple
-    Tkinter.Tk().withdraw() #Close the root window
+    Tkinter.Tk().withdraw()  # Close the root window
     return tkFileDialog.askopenfilename(**options)
-#UiGetFile
+# UiGetFile
 
 
 def OpenStack(filename):
@@ -316,11 +319,11 @@ def OpenStack(filename):
     Load image stack from tiff-file
     """
     im = Image.open(filename)
-    stack = np.empty((im.n_frames,im.size[1],im.size[0]))
-    #loop over frames and assign
+    stack = np.empty((im.n_frames, im.size[1], im.size[0]))
+    # loop over frames and assign
     for i in range(im.n_frames):
         im.seek(i)
-        stack[i,:,:] = np.array(im)
+        stack[i ,:, :] = np.array(im)
     im.close()
     return stack
     
@@ -332,37 +335,37 @@ def FilterStack(stack):
     """
     width = stack.shape[1]
     height = stack.shape[2]
-    for y in range(1,height-1):
-        for x in range(1,width-1):
+    for y in range(1, height-1):
+        for x in range(1, width-1):
             trace = np.zeros(stack.shape[0])
             for jit_x in range(-1,2):
                 for jit_y in range(-1,2):
-                    if(jit_x==0 and jit_y==0):
+                    if jit_x == 0 and jit_y == 0:
                         trace = trace + 0.5 * stack[:,x,y]
                     else:
                         trace = trace + 1/16 * stack[:,x+jit_x,y+jit_y]
-            stack[:,x,y] = trace
-    return stack#should be in place anyways
+            stack[:, x, y] = trace
+    return stack  # should be in place anyways
 
-def FilterStackGaussian(stack,sigma=1):
+def FilterStackGaussian(stack, sigma=1):
     """
     Performs per-plane gaussian filter (assumed axis0=time)
     using the given standard deviation in pixels
     """
-    out = np.zeros_like(stack,dtype='float')
+    out = np.zeros_like(stack, dtype='float')
     for t in range(stack.shape[0]):
-        out[t,:,:] = gaussian_filter(stack[t,:,:].astype(float),sigma,multichannel=False)
+        out[t, :, :] = gaussian_filter(stack[t, :, :].astype(float), sigma, multichannel=False)
     return out
     
 def DeltaFOverF(stack):
     """
     Transforms stack into delta-f over F metric
     """
-    F = np.mean(stack,0)[None,:,:]
+    F = np.mean(stack, 0)[None, :, :]
     F.repeat(stack.shape[0],0)
     return (stack-F)/F
     
-def Per_PixelFourier(stack,tstart=None,tend=None):
+def Per_PixelFourier(stack, tstart=None, tend=None):
     """
     For reach pixel performs a fourier transform of the time-series (axis 0)
     between the given start and end frames. Resulting stack will have fourier
@@ -371,7 +374,7 @@ def Per_PixelFourier(stack,tstart=None,tend=None):
     if tstart is None:
         tstart = 0
     if tend is None:
-        tend = stack.shape[0]#tend is exclusive
+        tend = stack.shape[0]  # tend is exclusive
     if tend <= tstart:
         raise ValueError("tend has to be larger than tstart")
     flen = (tend-tstart)//2 + 1
@@ -379,28 +382,29 @@ def Per_PixelFourier(stack,tstart=None,tend=None):
     f_phase_stack = np.zeros_like(f_mag_stack)
     for y in range(stack.shape[2]):
         for x in range(stack.shape[1]):
-            if(np.sum(np.isnan(stack[:,x,y]))==0):
-                #compute transform on mean-subtracted trace - don't want to punish thresholding
-                #for bright pixels
-                transform = np.fft.rfft(stack[tstart:tend,x,y]-np.mean(stack[tstart:tend,x,y]))
-                f_mag_stack[:,x,y] = np.absolute(transform)
-                f_phase_stack[:,x,y] = np.angle(transform)
+            if np.sum(np.isnan(stack[:, x, y])) == 0:
+                # compute transform on mean-subtracted trace - don't want to punish thresholding
+                # for bright pixels
+                transform = np.fft.rfft(stack[tstart:tend, x, y]-np.mean(stack[tstart:tend, x, y]))
+                f_mag_stack[:, x, y] = np.absolute(transform)
+                f_phase_stack[:, x, y] = np.angle(transform)
             else:
-                f_mag_stack[:,x,y] = np.full(flen,np.NaN)
-                f_phase_stack[:,x,y] = np.full(flen,np.NaN)
+                f_mag_stack[:, x, y] = np.full(flen, np.NaN)
+                f_phase_stack[:, x, y] = np.full(flen, np.NaN)
     return f_mag_stack, f_phase_stack
-    
+
+
 def ZScore_Stack(stack):
     """
     Replaces each pixel-timeseries/frequency-series with its
     corresponding z-score
     """
-    avg = np.mean(stack,0)[None,:,:]
-    std = np.std(stack,0)[None,:,:]
-    #do not introduce NaN's in zero rows (which will have avg=std=0) but rather keep
-    #them as all zero
-    std[avg==0] = 1
-    return (stack-avg.repeat(stack.shape[0],0))/std.repeat(stack.shape[0],0)
+    avg = np.mean(stack, 0)[None, :, :]
+    std = np.std(stack, 0)[None, :, :]
+    # do not introduce NaN's in zero rows (which will have avg=std=0) but rather keep
+    # them as all zero
+    std[avg == 0] = 1
+    return (stack-avg.repeat(stack.shape[0], 0))/std.repeat(stack.shape[0], 0)
 
 def Threshold_Zsc(stack, nstd, plane):
     """
@@ -408,12 +412,11 @@ def Threshold_Zsc(stack, nstd, plane):
     such that all pixels above nstd will be equal to the zscore all others 0.
     The thresholded single plane is returned
     """
-    #TODO: Since discrete FFT will smear out signals should probably allow passing multiple planes
+    # TODO: Since discrete FFT will smear out signals should probably allow passing multiple planes
     zsc = ZScore_Stack(stack)
-    im_th = zsc[plane,:,:]
-    im_th[im_th<nstd] = 0
+    im_th = zsc[plane, :, :]
+    im_th[im_th < nstd] = 0
     return im_th
-
 
 
 def ConnectedComponents(image):
@@ -426,7 +429,7 @@ def ConnectedComponents(image):
             [1]: A int32 image of same dimensions of image with each pixel
                 labeled according to the id of the component graph it belongs to
     """
-    def BFS(image,visited,sourceX,sourceY,color):
+    def BFS(image, visited, sourceX, sourceY, color):
         """
         Performs breadth first search on image
         given (sourceX,sourceY) as starting pixel
@@ -434,36 +437,37 @@ def ConnectedComponents(image):
         """
         pg = PixelGraph(color)
         Q = deque()
-        Q.append((sourceX,sourceY))
-        visited[sourceX,sourceY] = color#mark source as visited
+        Q.append((sourceX, sourceY))
+        visited[sourceX, sourceY] = color  # mark source as visited
         while len(Q) > 0:
             v = Q.popleft()
             x = v[0]
             y = v[1]
-            pg.V.append(v)#add current vertex to pixel graph
-            #add non-visited neighborhood to queue
-            for xn in range(x-1,x+2):#x+1 inclusive!
-                for yn in range(y-1,y+2):
-                    if xn<0 or yn<0 or xn>=image.shape[0] or yn>=image.shape[1]:#outside image dimensions
-                        continue;
-                    if (not visited[xn,yn]) and image[xn,yn]>0:
-                        Q.append((xn,yn))#add non-visited above threshold neighbor
-                        visited[xn,yn] = color#mark as visited
+            pg.V.append(v)  # add current vertex to pixel graph
+            # add non-visited neighborhood to queue
+            for xn in range(x-1, x+2):  # x+1 inclusive!
+                for yn in range(y-1, y+2):
+                    if xn < 0 or yn < 0 or xn >= image.shape[0] or yn >= image.shape[1]:  # outside image dimensions
+                        continue
+                    if (not visited[xn, yn]) and image[xn, yn] > 0:
+                        Q.append((xn, yn))  # add non-visited above threshold neighbor
+                        visited[xn, yn] = color  # mark as visited
         return pg
 
-    visited = np.zeros_like(image,dtype=int)#indicates visited pixels > 0
-    conn_comps = []#list of pixel graphs
-    #loop over pixels and initiate bfs whenever we encouter
-    #a pixel that is non-zero and which has not yet been visited
-    curr_color = 1#id counter of connected components
+    visited = np.zeros_like(image, dtype=int)  # indicates visited pixels > 0
+    conn_comps = []  # list of pixel graphs
+    # loop over pixels and initiate bfs whenever we encouter
+    # a pixel that is non-zero and which has not yet been visited
+    curr_color = 1  # id counter of connected components
     for x in range(image.shape[0]):
         for y in range(image.shape[1]):
-            if (not visited[x,y]) and image[x,y]>0:
-                conn_comps.append(BFS(image,visited,x,y,curr_color))
+            if (not visited[x, y]) and image[x, y]>0:
+                conn_comps.append(BFS(image, visited, x, y, curr_color))
                 curr_color += 1
     return conn_comps, visited
 
-def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
+
+def AvgNeighbhorCorrelations(stack, dist=2, predicate=None):
     """
     Returns a 2D image which for each pixel in stack
     has the average correlation of that pixel's time-series
@@ -472,35 +476,36 @@ def AvgNeighbhorCorrelations(stack,dist=2,predicate=None):
     Predicate is an optional function that takes an x/y coordinate
     pair as argument and returns whether to compute the correlation.
     """
-    if dist<1:
+    if dist < 1:
         raise ValueError('Dist has to be at least 1')
-    im_corr = np.zeros((stack.shape[1],stack.shape[2]))
-    corr_buff = dict()#buffers computed correlations to avoid computing the same pairs multiple times!
+    im_corr = np.zeros((stack.shape[1], stack.shape[2]))
+    corr_buff = dict()  # buffers computed correlations to avoid computing the same pairs multiple times!
     for x in range(stack.shape[1]):
         for y in range(stack.shape[2]):
-            if (not predicate is None) and (not predicate(x,y)):#pixel is excluded
+            if (predicate is not None) and (not predicate(x, y)):  # pixel is excluded
                 continue
             c_sum = []
-            for dx in range(-1*dist,dist+1):#dx=dist inclusive!
-                for dy in range(-1*dist,dist+1):                    
-                    if dx==0 and dy==0:#original pixel
+            for dx in range(-1*dist, dist+1):  # dx=dist inclusive!
+                for dy in range(-1*dist, dist+1):
+                    if dx == 0 and dy == 0:  # original pixel
                         continue
-                    if x+dx<0 or y+dy<0 or x+dx>=im_corr.shape[0] or y+dy>=im_corr.shape[1]:#outside of image
+                    if x+dx < 0 or y+dy < 0 or x+dx >= im_corr.shape[0] or y+dy >= im_corr.shape[1]:  # outside of image
                         continue
-                    p_src = (x,y)
-                    p_des = (x+dx,y+dy)
-                    if (p_src,p_des) in corr_buff:
-                        c_sum.append(corr_buff[(p_src,p_des)])
+                    p_src = (x, y)
+                    p_des = (x+dx, y+dy)
+                    if (p_src, p_des) in corr_buff:
+                        c_sum.append(corr_buff[(p_src, p_des)])
                     else:
-                        cval = np.corrcoef(stack[:,x,y],stack[:,x+dx,y+dy])[0,1]
-                        corr_buff[(p_des,p_src)] = cval
+                        cval = np.corrcoef(stack[:, x, y], stack[:, x+dx, y+dy])[0, 1]
+                        corr_buff[(p_des, p_src)] = cval
                         c_sum.append(cval)
-            if len(c_sum)>0 and not np.all(np.isnan(c_sum)):
-                im_corr[x,y] = np.nanmean(c_sum)
+            if len(c_sum) > 0 and not np.all(np.isnan(c_sum)):
+                im_corr[x, y] = np.nanmean(c_sum)
     im_corr[np.isnan(im_corr)] = 0
     return im_corr
 
-from scipy.ndimage.measurements import center_of_mass
+# from scipy.ndimage.measurements import center_of_mass
+
 
 def ComputeAlignmentShift(stack, index):
     """
@@ -509,33 +514,34 @@ def ComputeAlignmentShift(stack, index):
     the best alignment of stack[index,:,:] to the re-
     mainder of the stack
     """
-    #shift_x = np.zeros(stack.shape[0])#best x-shift of each image
-    #shift_y = np.zeros_like(shift_x)#best y-shift of each image
-    #max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
+    # shift_x = np.zeros(stack.shape[0])#best x-shift of each image
+    # shift_y = np.zeros_like(shift_x)#best y-shift of each image
+    # max_corr = np.zeros_like(shift_x)#un-normalized correlation at best shift
 
     def ms(slice):
         return slice-np.mean(slice)
 
     if index == 0:
-        sum_stack = np.sum(stack[1:,:,:],0)
+        sum_stack = np.sum(stack[1:, :, :], 0)
     elif index == stack.shape[0]-1:
-        sum_stack = np.sum(stack[:-1,:,:],0)
+        sum_stack = np.sum(stack[:-1, :, :], 0)
     else: 
-        sum_stack = np.sum(stack[:index,:,:],0) + np.sum(stack[index+1:,:,:],0)
+        sum_stack = np.sum(stack[:index, :, :], 0) + np.sum(stack[index+1:, :, :], 0)
 
-    exp_x, exp_y = stack.shape[1]-1, stack.shape[2]-1#these are the indices in the cross-correlation matrix that correspond to 0 shift    
-    c = fftconvolve(ms(sum_stack),ms(stack[index,::-1,::-1]))
-    #NOTE: Center of mass instead of maximum may be better IFF the eye has been
-    #masked out of the stack. But it seems to lead to quite large distortions
-    #otherwise. Namely, quality scores get substantially worse in slices with
-    #the eye present after center-of-mass alignment than after peak alignment.
-    #However, after masking out the eye, center-of-mass does seem to produce
-    #slightly better alignments
-    #c[c<0] = 0 #this line is necessary when using center-of-mass for shift!
-    x,y = np.unravel_index(np.argmax(c),c.shape)#center_of_mass(c)#
+    exp_x, exp_y = stack.shape[1]//2, stack.shape[2]//2  # these are the indices in the cross-correlation matrix that correspond to 0 shift
+    c = cv2.filter2D(ms(sum_stack), -1, ms(stack[index, :, :]))
+    # NOTE: Center of mass instead of maximum may be better IFF the eye has been
+    # masked out of the stack. But it seems to lead to quite large distortions
+    # otherwise. Namely, quality scores get substantially worse in slices with
+    # the eye present after center-of-mass alignment than after peak alignment.
+    # However, after masking out the eye, center-of-mass does seem to produce
+    # slightly better alignments
+    # c[c<0] = 0 #this line is necessary when using center-of-mass for shift!
+    x, y = np.unravel_index(np.argmax(c), c.shape)  # center_of_mass(c)#
     shift_x = int(x-exp_x)
     shift_y = int(y-exp_y)
-    return shift_x,shift_y
+    return shift_x, shift_y
+
 
 def ReAlign(stack, maxShift, filterT=0, filterXY=1):
     """
@@ -548,51 +554,52 @@ def ReAlign(stack, maxShift, filterT=0, filterXY=1):
     In addition to decrease the influence of imaging noise on shifts
     allows temporal filtering of the stack by filterT slices
     """
-    def Shift2Index(shift,size):
+    def Shift2Index(shift, size):
         """
         Translates a given shift into the appropriate
         source and target indices
         """
-        if shift<0:
-            #coordinate n in source should be n-shift in target
-            source = (-1*shift,size)
-            target = (0,shift)
-        elif shift>0:
-            #coordinate n in source should be n+1 in target
-            source = (0,-1*shift)
-            target = (shift,size)
+        if shift < 0:
+            # coordinate n in source should be n-shift in target
+            source = (-1*shift, size)
+            target = (0, shift)
+        elif shift > 0:
+            # coordinate n in source should be n+1 in target
+            source = (0, -1*shift)
+            target = (shift, size)
         else:
-            source = (0,size)
-            target = (0,size)
+            source = (0, size)
+            target = (0, size)
         return source, target
     x_shifts = np.zeros(stack.shape[0])
     y_shifts = np.zeros_like(x_shifts)
     re_aligned = stack.copy()
     align_source = stack.copy()
     if filterT > 0:
-        align_source = gaussian_filter(align_source,(filterT,filterXY,filterXY))
+        align_source = gaussian_filter(align_source, (filterT, filterXY, filterXY))
     for t in range(re_aligned.shape[0]):
-        xshift, yshift = ComputeAlignmentShift(re_aligned,t)
+        xshift, yshift = ComputeAlignmentShift(re_aligned, t)
         x_shifts[t] = xshift
         y_shifts[t] = yshift
         if xshift == 0 and yshift == 0:
             continue
-        if np.abs(xshift)>maxShift or np.abs(yshift)>maxShift:
-            print("Warning. Slice ",t," requires shift greater ",maxShift," pixels. Maximally shifted")
-            if xshift>maxShift:
+        if np.abs(xshift) > maxShift or np.abs(yshift) > maxShift:
+            print("Warning. Slice ", t, " requires shift greater ", maxShift, " pixels. Maximally shifted")
+            if xshift > maxShift:
                 xshift = maxShift
-            elif xshift<-1*maxShift:
+            elif xshift < -1*maxShift:
                 xshift = -1*maxShift
-            if yshift>maxShift:
+            if yshift > maxShift:
                 yshift = maxShift
-            elif yshift<-1*maxShift:
+            elif yshift < -1*maxShift:
                 yshift = -1*maxShift
-        xs,xt = Shift2Index(xshift,re_aligned.shape[1])
-        ys,yt = Shift2Index(yshift,re_aligned.shape[2])
-        newImage = np.zeros((re_aligned.shape[1],re_aligned.shape[2]))
-        newImage[xt[0]:xt[1],yt[0]:yt[1]] = re_aligned[t,xs[0]:xs[1],ys[0]:ys[1]]
-        re_aligned[t,:,:] = newImage
+        xs, xt = Shift2Index(xshift, re_aligned.shape[1])
+        ys, yt = Shift2Index(yshift, re_aligned.shape[2])
+        newImage = np.zeros((re_aligned.shape[1], re_aligned.shape[2]))
+        newImage[xt[0]:xt[1], yt[0]:yt[1]] = re_aligned[t, xs[0]:xs[1], ys[0]:ys[1]]
+        re_aligned[t, :, :] = newImage
     return re_aligned, x_shifts, y_shifts
+
 
 def CorrelationControl(stack, nFrames):
     """
@@ -604,17 +611,19 @@ def CorrelationControl(stack, nFrames):
     def zsclice(slice):
         return (slice-np.mean(slice))/np.std(slice)
 
-    nSlices,h,w = stack.shape
+    nSlices, h, w = stack.shape
     if nSlices//nFrames < 2:
         raise ValueError("Need to identify at least two nFrames sized sub-stacks in the stack")
-    ix0_x, ix0_y = h-1, w-1#coordinates of 0-shift correlation
-    sum_slices = np.zeros((nSlices//nFrames,h,w))
+    ix0_x, ix0_y = h//2, w//2  # coordinates of 0-shift correlation
+    sum_slices = np.zeros((nSlices//nFrames, h, w))
     correlations = np.zeros(nSlices//nFrames-1)
+    z_sum = zsclice(sum_slices[0, :, :])
     for i in range(nSlices//nFrames):
-        sum_slices[i,:,:] = np.sum(stack[nFrames*i:nFrames*(i+1),:,:],0)
+        sum_slices[i, :, :] = np.sum(stack[nFrames*i:nFrames*(i+1), :, :], 0)
         if i > 0:
-            correlations[i-1] = fftconvolve(zsclice(sum_slices[0,:,:]),zsclice(sum_slices[i,::-1,::-1]))[ix0_x,ix0_y]
+            correlations[i-1] = cv2.filter2D(z_sum, -1, zsclice(sum_slices[i, :, :]))[ix0_x, ix0_y]
     return correlations, sum_slices
+
 
 def ShuffleStackSpatioTemporal(stack):
     """
@@ -623,15 +632,16 @@ def ShuffleStackSpatioTemporal(stack):
     circularly permuted along it's temporal dimension (axis 0)
     """
     shuff = stack.copy()
-    s0,s1,s2 = stack.shape
+    s0, s1, s2 = stack.shape
     for x in range(s1):
         for y in range(s2):
             xs = np.random.randint(s1)
             ys = np.random.randint(s2)
-            temp = shuff[:,xs,ys].copy()#this copy is important since otherwise we are dealing with a view not actual values!!!
-            shuff[:,xs,ys] = shuff[:,x,y]
-            shuff[:,x,y] = np.roll(temp,np.random.randint(s0))
+            temp = shuff[:, xs, ys].copy()  # this copy is important since otherwise we are dealing with a view not actual values!!!
+            shuff[:, xs, ys] = shuff[:, x, y]
+            shuff[:, x, y] = np.roll(temp, np.random.randint(s0))
     return shuff
+
 
 def ShuffleStackTemporal(stack):
     """
@@ -639,9 +649,9 @@ def ShuffleStackTemporal(stack):
     permuted at random along the time axis (axis 0)
     """
     shuff = np.empty_like(stack)
-    s0,s1,s2 = stack.shape
+    s0, s1, s2 = stack.shape
     for x in range(s1):
         for y in range(s2):
-            shuff[:,x,y] = np.random.choice(stack[:,x,y],size=s0,replace=False)
+            shuff[:,x,y] = np.random.choice(stack[:, x, y], size=s0, replace=False)
     return shuff
             
