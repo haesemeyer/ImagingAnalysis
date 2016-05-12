@@ -386,6 +386,29 @@
         </rect>
        </property>
       </widget>
+      <widget class="QLabel" name="label_11">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>110</y>
+         <width>131</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Min. photons/pixel/frame</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="tbMinPhot">
+       <property name="geometry">
+        <rect>
+         <x>140</x>
+         <y>110</y>
+         <width>51</width>
+         <height>20</height>
+        </rect>
+       </property>
+      </widget>
      </widget>
      <widget class="QPushButton" name="btnSegSave">
       <property name="geometry">
@@ -485,6 +508,16 @@
           <y>60</y>
           <width>541</width>
           <height>111</height>
+         </rect>
+        </property>
+       </widget>
+       <widget class="ImageView" name="segColView">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>180</y>
+          <width>541</width>
+          <height>281</height>
          </rect>
         </property>
        </widget>
