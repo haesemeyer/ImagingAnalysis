@@ -11,6 +11,7 @@ try:
 except NameError:
     from IPython.parallel import Client
 
+
 class StartStackAnalyzer(QtGui.QMainWindow):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
@@ -18,6 +19,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.setupUi(self)
         self.currentStack = np.array([])
         self.graphList = []
+        self.filename = ""
         # set ui defaults
         self.ui.rbSumProj.setCheckable(False)
         self.ui.rbROIOverlay.setCheckable(False)
@@ -30,6 +32,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.tbStimFrames.setText("144")
         self.ui.tbPostFrames.setText("180")
         self.ui.tbFFTGap.setText("48")
+        self.ui.tbMinPhot.setText("0.02")
         self.ui.rb6s.setChecked(True)
         self.ui.tbCorrTh.setText("0.5")
         self.ui.tbCellDiam.setText("8")
@@ -38,9 +41,11 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.tabWidget.setCurrentIndex(0)
         self.ui.btnSeg.setEnabled(False)
         self.ui.btnSegSave.setEnabled(False)
-        # hide menu and roi button on image view
+        # hide menu and roi button on image views
         self.ui.sliceView.ui.roiBtn.hide()
         self.ui.sliceView.ui.menuBtn.hide()
+        self.ui.segColView.ui.roiBtn.hide()
+        self.ui.segColView.ui.menuBtn.hide()
         # connect our own signals
         QtCore.QObject.connect(self.ui.btnLoad, QtCore.SIGNAL("clicked()"), self.load)
         QtCore.QObject.connect(self.ui.rbROIOverlay, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
@@ -60,6 +65,52 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             print("No parallel pool found")
         self.ui.lcdEngines.display(str(len(self._rc)))
 
+    # UI element property access #
+    @property
+    def PreFrames(self):
+        return int(self.ui.tbPreFrames.text())
+
+    @property
+    def StimFrames(self):
+        return int(self.ui.tbStimFrames.text())
+
+    @property
+    def PostFrames(self):
+        return int(self.ui.tbPostFrames.text())
+
+    @property
+    def FFTGap(self):
+        return int(self.ui.tbFFTGap.text())
+
+    @property
+    def StimulusFrequency(self):
+        return float(self.ui.tbStimFreq.text())
+
+    @property
+    def FrameRate(self):
+        return float(self.ui.tbFrameRate.text())
+
+    @property
+    def MinPhot(self):
+        return float(self.ui.tbMinPhot.text())
+
+    @property
+    def CaTimeConstant(self):
+        if self.ui.rb6f.isChecked():
+            return 400 / 1000
+        elif self.ui.rb6s.isChecked():
+            return 1796 / 1000
+        else:
+            raise ValueError("Unknown indicator")
+
+    @property
+    def CorrThresh(self):
+        return float(self.ui.tbCorrTh.text())
+
+    @property
+    def CellDiam(self):
+        return int(self.ui.tbCellDiam.text())
+
     # Helper functions #
     @staticmethod
     def getAlignedName(tiffname):
@@ -68,6 +119,10 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     @staticmethod
     def getGraphName(tiffname):
         return tiffname[:-3]+"graph"
+
+    @staticmethod
+    def getTailName(tiffname):
+        return tiffname[:-6]+".tail"
 
     def findROIByPixel(self, x, y):
         if len(self.graphList) == 0:
@@ -168,6 +223,25 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             slc[i] = np.corrcoef(st, fstack[i, :, :].flatten())[0, 1]
         return slc
 
+    def assignMotorToGraphs(self):
+        """
+        Tries to load taildata corresponding to graph-list elements
+        under the assumption that they all belong to the same
+        experiment. Assigns corresponding data to each graph
+        """
+        if self.graphList is None or len(self.graphList) == 0:
+            return
+        g = self.graphList[0]
+        td = TailData.LoadTailData(self.getTailName(g.SourceFile), g.CaTimeConstant, 100)
+        if td is None:
+            print("No tail tracking file found")
+            return
+        pfv = td.PerFrameVigor
+        bst = td.FrameBoutStarts(g.FrameRate)
+        for g in self.graphList:
+            g.PerFrameVigor = pfv
+            g.BoutStartTrace = bst
+
     def chunkWork(self, a, axis=0, nchunks=None):
         """
         Takes the array a and divides it into chunks for each parallel
@@ -254,7 +328,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     def segmentByCorrelation(self):
         if self.ui.chkRealign.checkState():
             maxshift = int(self.ui.tbCellDiam.text()) // 2
-            self.currentStack, xshift, yshift = ReAlign(self.currentStack, maxshift, float(self.ui.tbFrameRate.text()))
+            self.currentStack, xshift, yshift = ReAlign(self.currentStack, maxshift)
             # remove borders that may have been affected by the realignment
             self.currentStack[:, :maxshift, :] = 0
             self.currentStack[:, :, :maxshift] = 0
@@ -268,7 +342,60 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             pi.setLabel("left", "Shift [px]")
             pi.setLabel("bottom", "Frames")
             pi.setTitle("Slice shifts in x and y direction")
-        return []
+        filterWins = (self.FrameRate, self.CellDiam // 8, self.CellDiam // 8)
+        if len(self._rc) > 0:
+            # perform shuffled correlation computation on a different engine
+            ar_sh = self._rc[0].apply_async(ComputeShuffledCorrelations, self.currentStack, filterWins, self.MinPhot)
+            im_nc_shuff = []  # place holder definition
+        else:
+            im_nc_shuff = ComputeShuffledCorrelations(self.currentStack, filterWins,
+                                                      self.MinPhot*self.currentStack.shape[0])
+        # compute neighborhood correlations on original stack
+        sum_stack = np.sum(self.currentStack, 0)
+        consider = lambda x, y: sum_stack[x, y] >= (self.MinPhot*self.currentStack.shape[0])
+        rate_stack = gaussian_filter(self.currentStack, filterWins)
+        im_ncorr = AvgNeighbhorCorrelations(rate_stack, 2, consider)
+        print('Maximum neighbor correlation in stack = ', im_ncorr.max(), flush=True)
+        seed_cutoff = 1
+        if len(self._rc) > 0:
+            # need to pick up our shuffled stack!
+            im_nc_shuff = ar_sh.get()
+        for c in np.linspace(0, 1, 1001):
+            if ((im_ncorr > c).sum() / (im_nc_shuff > c).sum()) >= 10:
+                seed_cutoff = c
+                break
+        print('Correlation seed cutoff in stack = ', seed_cutoff, flush=True)
+        # extract correlation graphs - 4-connected
+        # cap our growth correlation threshold at the seed-cutoff, i.e. if corr_thresh
+        # is larger than the significance threshold reduce it, when creating graph
+        if self.CorrThresh <= seed_cutoff:
+            ct_actual = self.CorrThresh
+        else:
+            ct_actual = seed_cutoff
+        graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack, im_ncorr, ct_actual, consider, False,
+                                                              (0, rate_stack.shape[0]), seed_cutoff)
+        self.ui.segColView.setImage(colors)
+        min_size = np.pi * (self.CellDiam / 2) ** 2 / 2  # half of a circle with the given average cell diameter
+        graph = [g for g in graph if g.NPixels >= min_size]  # remove compoments with less than 30 pixels
+        print('Identified ', len(graph), 'units in slice ', flush=True)
+        # assign necessary information to each graph
+        for g in graph:
+            g.SourceFile = self.filename  # store for convenience access
+            g.FramesPre = self.PreFrames
+            g.FramesStim = self.StimFrames
+            g.FramesPost = self.PostFrames
+            g.FramesFFTGap = self.FFTGap
+            g.StimFrequency = self.StimulusFrequency
+            g.CellDiam = self.CellDiam
+            g.CorrThresh = ct_actual
+            g.CorrSeedCutoff = seed_cutoff
+            g.RawTimeseries = np.zeros_like(g.Timeseries)
+            g.FrameRate = self.FrameRate
+            g.CaTimeConstant = self.CaTimeConstant
+            # TODO: Find replacement for quality score deviation or re-compute!
+            for v in g.V:
+                g.RawTimeseries = g.RawTimeseries + self.currentStack[:, v[0], v[1]]
+        return graph
 
     # Signals #
 
@@ -297,7 +424,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
                 self.ui.rbROIOverlay.setEnabled(False)
             self.ui.lblFile.setText(fname)
             self.resetAfterLoad()
-
+            self.filename = fname
         else:
             print("No file selected")
 
@@ -362,6 +489,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.resetAfterLoad()
         else:
             print("Not implemented segmentation option selected")
+        # if possible assign motor information
+        self.assignMotorToGraphs()
 
     def saveSegmentation(self):
         pass
@@ -382,7 +511,15 @@ class StartStackAnalyzer(QtGui.QMainWindow):
 
 
 # parallel pool helpers
-
+def ComputeShuffledCorrelations(stack, filterdims, minphot):
+    from mh_2P import ShuffleStackTemporal, AvgNeighbhorCorrelations
+    from scipy.ndimage import gaussian_filter
+    import numpy as np
+    st_shuff = ShuffleStackTemporal(stack)
+    sum_stack = np.sum(stack, 0)
+    consider = lambda x, y: sum_stack[x, y] >= minphot
+    rs_shuff = gaussian_filter(st_shuff, filterdims)
+    return AvgNeighbhorCorrelations(rs_shuff, 2, consider)
 
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
