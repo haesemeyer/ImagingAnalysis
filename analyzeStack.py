@@ -183,7 +183,7 @@ if __name__ == "__main__":
             mask = mask[None,:,:]
             stack = stack * np.repeat(mask,stack.shape[0],0)
             maxshift = cell_diam//2
-            stack, xshift, yshift = ReAlign(stack,maxshift,frame_rate)#make filtering before alignment prop. to frame-rate with the idea that faster acquisition = noisier data...
+            stack, xshift, yshift = ReAlign(stack, maxshift)
             #remove border from stack that corresponds to our max-shift size
             stack[:,:maxshift,:] = 0
             stack[:,:,:maxshift] = 0
