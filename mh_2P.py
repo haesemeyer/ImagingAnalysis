@@ -33,7 +33,92 @@ except ImportError:
     import tkinter.filedialog as tkFileDialog
 
 
+class NucleusGraph:
 
+    def __init__(self, id, timeseries):
+        self.V = []
+        self.ID = id
+        self.RawTimeseries = timeseries
+        self.gcv = [] # the greyscale values of all graph pixels
+
+    @property
+    def NPixels(self):
+        return len(self.V)
+
+    @property
+    def MinX(self):
+        return min(list(zip(*self.V))[0])
+
+    @property
+    def MinY(self):
+        return min(list(zip(*self.V))[1])
+
+    @property
+    def MaxX(self):
+        return max(list(zip(*self.V))[0])
+
+    @property
+    def MaxY(self):
+        return max(list(zip(*self.V))[1])
+
+    @staticmethod
+    def NuclearConnComp(stack, sumImage, seedImage):
+        """
+        Attempts to segment sumImage into individual nuclei by growing graphs via BFS from seed voxels
+        obtain from seedImage
+        Args:
+            stack: The original stack to add time-series data to the graph
+            sumImage: A (potentially tweaked) projection of stack that is used for segmentation
+            seedImage: Greyscale image that contains potential nuclear region seed pixels
+
+        Returns: A list of nucleus graphs that segment sumImage
+
+        """
+        def BFS(sourceX, sourceY, color):
+            """
+            Performs breadth first search on sumImage
+            given (sourceX,sourceY) as starting pixel
+            coloring all visited pixels in color
+            """
+            pg = NucleusGraph(color, np.zeros(stack.shape[0]))
+            Q = deque()
+            Q.append((sourceX, sourceY, 0))
+            visited[sourceX, sourceY] = color  # mark source as visited
+            while len(Q) > 0:
+                v = Q.popleft()
+                x = v[0]
+                y = v[1]
+                pg.V.append(v)  # add current vertex to pixel graph
+                pg.gcv.append(sumImage[x, y])
+                pg.RawTimeseries += stack[:, x, y]  # add current pixel's timeseries
+                # add non-visited neighborhood to queue
+                for xn in range(x - 1, x + 2):  # x+1 inclusive!
+                    for yn in range(y - 1, y + 2):
+                        if xn < 0 or yn < 0 or xn >= stack.shape[1] or yn >= stack.shape[2] or visited[xn, yn]:
+                            # outside image dimensions or already visited
+                            continue
+                        if xn != x and yn != y: # 4-connected
+                            continue
+                        # determine if the current pixel should be added
+                        if len(pg.gcv) == 1:
+                            minval = pg.gcv[0] / 2  # currently only one pixel add anything of at least 1/2 brightness
+                        else:
+                            minval = np.mean(pg.gcv) - np.std(pg.gcv)  # add as long as brightness >= m-sd
+                        if sumImage[xn, yn] >= minval:
+                            Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
+                            visited[xn, yn] = color  # mark as visited
+            return pg
+
+        visited = np.zeros_like(sumImage, dtype=np.uint16)
+        conn_comps = []  # list of nucleus graphs
+        # at each iteration we find the pixel with the highest greyscale value in seedImage,
+        # ignoring visited pixels, and use it as a source pixel for breadth first search
+        curr_color = 1  # id counter of connected components
+        while np.max(seedImage * (visited == 0)) > 0:
+            (x, y) = np.unravel_index(np.argmax(seedImage * (visited == 0)), seedImage.shape)
+            conn_comps.append(BFS(x, y, curr_color))
+            curr_color += 1
+        return conn_comps, visited
 
 
 class CorrelationGraph:
