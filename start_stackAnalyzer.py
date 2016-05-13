@@ -39,6 +39,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.tbStimFreq.setText("0.1")
         self.ui.tbFrameRate.setText("2.4")
         self.ui.tabWidget.setCurrentIndex(0)
+        self.ui.twSegment.setCurrentIndex(0)
         self.ui.btnSeg.setEnabled(False)
         self.ui.btnSegSave.setEnabled(False)
         # hide menu and roi button on image views
@@ -46,6 +47,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         self.ui.sliceView.ui.menuBtn.hide()
         self.ui.segColView.ui.roiBtn.hide()
         self.ui.segColView.ui.menuBtn.hide()
+        self.ui.segNucView.ui.menuBtn.hide()
+        self.ui.segNucView.ui.roiBtn.hide()
         # connect our own signals
         QtCore.QObject.connect(self.ui.btnLoad, QtCore.SIGNAL("clicked()"), self.load)
         QtCore.QObject.connect(self.ui.rbROIOverlay, QtCore.SIGNAL("toggled(bool)"), self.displayChanged)
@@ -342,6 +345,8 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             pi.setLabel("left", "Shift [px]")
             pi.setLabel("bottom", "Frames")
             pi.setTitle("Slice shifts in x and y direction")
+            pi.update()
+            QtGui.QApplication.processEvents()
         filterWins = (self.FrameRate, self.CellDiam // 8, self.CellDiam // 8)
         if len(self._rc) > 0:
             # perform shuffled correlation computation on a different engine
@@ -396,6 +401,41 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             for v in g.V:
                 g.RawTimeseries = g.RawTimeseries + self.currentStack[:, v[0], v[1]]
         return graph
+
+    def segmentNuclei(self):
+        # Rather simple idea:
+        # Build graphs starting from bright pixels in the image (center of nuclei) that do not grow across
+        # strong light-dark transitions (nuclear boundary). This could yield an initial segmentation where
+        # overlapping nuclei would create merged regions
+        # 1) How to define a "strong" light-dark transition
+        # 2) How to bias starting of graph search to middle of nuclei as this would allow to first accumulate some
+        #    idea on average brightness and standard deviation of the given nucleaus in order to assess 1)
+        # Perform small grey-scale erosion (i.e. grow inter-nuclear regions), 3px se
+        # Threshold the image above - this identifies potential seed pixels
+        # Take the eroded image and to each pixel assign the sum of brightness of its 8 neighbors
+        # Mutliply this image with the thresholded image
+        # Successively find pixels of maximal brightness IN THE RESULT that have not been visited
+        #   to start BFS IN THE ORIGINAL IMAGE
+        # Grow regions using 4-connectivity where pixels are only considered connected if their brightness is at least
+        # the average brightness minus standard deviation in the current region
+        # Return all regions found by this breadth first search
+        if "sumStack" in self._cash:
+            sumstack = self._cash["sumStack"]
+        else:
+            sumstack = np.sum(self.currentStack, 0)
+            self._cash["sumStack"] = sumstack
+        # transform into 8-bit representation
+        sumstack = (sumstack / sumstack.max() * 255).astype(np.uint8)
+        ss_eroded = cv2.erode(sumstack, np.ones((3, 3)))
+        ss_eth = cv2.threshold(ss_eroded, np.mean(ss_eroded).astype(np.uint8), 1, cv2.THRESH_BINARY)[1]
+        kernel = np.ones((3, 3)).astype(np.float32)
+        kernel[0, 0] = kernel[2, 0] = kernel[0, 2] = kernel[2, 2] = 0.0
+        kernel /= kernel.sum()
+        ss_eroded = cv2.filter2D(ss_eroded, -1, kernel)
+        ss_eroded = cv2.multiply(ss_eroded, ss_eth)
+        graph, colors = NucleusGraph.NuclearConnComp(self.currentStack, sumstack, ss_eroded)
+        self.ui.segNucView.setImage(colors)
+        return []
 
     # Signals #
 
@@ -487,6 +527,12 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             self.ui.rbROIOverlay.setCheckable(True)
             self.ui.rbROIOverlay.setEnabled(True)
             self.resetAfterLoad()
+        elif self.ui.twSegment.currentIndex() == 1:
+            # anatomical nuclear segmentation
+            self.graphList = self.segmentNuclei()
+            self.ui.rbROIOverlay.setCheckable(True)
+            self.ui.rbROIOverlay.setEnabled(True)
+            self.resetAfterLoad(False)
         else:
             print("Not implemented segmentation option selected")
         # if possible assign motor information
@@ -495,10 +541,11 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     def saveSegmentation(self):
         pass
 
-    def resetAfterLoad(self):
+    def resetAfterLoad(self, clearCash=True):
         self.ui.sliceView.setImage(self.currentStack)
         # clear our cash
-        self._cash.clear()
+        if clearCash:
+            self._cash.clear()
         # reset ui options and clear unit graphs
         self.ui.rbSumProj.setCheckable(True)
         self.ui.rbSumProj.setEnabled(True)

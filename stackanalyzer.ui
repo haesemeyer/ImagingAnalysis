@@ -438,6 +438,9 @@
       <property name="tabPosition">
        <enum>QTabWidget::West</enum>
       </property>
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
       <widget class="QWidget" name="corTab">
        <attribute name="title">
         <string>Correlation</string>
@@ -522,10 +525,20 @@
         </property>
        </widget>
       </widget>
-      <widget class="QWidget" name="tab_2">
+      <widget class="QWidget" name="nucTab">
        <attribute name="title">
-        <string>Tab 2</string>
+        <string>Nuclear</string>
        </attribute>
+       <widget class="ImageView" name="segNucView">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>170</y>
+          <width>541</width>
+          <height>281</height>
+         </rect>
+        </property>
+       </widget>
       </widget>
      </widget>
      <widget class="QPushButton" name="btnSeg">

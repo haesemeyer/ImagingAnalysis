@@ -163,9 +163,12 @@ class Ui_StackAnalyzer(object):
         self.segColView.setGeometry(QtCore.QRect(10, 180, 541, 281))
         self.segColView.setObjectName(_fromUtf8("segColView"))
         self.twSegment.addTab(self.corTab, _fromUtf8(""))
-        self.tab_2 = QtGui.QWidget()
-        self.tab_2.setObjectName(_fromUtf8("tab_2"))
-        self.twSegment.addTab(self.tab_2, _fromUtf8(""))
+        self.nucTab = QtGui.QWidget()
+        self.nucTab.setObjectName(_fromUtf8("nucTab"))
+        self.segNucView = ImageView(self.nucTab)
+        self.segNucView.setGeometry(QtCore.QRect(10, 170, 541, 281))
+        self.segNucView.setObjectName(_fromUtf8("segNucView"))
+        self.twSegment.addTab(self.nucTab, _fromUtf8(""))
         self.btnSeg = QtGui.QPushButton(self.segTab)
         self.btnSeg.setGeometry(QtCore.QRect(40, 630, 75, 23))
         self.btnSeg.setObjectName(_fromUtf8("btnSeg"))
@@ -200,6 +203,7 @@ class Ui_StackAnalyzer(object):
 
         self.retranslateUi(StackAnalyzer)
         self.tabWidget.setCurrentIndex(1)
+        self.twSegment.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(StackAnalyzer)
 
     def retranslateUi(self, StackAnalyzer):
@@ -230,7 +234,7 @@ class Ui_StackAnalyzer(object):
         self.label_7.setText(_translate("StackAnalyzer", "Cell diameter", None))
         self.chkRealign.setText(_translate("StackAnalyzer", "Realign stack", None))
         self.twSegment.setTabText(self.twSegment.indexOf(self.corTab), _translate("StackAnalyzer", "Correlation", None))
-        self.twSegment.setTabText(self.twSegment.indexOf(self.tab_2), _translate("StackAnalyzer", "Tab 2", None))
+        self.twSegment.setTabText(self.twSegment.indexOf(self.nucTab), _translate("StackAnalyzer", "Nuclear", None))
         self.btnSeg.setText(_translate("StackAnalyzer", "Segment", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.segTab), _translate("StackAnalyzer", "Segmentation", None))
         self.label.setText(_translate("StackAnalyzer", "Parallel pool", None))
