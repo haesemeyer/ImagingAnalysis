@@ -539,6 +539,16 @@
          </rect>
         </property>
        </widget>
+       <widget class="PlotWidget" name="graphNHist">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>50</y>
+          <width>541</width>
+          <height>111</height>
+         </rect>
+        </property>
+       </widget>
       </widget>
      </widget>
      <widget class="QPushButton" name="btnSeg">

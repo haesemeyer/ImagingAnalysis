@@ -2,6 +2,7 @@ from PyQt4 import QtCore, QtGui
 from sta_ui import Ui_StackAnalyzer
 from mh_2P import *
 import numpy as np
+import pyqtgraph as pg
 import pickle
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import warnings
@@ -434,7 +435,14 @@ class StartStackAnalyzer(QtGui.QMainWindow):
         ss_eroded = cv2.filter2D(ss_eroded, -1, kernel)
         ss_eroded = cv2.multiply(ss_eroded, ss_eth)
         graph, colors = NucleusGraph.NuclearConnComp(self.currentStack, sumstack, ss_eroded)
+        graph = [g for g in graph if g.NPixels >= 5]  # remove compoments with less than 5 pixels
         self.ui.segNucView.setImage(colors)
+        gsizes = [g.NPixels for g in graph]
+        y, x = np.histogram(gsizes, 100)
+        pi = self.ui.graphNHist.plotItem
+        curve = pg.PlotCurveItem(x, y, stepMode=True, fillLevel=0, brush=(20, 50, 255, 75))
+        print("Median of sizes: ", np.median(gsizes))
+        pi.addItem(curve)
         return []
 
     # Signals #
