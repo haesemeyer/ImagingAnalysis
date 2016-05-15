@@ -699,10 +699,11 @@ def CorrelationControl(stack, nFrames):
     ix0_x, ix0_y = h//2, w//2  # coordinates of 0-shift correlation
     sum_slices = np.zeros((nSlices//nFrames, h, w))
     correlations = np.zeros(nSlices//nFrames-1)
-    z_sum = zsclice(sum_slices[0, :, :])
     for i in range(nSlices//nFrames):
         sum_slices[i, :, :] = np.sum(stack[nFrames*i:nFrames*(i+1), :, :], 0)
-        if i > 0:
+        if i == 0:
+            z_sum = zsclice(sum_slices[0, :, :])
+        elif i > 0:
             correlations[i-1] = cv2.filter2D(z_sum, -1, zsclice(sum_slices[i, :, :]))[ix0_x, ix0_y]
     return correlations, sum_slices
 
