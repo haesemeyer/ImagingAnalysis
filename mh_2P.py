@@ -100,11 +100,15 @@ class NucleusGraph:
                         if xn != x and yn != y: # 4-connected
                             continue
                         # determine if the current pixel should be added
-                        if len(pg.gcv) == 1:
+                        if len(pg.gcv) < 3:
                             minval = pg.gcv[0] / 2  # currently only one pixel add anything of at least 1/2 brightness
+                            maxval = pg.gcv[0] * 2
                         else:
-                            minval = np.mean(pg.gcv) - np.std(pg.gcv)  # add as long as brightness >= m-sd
-                        if sumImage[xn, yn] >= minval:
+                            m = np.mean(pg.gcv)
+                            s = np.std(pg.gcv)
+                            minval = m - 1.5 * s  # add as long as brightness >= m-sd
+                            maxval = m + 1.5 * s
+                        if minval <= sumImage[xn, yn] <= maxval:
                             Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
                             visited[xn, yn] = color  # mark as visited
             return pg
