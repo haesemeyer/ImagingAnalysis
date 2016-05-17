@@ -597,7 +597,7 @@ def AvgNeighbhorCorrelations(stack, dist=2, predicate=None):
 # from scipy.ndimage.measurements import center_of_mass
 
 
-def ComputeAlignmentShift(stack, index):
+def ComputeAlignmentShift(stack, index, sum_stack):
     """
     For the slice in stack identified by index computes
     the x (row) and y (column) shift that corresponds to
@@ -611,12 +611,8 @@ def ComputeAlignmentShift(stack, index):
     def ms(slice):
         return slice-np.mean(slice)
 
-    if index == 0:
-        sum_stack = np.sum(stack[1:, :, :], 0)
-    elif index == stack.shape[0]-1:
-        sum_stack = np.sum(stack[:-1, :, :], 0)
-    else: 
-        sum_stack = np.sum(stack[:index, :, :], 0) + np.sum(stack[index+1:, :, :], 0)
+    # remove current slice from the sum
+    sum_stack -= stack[index, :, :]
 
     exp_x, exp_y = stack.shape[1]//2, stack.shape[2]//2  # these are the indices in the cross-correlation matrix that correspond to 0 shift
     c = cv2.filter2D(ms(sum_stack), -1, ms(stack[index, :, :]))
@@ -630,7 +626,8 @@ def ComputeAlignmentShift(stack, index):
     x, y = np.unravel_index(np.argmax(c), c.shape)  # center_of_mass(c)#
     shift_x = int(x-exp_x)
     shift_y = int(y-exp_y)
-    return shift_x, shift_y
+    # return sum_stack so that outer scope can add shifted verion back in
+    return shift_x, shift_y, sum_stack
 
 
 def ReAlign(stack, maxShift):
@@ -661,11 +658,14 @@ def ReAlign(stack, maxShift):
             source = (0, size)
             target = (0, size)
         return source, target
+
     x_shifts = np.zeros(stack.shape[0])
     y_shifts = np.zeros_like(x_shifts)
     re_aligned = stack.copy()
+    # compute initial sum
+    sum_stack = np.sum(re_aligned, 0)
     for t in range(re_aligned.shape[0]):
-        xshift, yshift = ComputeAlignmentShift(re_aligned, t)
+        xshift, yshift, sum_stack = ComputeAlignmentShift(re_aligned, t, sum_stack)
         x_shifts[t] = xshift
         y_shifts[t] = yshift
         if xshift == 0 and yshift == 0:
@@ -685,6 +685,8 @@ def ReAlign(stack, maxShift):
         newImage = np.zeros((re_aligned.shape[1], re_aligned.shape[2]))
         newImage[xt[0]:xt[1], yt[0]:yt[1]] = re_aligned[t, xs[0]:xs[1], ys[0]:ys[1]]
         re_aligned[t, :, :] = newImage
+        # add re-aligned image to sumStack
+        sum_stack += newImage
     return re_aligned, x_shifts, y_shifts
 
 
