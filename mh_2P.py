@@ -39,7 +39,7 @@ class NucleusGraph:
         self.V = []
         self.ID = id
         self.RawTimeseries = timeseries
-        self.gcv = [] # the greyscale values of all graph pixels
+        self.gcv = []  # the greyscale values of all graph pixels
 
     @property
     def NPixels(self):
@@ -62,7 +62,7 @@ class NucleusGraph:
         return max(list(zip(*self.V))[1])
 
     @staticmethod
-    def NuclearConnComp(stack, sumImage, seedImage):
+    def NuclearConnComp(stack, sumImage, seedImage, maxDist):
         """
         Attempts to segment sumImage into individual nuclei by growing graphs via BFS from seed voxels
         obtain from seedImage
@@ -70,6 +70,7 @@ class NucleusGraph:
             stack: The original stack to add time-series data to the graph
             sumImage: A (potentially tweaked) projection of stack that is used for segmentation
             seedImage: Greyscale image that contains potential nuclear region seed pixels
+            maxDist: The maximum source-distance to be incorporated into a graph
 
         Returns: A list of nucleus graphs that segment sumImage
 
@@ -97,7 +98,7 @@ class NucleusGraph:
                         if xn < 0 or yn < 0 or xn >= stack.shape[1] or yn >= stack.shape[2] or visited[xn, yn]:
                             # outside image dimensions or already visited
                             continue
-                        if xn != x and yn != y: # 4-connected
+                        if xn != x and yn != y:  # 4-connected
                             continue
                         # determine if the current pixel should be added
                         if len(pg.gcv) < 3:
@@ -108,7 +109,7 @@ class NucleusGraph:
                             s = np.std(pg.gcv)
                             minval = m - 1.5 * s  # add as long as brightness >= m-sd
                             maxval = m + 1.5 * s
-                        if minval <= sumImage[xn, yn] <= maxval:
+                        if minval <= sumImage[xn, yn] <= maxval and v[2] < maxDist:
                             Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
                             visited[xn, yn] = color  # mark as visited
             return pg
@@ -127,10 +128,10 @@ class NucleusGraph:
 
 class CorrelationGraph:
 
-    def __init__(self,id,timeseries):
-        self.V = []#list of vertices
-        self.ID = id#id of this graph for easy component reference
-        self.Timeseries = timeseries#the summed pixel-timeseries of the graph
+    def __init__(self, id, timeseries):
+        self.V = []  # list of vertices
+        self.ID = id  # id of this graph for easy component reference
+        self.Timeseries = timeseries  # the summed pixel-timeseries of the graph
 
     @property
     def NPixels(self):
@@ -739,6 +740,15 @@ def ShuffleStackTemporal(stack):
     s0, s1, s2 = stack.shape
     for x in range(s1):
         for y in range(s2):
-            shuff[:,x,y] = np.random.choice(stack[:, x, y], size=s0, replace=False)
+            shuff[:, x, y] = np.random.choice(stack[:, x, y], size=s0, replace=False)
     return shuff
-            
+
+
+def cutOutliers(image, perc_cut=99.9):
+    """
+    Converts an image to 8-bit representation setting all pixels above
+    the given percentile to 255 in order to remove extreme outliers
+    """
+    image = image.copy() / np.percentile(image, perc_cut)
+    image[image > 1] = 1
+    return image
