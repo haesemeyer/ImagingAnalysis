@@ -62,7 +62,7 @@ class NucleusGraph:
         return max(list(zip(*self.V))[1])
 
     @staticmethod
-    def NuclearConnComp(stack, sumImage, seedImage, maxDist):
+    def NuclearConnComp(stack, sumImage, seedImage, maxDist, minSize):
         """
         Attempts to segment sumImage into individual nuclei by growing graphs via BFS from seed voxels
         obtain from seedImage
@@ -71,6 +71,7 @@ class NucleusGraph:
             sumImage: A (potentially tweaked) projection of stack that is used for segmentation
             seedImage: Greyscale image that contains potential nuclear region seed pixels
             maxDist: The maximum source-distance to be incorporated into a graph
+            minSize: The minimum number of pixels in a nuclear graph
 
         Returns: A list of nucleus graphs that segment sumImage
 
@@ -84,6 +85,7 @@ class NucleusGraph:
             pg = NucleusGraph(color, np.zeros(stack.shape[0]))
             Q = deque()
             Q.append((sourceX, sourceY, 0))
+            visited = finalized.copy()  # since we don't know if graph will be accepted, make local copy
             visited[sourceX, sourceY] = color  # mark source as visited
             while len(Q) > 0:
                 v = Q.popleft()
@@ -102,28 +104,40 @@ class NucleusGraph:
                             continue
                         # determine if the current pixel should be added
                         if len(pg.gcv) < 3:
-                            minval = pg.gcv[0] / 2  # currently only one pixel add anything of at least 1/2 brightness
-                            maxval = pg.gcv[0] * 2
+                            minval = pg.gcv[0] / 1.5  # currently only one pixel add anything of at least 2/3 brightness
+                            maxval = pg.gcv[0] * 1.5  # penalize for starting from a darker pixel
                         else:
                             m = np.mean(pg.gcv)
                             s = np.std(pg.gcv)
-                            minval = m - 1.5 * s  # add as long as brightness >= m-sd
-                            maxval = m + 1.5 * s
+                            minval = m - 2 * s  # add as long as brightness >= m-2*sd
+                            maxval = m + 2 * s  # penalize for starting from a darker pixel
                         if minval <= sumImage[xn, yn] <= maxval and v[2] < maxDist:
                             Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
                             visited[xn, yn] = color  # mark as visited
             return pg
 
-        visited = np.zeros_like(sumImage, dtype=np.uint16)
+        finalized = np.zeros_like(sumImage, dtype=np.uint16)
+        usedAsSeed = np.zeros_like(finalized, dtype=np.uint16)
         conn_comps = []  # list of nucleus graphs
         # at each iteration we find the pixel with the highest greyscale value in seedImage,
-        # ignoring visited pixels, and use it as a source pixel for breadth first search
+        # ignoring visited pixels and black pixels, and use it as a source pixel for breadth first search
+        # a pixel is never used twice as a see pixel, however each potential graph that is returned from
+        # breadth first search gets only accepted if it passes a minimum size threhold and only then
+        # are its constituent pixels marked as finalized
         curr_color = 1  # id counter of connected components
-        while np.max(seedImage * (visited == 0)) > 0:
-            (x, y) = np.unravel_index(np.argmax(seedImage * (visited == 0)), seedImage.shape)
-            conn_comps.append(BFS(x, y, curr_color))
-            curr_color += 1
-        return conn_comps, visited
+        while np.max(seedImage * (usedAsSeed == 0) * sumImage) > 0:
+            (x, y) = np.unravel_index(np.argmax(seedImage * (usedAsSeed == 0)), seedImage.shape)
+            pot_graph = BFS(x, y, curr_color)
+            if pot_graph.NPixels >= minSize:
+                conn_comps.append(pot_graph)
+                for v in pot_graph.V:
+                    finalized[v[0], v[1]] = curr_color  # finalize all graph constituents
+                    usedAsSeed[v[0], v[1]] = 1  # also don't use graph constituents as future seeds
+                curr_color += 1  # we take this graph, update color
+            else:
+                # we don't accept this graph, but do not reuse seed regardless, however do not finalize the pixel
+                usedAsSeed[x, y] = 1
+        return conn_comps, finalized
 
 
 class CorrelationGraph:
@@ -153,13 +167,13 @@ class CorrelationGraph:
     def MaxY(self):
         return max(list(zip(*self.V))[1])
 
-    def ComputeGraphShuffles(self,nshuffles):
+    def ComputeGraphShuffles(self, nshuffles):
         min_shuff = self.FramesPre
-        max_shuff = self.RawTimeseries.size// 3
-        shuff_ts = np.zeros((nshuffles,self.RawTimeseries.size))
-        rolls = np.random.randint(min_shuff,max_shuff,size=nshuffles)
+        max_shuff = self.RawTimeseries.size // 3
+        shuff_ts = np.zeros((nshuffles, self.RawTimeseries.size))
+        rolls = np.random.randint(min_shuff, max_shuff, size=nshuffles)
         for i in range(nshuffles):
-            shuff_ts[i,:] = np.roll(self.RawTimeseries,rolls[i])
+            shuff_ts[i,:] = np.roll(self.RawTimeseries, rolls[i])
         self.shuff_ts = shuff_ts
 
     @staticmethod
@@ -754,3 +768,49 @@ def cutOutliers(image, perc_cut=99.9):
     image = image.copy() / np.percentile(image, perc_cut)
     image[image > 1] = 1
     return image
+
+
+def hessian(x):
+    """
+    Calculate hessian matrices with finite differences
+    Parameters:
+         - x : ndarray
+    Returns: an array of shape (x.dim, x.ndim) + x.shape
+        where the array[i, j, ...] corresponds to the second derivative x_ij
+    """
+    x_grad = np.gradient(x)
+    hess = np.empty((x.ndim, x.ndim) + x.shape, dtype=x.dtype)
+    for k, grad_k in enumerate(x_grad):
+        # iterate over dimensions
+        # apply gradient again to every component of the first derivative.
+        tmp_grad = np.gradient(grad_k)
+        for l, grad_kl in enumerate(tmp_grad):
+            hess[k, l, :, :] = grad_kl
+    return hess
+
+
+def hessian_eigval_images(h):
+    """
+    For the hessian matrices of an image returns images of the two
+    eigenvalues of each pixel's hessian matrix
+    Args:
+        h: Hessian matrices for each pixel of an image. Of shape [xdim, ydim, 2, 2]
+
+    Returns:
+        Two images of dimensions [xdim, ydim] corresponding to the first two eigenvalues
+        of the hessian at each pixel
+    """
+    assert h.ndim == 4
+    assert h.shape[0] == 2
+    assert h.shape[1] == 2
+    s_x = h.shape[2]
+    s_y = h.shape[3]
+    evi1 = np.zeros((s_x, s_y))
+    evi2 = np.zeros_like(evi1)
+    for x in range(s_x):
+        for y in range(s_y):
+            h_pix = h[:, :, x, y]  # hessian matrix of the given pixel
+            e1, e2 = np.linalg.eig(h_pix)[0]
+            evi1[x, y] = e1
+            evi2[x, y] = e2
+    return evi1, evi2
