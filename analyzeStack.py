@@ -169,22 +169,16 @@ if __name__ == "__main__":
         filenames = [filenames]
     for i,f in enumerate(filenames):
         t_start = perf_counter()
-        #load stack - first try to find aligned file
+        # load stack - first try to find aligned file
         try:
             stack = np.load(f[:-4]+"_stack.npy").astype(np.float32)
             print('Loaded aligned stack of slice ', i, flush=True)
         except FileNotFoundError:
             stack = OpenStack(f).astype(np.float32)
-            #re-align slices - mask out potential eye-pixels
-            #which will show up with very high single-instance photon counts
-            mask = np.sum(stack > 10, 0)
-            mask[mask>0] = 1
-            mask = 1 - mask
-            mask = mask[None,:,:]
-            stack = stack * np.repeat(mask,stack.shape[0],0)
+            # re-align slices
             maxshift = cell_diam//2
             stack, xshift, yshift = ReAlign(stack, maxshift)
-            #remove border from stack that corresponds to our max-shift size
+            # remove border from stack that corresponds to our max-shift size
             stack[:,:maxshift,:] = 0
             stack[:,:,:maxshift] = 0
             stack[:,stack.shape[1]-maxshift:,:] = 0
