@@ -171,10 +171,10 @@ if __name__ == "__main__":
         t_start = perf_counter()
         #load stack - first try to find aligned file
         try:
-            stack = np.load(f[:-4]+"_stack.npy").astype('float')
-            print('Loaded aligned stack of slice ', i,flush=True)
+            stack = np.load(f[:-4]+"_stack.npy").astype(np.float32)
+            print('Loaded aligned stack of slice ', i, flush=True)
         except FileNotFoundError:
-            stack = OpenStack(f).astype(float)
+            stack = OpenStack(f).astype(np.float32)
             #re-align slices - mask out potential eye-pixels
             #which will show up with very high single-instance photon counts
             mask = np.sum(stack > 10, 0)

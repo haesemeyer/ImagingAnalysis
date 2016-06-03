@@ -142,7 +142,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
     def getROIProjection(self):
         if len(self.graphList) == 0:
             return None
-        proj = np.zeros((self.currentStack.shape[1], self.currentStack.shape[2], 3))
+        proj = np.zeros((self.currentStack.shape[1], self.currentStack.shape[2], 3), dtype=np.float32)
         s = np.sum(self.currentStack, 0)
         s /= (np.max(s) * 1.2)
         proj[:, :, 0] = proj[:, :, 1] = proj[:, :, 2] = s
@@ -454,7 +454,7 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             assert isinstance(fname, str)
             self.graphList = []
             try:
-                self.currentStack = np.load(self.getAlignedName(fname)).astype(float)
+                self.currentStack = np.load(self.getAlignedName(fname)).astype(np.float32)
                 # if we found an aligned stack, set the corresponding segmentation option to false
                 self.ui.chkRealign.setChecked(False)
                 print("Loaded pre-aligned stack")

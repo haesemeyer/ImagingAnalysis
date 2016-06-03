@@ -177,7 +177,7 @@ class CorrelationGraph:
         self.shuff_ts = shuff_ts
 
     @staticmethod
-    def CorrelationConnComps(stack,im_ncorr,corr_thresh,predicate,norm8=True,limit=None,seed_limit=0):
+    def CorrelationConnComps(stack, im_ncorr, corr_thresh, predicate, norm8=True, limit=None, seed_limit=0):
         """
         Builds connected component graphs whereby components are
         determined based on pixel-timeseries correlations. Pixels
@@ -201,53 +201,54 @@ class CorrelationGraph:
                 [0]: List of connected component graphs
                 [1]: Image numerically identifying each pixel of each graph
         """
-        def BFS(stack,thresh,visited,sourceX,sourceY,color,norm8,predicate):
+        def BFS(stack, thresh, visited, sourceX, sourceY, color, norm8, predicate):
             """
             Performs breadth first search on image
             given (sourceX,sourceY) as starting pixel
             coloring all visited pixels in color
             """
             nonlocal limit
-            pg = CorrelationGraph(color,np.zeros(stack.shape[0]))
+            pg = CorrelationGraph(color, np.zeros(stack.shape[0], dtype=np.float32))
             Q = deque()
-            Q.append((sourceX,sourceY,0))
-            visited[sourceX,sourceY] = color#mark source as visited
+            Q.append((sourceX, sourceY, 0))
+            visited[sourceX, sourceY] = color  # mark source as visited
             while len(Q) > 0:
                 v = Q.popleft()
                 x = v[0]
                 y = v[1]
-                pg.V.append(v)#add current vertex to pixel graph
-                pg.Timeseries = pg.Timeseries + stack[:,x,y]#add current pixel's timeseries
-                #add non-visited neighborhood to queue
-                for xn in range(x-1,x+2):#x+1 inclusive!
-                    for yn in range(y-1,y+2):
-                        if xn<0 or yn<0 or xn>=stack.shape[1] or yn>=stack.shape[2] or visited[xn,yn]:#outside image dimensions or already visited
+                pg.V.append(v)  # add current vertex to pixel graph
+                pg.Timeseries = pg.Timeseries + stack[:, x, y]  # add current pixel's timeseries
+                # add non-visited neighborhood to queue
+                for xn in range(x-1, x+2):  # x+1 inclusive!
+                    for yn in range(y-1, y+2):
+                        # outside image dimensions or already visited
+                        if xn < 0 or yn < 0 or xn >= stack.shape[1] or yn >= stack.shape[2] or visited[xn, yn]:
                             continue
-                        if (not norm8) and xn!=x and yn!=y:
+                        if (not norm8) and xn != x and yn != y:
                             continue
-                        if not predicate(xn,yn):
+                        if not predicate(xn, yn):
                             continue
-                        #compute correlation of considered pixel's timeseries to full graphs timeseries
-                        c = np.corrcoef(pg.Timeseries[limit[0]:limit[1]],stack[limit[0]:limit[1],xn,yn])[0,1]
-                        if c>=thresh:
-                            Q.append((xn,yn,v[2]+1))#add non-visited above threshold neighbor
-                            visited[xn,yn] = color#mark as visited
+                        # compute correlation of considered pixel's timeseries to full graphs timeseries
+                        c = np.corrcoef(pg.Timeseries[limit[0]:limit[1]], stack[limit[0]:limit[1], xn, yn])[0, 1]
+                        if c >= thresh:
+                            Q.append((xn, yn, v[2]+1))  # add non-visited above threshold neighbor
+                            visited[xn, yn] = color  # mark as visited
             return pg
 
         if im_ncorr.shape[0] != stack.shape[1] or im_ncorr.shape[1] != stack.shape[2]:
             raise ValueError("Stack width and height must be same as im_ncorr width and height")
         if limit is None:
-            limit = (0,stack.shape[0])
+            limit = (0, stack.shape[0])
         if len(limit) != 2:
-            raise ValueError("If set limit must be a 2-element tuple or list referencing start and end slice (exclusive)")
-        visited = np.zeros_like(im_ncorr,dtype=int)#indicates visited pixels > 0
-        conn_comps = []#list of correlation graphs
-        #at each iteration we find the pixel with the highest neighborhood correlation,
-        #ignoring visited pixels, and use it as a source pixel for breadth first search
-        curr_color = 1#id counter of connected components
-        while np.max(im_ncorr * (visited==0)) > seed_limit:
-            (x,y) = np.unravel_index(np.argmax(im_ncorr * (visited==0)),im_ncorr.shape)
-            conn_comps.append(BFS(stack,corr_thresh,visited,x,y,curr_color,norm8,predicate))
+            raise ValueError("If set limit must be a 2-element tuple or list of start and end slice (exclusive)")
+        visited = np.zeros_like(im_ncorr, dtype=int)  # indicates visited pixels > 0
+        conn_comps = []  # list of correlation graphs
+        # at each iteration we find the pixel with the highest neighborhood correlation,
+        # ignoring visited pixels, and use it as a source pixel for breadth first search
+        curr_color = 1  # id counter of connected components
+        while np.max(im_ncorr * (visited == 0)) > seed_limit:
+            (x, y) = np.unravel_index(np.argmax(im_ncorr * (visited == 0)), im_ncorr.shape)
+            conn_comps.append(BFS(stack, corr_thresh, visited, x, y, curr_color, norm8, predicate))
             curr_color += 1
         return conn_comps, visited
 # class CorrelationGraph
@@ -582,7 +583,7 @@ def AvgNeighbhorCorrelations(stack, dist=2, predicate=None):
     """
     if dist < 1:
         raise ValueError('Dist has to be at least 1')
-    im_corr = np.zeros((stack.shape[1], stack.shape[2]))
+    im_corr = np.zeros((stack.shape[1], stack.shape[2]), dtype=np.float32)
     corr_buff = dict()  # buffers computed correlations to avoid computing the same pairs multiple times!
     for x in range(stack.shape[1]):
         for y in range(stack.shape[2]):
@@ -696,7 +697,7 @@ def ReAlign(stack, maxShift):
                 yshift = -1*maxShift
         xs, xt = Shift2Index(xshift, re_aligned.shape[1])
         ys, yt = Shift2Index(yshift, re_aligned.shape[2])
-        newImage = np.zeros((re_aligned.shape[1], re_aligned.shape[2]))
+        newImage = np.zeros((re_aligned.shape[1], re_aligned.shape[2]), dtype=np.float32)
         newImage[xt[0]:xt[1], yt[0]:yt[1]] = re_aligned[t, xs[0]:xs[1], ys[0]:ys[1]]
         re_aligned[t, :, :] = newImage
         # add re-aligned image to sumStack
@@ -718,7 +719,7 @@ def CorrelationControl(stack, nFrames):
     if nSlices//nFrames < 2:
         raise ValueError("Need to identify at least two nFrames sized sub-stacks in the stack")
     ix0_x, ix0_y = h//2, w//2  # coordinates of 0-shift correlation
-    sum_slices = np.zeros((nSlices//nFrames, h, w))
+    sum_slices = np.zeros((nSlices//nFrames, h, w), dtype=np.float32)
     correlations = np.zeros(nSlices//nFrames-1)
     for i in range(nSlices//nFrames):
         sum_slices[i, :, :] = np.sum(stack[nFrames*i:nFrames*(i+1), :, :], 0)
