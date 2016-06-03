@@ -143,30 +143,34 @@ def CaConvolve(trace,ca_timeconstant,frame_rate):
     return np.convolve(trace,kernel)[:trace.size]
 
 
-def PlotROI(graph,ax=None,motor=False):
+def PlotROI(graph, ax=None, motor=False):
     """
     Plots graph location on slice sum of original stack
     """
     stack_file = graph.SourceFile[:-4]+"_stack.npy"
-    stack = np.load(stack_file).astype(float)
-    sum_stack = np.sum(stack,0)
-    projection = np.zeros((sum_stack.shape[0],sum_stack.shape[1],3))
-    projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
-    projection[projection>0.8] = 0.8
+    try:
+        stack = np.load(stack_file).astype(np.float32)
+    except FileNotFoundError:
+        stack = OpenStack(graph.SourceFile)
+    sum_stack = np.sum(stack, 0)
+    projection = np.zeros((sum_stack.shape[0], sum_stack.shape[1], 3))
+    projection[:, :, 0] = projection[:, :, 1] = projection[:, :, 2] = sum_stack/sum_stack.max()*2
+    projection[projection > 0.8] = 0.8
     if motor:
         for v in graph.V:
-            projection[v[0],v[1],2] = 1
+            projection[v[0], v[1], 2] = 1
     else:
         for v in graph.V:
-            projection[v[0],v[1],0] = 1
+            projection[v[0], v[1], 0] = 1
     if ax is None:
         with sns.axes_style("white"):
-            fig,ax  = pl.subplots()
+            fig, ax = pl.subplots()
             ax.imshow(projection)
-            sns.despine(fig,ax,True,True,True,True)
+            sns.despine(fig, ax, True, True, True, True)
     else:
         ax.imshow(projection)
-        sns.despine(None,ax,True,True,True,True)
+        sns.despine(None, ax, True, True, True, True)
+
 
 def PlotAvgDff(graph,ax=None):
     if ax is None:
