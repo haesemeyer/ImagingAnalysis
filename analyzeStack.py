@@ -246,19 +246,6 @@ if __name__ == "__main__":
             ct_actual = seed_cutoff
         graph, colors = CorrelationGraph.CorrelationConnComps(rate_stack,im_ncorr,ct_actual,consider,False,(0,rate_stack.shape[0]),seed_cutoff)
         print('Correlation graph of stack ',i,' of ',len(filenames)-1,' created',flush=True)
-        
-        #plot largest three components onto projection
-        #projection = np.zeros((im_ncorr.shape[0],im_ncorr.shape[1],3),dtype=float)
-        #projection[:,:,0] = projection[:,:,2] = sum_stack / sum_stack.max()
-        #g_sizes = [g.NPixels for g in graph]
-        #g_sizes = sorted(g_sizes)
-        #for g in graph:
-        #    if g.NPixels > g_sizes[-4]:
-        #        for v in g.V:
-        #            projection[v[0],v[1],1] = 0.3#color it green
-        #with sns.axes_style('white'):
-        #    fig, ax = pl.subplots()
-        #    ax.imshow(projection)
 
         max_qual_deviation = (np.max(qualscore)-np.min(qualscore))/np.mean(qualscore)
         print("Maximum quality score deviation = ",max_qual_deviation,flush=True)
@@ -297,21 +284,13 @@ if __name__ == "__main__":
             #post-stim
             AssignFourier(g,pre_stim+stim+stim_fft_gap,pre_stim+stim+post_stim,des_freq,frame_rate,"post")
 
-        #save graph list
+        # save graph list
         if save:
             f_graph = open(f[:-3]+"graph","wb")
             pickle.dump(graph,f_graph,protocol=pickle.HIGHEST_PROTOCOL)
             f_graph.close()
-        #list all graphs in which the fourier ratio during stimulation compared to
-        #pre and post has increased by at least 0.1 on average
-        inc = lambda gr: np.mean([gr.fourier_ratio_stim-gr.fourier_ratio_pre,gr.fourier_ratio_stim-gr.fourier_ratio_post])
-        power_inc = [(i,inc(g)) for i,g in enumerate(graph) if inc(g)>0.05 and g.fourier_ratio_stim > 0.1]
-        if power_inc:
-            power_inc, increases = zip(*power_inc)
-        else:
-            power_inc = increases = []
 
-        #draw all graphs into the image and save
+        # draw all graphs into the image and save
         projection = np.zeros((im_ncorr.shape[0],im_ncorr.shape[1],3),dtype=float)
         projection[:,:,0] = projection[:,:,2] = sum_stack / sum_stack.max()
         im_roi = np.zeros_like(im_ncorr)
@@ -324,40 +303,6 @@ if __name__ == "__main__":
         if save:
             im_roi.save(f[:-3]+'png')
 
-        #plot trace of graph in this plane with maximum increase
-        if len(graph) > 0 and len(power_inc) > 0:
-            frames = np.arange(pre_stim+stim+post_stim)
-            m_graph = graph[power_inc[np.argmax(increases)]]
-            with sns.axes_style('white'):
-                fig, (ax1, ax2, ax3) = pl.subplots(ncols=3)
-                ax1.plot(frames[:pre_stim],m_graph.RawTimeseries[:pre_stim])
-                ax1.plot(frames[pre_stim+stim:pre_stim+stim+post_stim],m_graph.RawTimeseries[pre_stim+stim:pre_stim+stim+post_stim])
-                ax1.plot(frames[pre_stim:pre_stim+stim],m_graph.RawTimeseries[pre_stim:pre_stim+stim])
-                ax1.plot([pre_stim,pre_stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
-                ax1.plot([pre_stim+stim,pre_stim+stim],[ax1.get_ylim()[0],ax1.get_ylim()[1]],'k--',alpha=0.5)
-                ax1.set_xlabel('Frames')
-                ax1.set_ylabel('ZScored photon count')
-                ax2.plot(m_graph.freqs_pre,np.absolute(m_graph.fft_pre**2),label="Pre")
-                ax2.plot(m_graph.freqs_post,np.absolute(m_graph.fft_post**2),label="Post")
-                ax2.plot(m_graph.freqs_stim,np.absolute(m_graph.fft_stim**2),label="Stim")
-                ax2.plot([des_freq,des_freq],[0,ax2.get_ylim()[1]],'k--',alpha=0.5)
-                ax2.set_xlabel('Frequency [Hz]')
-                ax2.set_ylabel('Power')
-                ax2.legend()
-                projection[:,:,0] = projection[:,:,1] = projection[:,:,2] = sum_stack/sum_stack.max()*2
-                projection[projection>0.8] = 0.8
-                for v in m_graph.V:
-                    projection[v[0],v[1],0] = 1
-                ax3.imshow(projection)
-                sns.despine(ax=ax3,left=True,bottom=True)
-                fig.set_size_inches(15,5,5)
-                fig.tight_layout()
-            if save:
-                fig.savefig(f[:-3]+'pdf',type='pdf')
-                pl.close('all')
-            
-
-        
         elapsed = perf_counter() - t_start
         print((i+1)/len(filenames)*100,'% done',flush=True)
         print('Elapsed time = '+str(elapsed)+' s',flush=True)
