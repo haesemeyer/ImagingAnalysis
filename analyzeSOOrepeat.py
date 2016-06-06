@@ -17,6 +17,7 @@ import pickle
 import warnings
 
 import sys
+from scipy.signal import lfilter
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 
 import mhba_basic as mb
@@ -24,64 +25,66 @@ import mhba_basic as mb
 from mh_lasTemp import LaserTempData
 
 
-
 def LoadGraphTailData(graph):
     name = graph.SourceFile[:-6]+".tail"
-    return TailData.LoadTailData(name,graph.CaTimeConstant)
+    return TailData.LoadTailData(name, graph.CaTimeConstant)
+
 
 def ZScore(trace):
     return (trace-np.mean(trace))/np.std(trace)
 
-def ComputeTraceFourierFraction(trace,startFrame,endFrame,des_freq,frame_rate,aggregate=True):
-    filtered = gaussian_filter1d(trace,frame_rate/8)
+
+def ComputeTraceFourierFraction(trace, startFrame, endFrame, des_freq, frame_rate, aggregate=True):
+    filtered = gaussian_filter1d(trace, frame_rate/8)
     filtered = filtered[startFrame:endFrame]
     if aggregate:
-        #Test if we can aggregate: Find the period length pl in frames. If the length of filtered
-        #is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
-        #and second half to reduce noise in transform (while at the same time reducing resolution)
+        # Test if we can aggregate: Find the period length pl in frames. If the length of filtered
+        # is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
+        # and second half to reduce noise in transform (while at the same time reducing resolution)
         pl = round(1 / des_freq * frame_rate)
         if (filtered.size/pl) % 2 == 0:
             filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
         else:
-            warning.warn('Could not aggregate for fourier due to phase alignment mismatch')
-    fft = np.fft.rfft(ZScore(filtered))
-    mag = np.absolute(fft)
-    freqs = np.linspace(0,frame_rate/2,fft.shape[0])
+            warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
+    fft = np.fft.rfft(filtered - np.mean(filtered))
+    freqs = np.linspace(0, frame_rate/2, fft.shape[0])
     ix = np.argmin(np.absolute(des_freq-freqs))
     return np.absolute(fft)[ix] / np.sum(np.absolute(fft))
 
-def ComputeFourierAvgStim(graph,startFrame,endFrame,des_freq,frame_rate,aggregate=True):
+
+def ComputeFourierAvgStim(graph, startFrame, endFrame, des_freq, frame_rate, aggregate=True):
     """
         Computes the fourier transform of the stimulus period on the repeat-averaged
         timeseries.
     """
-    #anti-aliasing
-    filtered = gaussian_filter1d(graph.AveragedTimeseries,frame_rate/8)
+    # anti-aliasing
+    filtered = gaussian_filter1d(graph.AveragedTimeseries, frame_rate/8)
     filtered = filtered[startFrame:endFrame]
-    #TODO: Somehow make the following noise reduction more generally applicable...
-    #if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
+    # TODO: Somehow make the following noise reduction more generally applicable...
+    # if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
     if aggregate:
-        #Test if we can aggregate: Find the period length pl in frames. If the length of filtered
-        #is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
-        #and second half to reduce noise in transform (while at the same time reducing resolution)
+        # Test if we can aggregate: Find the period length pl in frames. If the length of filtered
+        # is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
+        # and second half to reduce noise in transform (while at the same time reducing resolution)
         pl = round(1 / des_freq * frame_rate)
         if (filtered.size/pl) % 2 == 0:
             filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
         else:
-            warning.warn('Could not aggregate for fourier due to phase alignment mismatch')
-    fft = np.fft.rfft(ZScore(filtered))
-    freqs = np.linspace(0,frame_rate/2,fft.shape[0])
-    mag = np.absolute(fft)
-    ix = np.argmin(np.absolute(des_freq-freqs))#index of bin which contains our desired frequency
+            warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
+    fft = np.fft.rfft(filtered - np.mean(filtered))
+    freqs = np.linspace(0, frame_rate/2, fft.shape[0])
+    ix = np.argmin(np.absolute(des_freq-freqs))  # index of bin which contains our desired frequency
     graph.stimFFT = fft
     graph.stimFFT_freqs = freqs
     graph.mag_atStim = np.absolute(fft)[ix]
     graph.mfrac_atStim = graph.mag_atStim / np.sum(np.absolute(fft))
     graph.ang_atStim = np.angle(fft)[ix]
 
+
 def ComputeAveragedTimeseries(timeseries):
     l = timeseries.size
-    return np.sum(np.reshape(timeseries[0:l-n_hangoverFrames],(2,(l-1)//2)),0)#sum/mean equivalent here (anyways determined by graph size)
+    # sum/mean equivalent here (anyways determined by graph size)
+    return np.sum(np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats)), 0)
 
 
 #def ComputeStimInducedNoise(graph,avg_timeseries):
@@ -104,43 +107,46 @@ def ComputeStimulusEffect(graph,timeseries):
     given pre periods
     """
     l = timeseries.size
-    reps = np.reshape(timeseries[0:l-n_hangoverFrames],(2,(l-1)//2))
-    m_pre = np.mean(reps[:,:graph.FramesPre],1)
-    m_stim = np.mean(reps[:,graph.FramesPre:],1)
-    d_pre = np.abs(m_pre[0]-m_pre[1])
-    d_ps = np.mean(np.abs(m_pre-m_stim))
+    reps = np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats))
+    pre = reps[:, :graph.FramesPre]
+    m_pre = np.mean(pre, 1)
+    m_stim = np.mean(reps[:, graph.FramesPre:], 1)
+    d_pre = np.std(pre)  # np.abs(m_pre[0]-m_pre[1])
+    d_ps = np.abs(np.mean(m_pre-m_stim))
     return d_ps / d_pre
 
-def ComputeSwimTriggeredAverage(graph_list,tailData,f_pre,f_post):
+
+def ComputeSwimTriggeredAverage(graph_list, tailData, f_pre, f_post):
     mta = []
     for g in graph_list:
         td = tailData[g.SourceFile]
         if td.boutFrames is None or td.boutFrames.size == 0:
             continue
         im_len = g.RawTimeseries.size
-        gts = (g.RawTimeseries-np.percentile(g.RawTimeseries,20))/np.percentile(g.RawTimeseries,20)
+        gts = (g.RawTimeseries-np.percentile(g.RawTimeseries, 20))/np.percentile(g.RawTimeseries, 20)
         if np.any(np.isnan(gts)) or np.any(np.isinf(gts)):
             continue
-        ix = mb.IndexingMatrix(td.boutFrames,f_pre,f_post,im_len)[0]
+        ix = mb.IndexingMatrix(td.boutFrames, f_pre, f_post, im_len)[0]
         btrig = gts[ix]
-        mta.append(np.nanmean(btrig,0))
+        mta.append(np.nanmean(btrig, 0))
     return np.vstack(mta)
 
-from scipy.signal import lfilter
 
-def CorrelateResWithMTA(graph,mta):
+def CorrelateResWithMTA(graph, mta):
     rs = graph.RawTimeseries
     rs = (rs-np.mean(rs))/np.std(rs)
     mta = (mta-np.mean(mta))/np.std(mta)
-    return lfilter(mta[::-1],1,rs)
+    return lfilter(mta[::-1], 1, rs)
+
 
 def ComputeDFF(avg_timeseries):
     f0 = np.mean(avg_timeseries[:72])
     return (avg_timeseries-f0)/f0
 
-def CaConvolve(trace,ca_timeconstant,frame_rate):
-    kernel = TailData.CaKernel(ca_timeconstant,frame_rate)
-    return np.convolve(trace,kernel)[:trace.size]
+
+def CaConvolve(trace, ca_timeconstant, frame_rate):
+    kernel = TailData.CaKernel(ca_timeconstant, frame_rate)
+    return np.convolve(trace, kernel)[:trace.size]
 
 
 def PlotROI(graph, ax=None, motor=False):
@@ -172,62 +178,70 @@ def PlotROI(graph, ax=None, motor=False):
         sns.despine(None, ax, True, True, True, True)
 
 
-def PlotAvgDff(graph,ax=None):
+def PlotAvgDff(graph, ax=None):
     if ax is None:
-        fig,ax = pl.subplots()
+        fig, ax = pl.subplots()
     dff = ComputeDFF(graph.AveragedTimeseries)
     time = np.arange(dff.size)/graph.FrameRate
-    ax.plot(time,dff,'r',label='Response')
-    ax.plot(time,graph.StimOn*dff.max(),label='Stimulus')
+    ax.plot(time, dff, 'r', label='Response')
+    ax.plot(time, graph.StimOn*dff.max(), label='Stimulus')
     ax.set_xlabel('Time [s]')
     ax.set_ylabel('DFF')
     ax.set_title('Repeat average activity')
     ax.legend()
 
+
 def PlotMotorRelation(graph,ax=None):
     if ax is None:
         fig, ax = pl.subplots()
-    #zs_act = ZScore(graph.RawTimeseries)
-    zs_act = (graph.RawTimeseries - np.percentile(graph.RawTimeseries,20)) / np.percentile(graph.RawTimeseries,20)
+    # zs_act = ZScore(graph.RawTimeseries)
+    zs_act = (graph.RawTimeseries - np.percentile(graph.RawTimeseries, 20)) / np.percentile(graph.RawTimeseries, 20)
     zs_mot = ZScore(graph.PerFrameVigor)
     zs_mot = zs_mot / zs_mot.max() * zs_act.max()
-    time = np.arange(zs_act.size)/graph.FrameRate
-    ax.plot(time,zs_act,'r',label='Response')
-    ax.plot(time,zs_mot,label='Swim vigor')
+    time = np.arange(zs_act.size) / graph.FrameRate
+    ax.plot(time, zs_act, 'r', label='Response')
+    ax.plot(time, zs_mot, label='Swim vigor', alpha=0.4)
     ax.set_xlabel('Time [s]')
     ax.set_ylabel('Act: DFF / Mot: AU')
     ax.set_title('Raw activity vs. motor output')
     ax.legend()
 
+
 def PlotMetrics(graph,ax=None,index=None):
     if ax is None:
         fig, ax = pl.subplots()
-    ax.text(0.1,0.8,str.format('Stimulus induction {0:.2f}',graph.StimIndFluct),transform=ax.transAxes)
-    ax.text(0.1,0.7,str.format('Motor correlation {0:.2f}',graph.MotorCorrelation),transform=ax.transAxes)
-    ax.text(0.1,0.6,str.format('ON Correlation {0:.2f}',graph.CorrOn),transform=ax.transAxes)
-    ax.text(0.1,0.5,str.format('OFF Correlation {0:.2f}',graph.CorrOff),transform=ax.transAxes)
-    ax.text(0.1,0.4,str.format('Magnitude fraction {0:.2f}',graph.mfrac_atStim),transform=ax.transAxes)
-    #shuffle cutoffs
-    ax.text(0.6,0.8,str.format('{0:.2f}',graph.sh_m_StIndFluct+2*graph.sh_std_StIndFluct),transform=ax.transAxes,color='r')
-    ax.text(0.6,0.6,str.format('{0:.2f}',graph.sh_m_CorrOn+2*graph.sh_std_CorrOn),transform=ax.transAxes,color='r')
-    ax.text(0.6,0.5,str.format('{0:.2f}',graph.sh_m_CorrOff+2*graph.sh_std_CorrOff),transform=ax.transAxes,color='r')
-    ax.text(0.6,0.4,str.format('{0:.2f}',graph.sh_m_mfrac+2*graph.sh_std_mfrac),transform=ax.transAxes,color='r')
+    ax.text(0.1, 0.8, str.format('Stimulus induction {0:.2f}', graph.StimIndFluct), transform=ax.transAxes)
+    ax.text(0.1, 0.7, str.format('Motor correlation {0:.2f}', graph.MotorCorrelation), transform=ax.transAxes)
+    ax.text(0.1, 0.6, str.format('ON Correlation {0:.2f}', graph.CorrOn), transform=ax.transAxes)
+    ax.text(0.1, 0.5, str.format('OFF Correlation {0:.2f}', graph.CorrOff), transform=ax.transAxes)
+    ax.text(0.1, 0.4, str.format('Magnitude fraction {0:.2f}', graph.mfrac_atStim), transform=ax.transAxes)
+    # shuffle cutoffs
+    ax.text(0.6, 0.8, str.format('{0:.2f}', graph.sh_m_StIndFluct+2*graph.sh_std_StIndFluct),
+            transform=ax.transAxes, color='r')
+    ax.text(0.6, 0.6, str.format('{0:.2f}', graph.sh_m_CorrOn+2*graph.sh_std_CorrOn),
+            transform=ax.transAxes, color='r')
+    ax.text(0.6, 0.5, str.format('{0:.2f}', graph.sh_m_CorrOff+2*graph.sh_std_CorrOff),
+            transform=ax.transAxes, color='r')
+    ax.text(0.6, 0.4, str.format('{0:.2f}', graph.sh_m_mfrac+2*graph.sh_std_mfrac),
+            transform=ax.transAxes, color='r')
 
-    if not index is None:
-        ax.text(0.1,0.3,str.format('Array index {0}',index),transform=ax.transAxes)
-    ax.text(0.1,0.2,str.format('Sourcefile {0}',graph.SourceFile.split('/')[-1]),transform=ax.transAxes)
+    if index is not None:
+        ax.text(0.1, 0.3, str.format('Array index {0}', index), transform=ax.transAxes)
+    ax.text(0.1, 0.2, str.format('Sourcefile {0}', graph.SourceFile.split('/')[-1]), transform=ax.transAxes)
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-def PlotGraphInfo(graph,index=None):
+
+def PlotGraphInfo(graph, index=None):
     with sns.axes_style('white'):
-        fig, axes = pl.subplots(2,2,figsize=(15,10))
-        PlotROI(graph,axes[0,0])
-        PlotAvgDff(graph,axes[0,1])
-        PlotMotorRelation(graph,axes[1,0])
-        PlotMetrics(graph,axes[1,1],index)
+        fig, axes = pl.subplots(2, 2, figsize=(15, 10))
+        PlotROI(graph, axes[0, 0])
+        PlotAvgDff(graph, axes[0, 1])
+        PlotMotorRelation(graph, axes[1, 0])
+        PlotMetrics(graph, axes[1, 1], index)
         sns.despine(fig)
         fig.tight_layout()
+
 
 def PlotCycleGraphList(glist):
     from matplotlib.pyplot import pause
@@ -235,29 +249,30 @@ def PlotCycleGraphList(glist):
     for i,g in enumerate(glist):
         if g.SourceFile in skip_dic:
             continue
-        PlotGraphInfo(g,i)
+        PlotGraphInfo(g, i)
         pause(0.5)
         inp = ""
-        while inp!="s" and inp!="p" and inp!="c":
+        while inp != "s" and inp != "p" and inp != "c":
             inp = input("[c]ontinue/[s]kip plane/sto[p]:")
-        if inp=="p":
+        if inp == "p":
             break
-        elif inp=="s":
+        elif inp == "s":
             skip_dic[g.SourceFile] = 1
         pl.close('all')
-        print(i/len(glist),flush=True)
+        print(i/len(glist), flush=True)
+
 
 def restFreq(tail_d):
     if tail_d.bouts is None:
         return 0
-    st_b = np.sum(phase[tail_d.boutFrames.astype(int)]==0)
+    st_b = np.sum(phase[tail_d.boutFrames.astype(int)] == 0)
     return st_b/150
 
 
 def stimFreq(tail_d):
     if tail_d.bouts is None:
         return 0
-    st_b = np.sum(phase[tail_d.boutFrames.astype(int)]==1)
+    st_b = np.sum(phase[tail_d.boutFrames.astype(int)] == 1)
     return st_b/180
 
 
@@ -298,17 +313,24 @@ if __name__ == "__main__":
                         g.StimOff = stimOff
                     except NameError:
                         post_start = g.FramesPre+g.FramesStim
-                        step_len = 15 * g.FrameRate
+                        step_len = int(15 * g.FrameRate)
                         stimOn = stimOnset = stimOffset = np.zeros_like(g.AveragedTimeseries)
                         stimOn[g.FramesPre:post_start] = 1
                         stimOn[post_start+step_len:post_start+2*step_len] = 1
                         stimOn[post_start+3*step_len:post_start+4*step_len] = 1
                         stimOff = 1-stimOn
-                        stimOn = LaserTempData.PredictTemperature(3.625,0.53,stimOn,1/2.4)
-                        stimOff = LaserTempData.PredictTemperature(3.625,0.53,stimOff,1/2.4)
-                        stimOn = CaConvolve(stimOn,g.CaTimeConstant,g.FrameRate)
+                        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
+                        # half-time inferred to be: 891 ms
+                        # => time-constant beta = 0.964
+                        # NOTE: If correct, this means that heating kinetics in this set-up mimic freely swimming
+                        # kinetics more than kinetics in the embedded setup. Maybe because of a) much more focuses beam
+                        # and b) additional heat-sinking by microscope objective
+                        # alpha obviously not determined
+                        stimOn = LaserTempData.PredictTemperature(1, 0.964, stimOn, 1/2.4)
+                        stimOff = LaserTempData.PredictTemperature(1, 0.964, stimOff, 1/2.4)
+                        stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
                         stimOn = stimOn / stimOn.max()
-                        stimOff = CaConvolve(stimOff,g.CaTimeConstant,g.FrameRate)
+                        stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
                         stimOff = stimOff / stimOff.max()
                         g.StimOn = stimOn
                         g.StimOff = stimOff
@@ -334,17 +356,18 @@ if __name__ == "__main__":
                     sh_coff = np.zeros_like(sh_mc)#OFF correlations
                     sh_StInFl = np.zeros_like(sh_mc)#stimulus modulation
                     sh_mfrac = np.zeros_like(sh_mc)#magnitude fraction
-                    for i,row in enumerate(g.shuff_ts):
-                        sh_mc[i] = np.corrcoef(row,g.PerFrameVigor)[0,1]
-                        con1 = np.corrcoef(g.StimOn[step_start1:],row[step_start1:step_end1])[0,1]
-                        con2 = np.corrcoef(g.StimOn[step_start1:],row[step_start2:step_end2])[0,1]
+                    for i, row in enumerate(g.shuff_ts):
+                        sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
+                        con1 = np.corrcoef(g.StimOn[step_start1:], row[step_start1:step_end1])[0, 1]
+                        con2 = np.corrcoef(g.StimOn[step_start1:], row[step_start2:step_end2])[0, 1]
                         sh_con[i] = (con1 + con2) / 2
-                        cof1 = np.corrcoef(g.StimOff[step_start1:],row[step_start1:step_end1])[0,1]
-                        cof2 = np.corrcoef(g.StimOff[step_start1:],row[step_start2:step_end2])[0,1]
+                        cof1 = np.corrcoef(g.StimOff[step_start1:], row[step_start1:step_end1])[0, 1]
+                        cof2 = np.corrcoef(g.StimOff[step_start1:], row[step_start2:step_end2])[0, 1]
                         sh_coff[i] = (cof1 + cof2) / 2
-                        sh_StInFl[i] = ComputeStimulusEffect(g,row)
+                        sh_StInFl[i] = ComputeStimulusEffect(g, row)
                         avg = ComputeAveragedTimeseries(row)
-                        sh_mfrac[i] = ComputeTraceFourierFraction(avg,g.FramesPre+g.FramesFFTGap,g.FramesPre+g.FramesStim,g.StimFrequency,g.FrameRate,True)
+                        sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre+g.FramesFFTGap,
+                                                                  g.FramesPre+g.FramesStim, g.StimFrequency, g.FrameRate, True)
                     g.sh_m_MotorCorrelation = np.mean(sh_mc)
                     g.sh_std_MotorCorrelation = np.std(sh_mc)
                     g.sh_m_CorrOn = np.mean(sh_con)
@@ -355,6 +378,8 @@ if __name__ == "__main__":
                     g.sh_std_StIndFluct = np.nanstd(sh_StInFl)
                     g.sh_m_mfrac = np.mean(sh_mfrac)
                     g.sh_std_mfrac = np.std(sh_mfrac)
+                    # to reduce memory load, remove graph shuffle traces
+                    g.shuff_ts = []
                     
                 graph_list += graphs
         finally:
@@ -372,11 +397,12 @@ if __name__ == "__main__":
 
     #call units that show significant modulation in their standard deviation
     #as well as significant locking to our sign-wave potential stimulus units
-    pot_stim_units = [g for g in non_mot_units if (g.StimIndFluct > g.sh_m_StIndFluct+2*g.sh_std_StIndFluct) and (g.mfrac_atStim > g.sh_m_mfrac + 2*g.sh_std_mfrac)]
+    pot_stim_units = [g for g in non_mot_units if (g.StimIndFluct > g.sh_m_StIndFluct+2*g.sh_std_StIndFluct) and
+                      (g.mfrac_atStim > g.sh_m_mfrac + 2*g.sh_std_mfrac)]
 
     #identify on and off graphs based on respective correlation > 0.5
-    graph_on = [g for g in pot_stim_units if g.CorrOn>g.sh_m_CorrOn+2*g.sh_std_CorrOn and g.CorrOn>0.4]
-    graph_off = [g for g in pot_stim_units if g.CorrOff>g.sh_m_CorrOff+2*g.sh_std_CorrOff and g.CorrOff>0.4]
+    graph_on = [g for g in pot_stim_units if g.CorrOn>g.sh_m_CorrOn+2*g.sh_std_CorrOn and g.CorrOn > 0.4]
+    graph_off = [g for g in pot_stim_units if g.CorrOff>g.sh_m_CorrOff+2*g.sh_std_CorrOff and g.CorrOff > 0.4]
 
     #create plot of average per-frame-swim vigor across experiments - count each plane only once
     skip_dic = dict()
@@ -534,6 +560,7 @@ if __name__ == "__main__":
     mta = ComputeSwimTriggeredAverage(motor_units,taildata,5,24)
     mta_time = np.arange(-5,25)/2.4
     with sns.axes_style('whitegrid'):
+        pl.figure()
         sns.tsplot(data=mta,time=mta_time)
         pl.xlabel('Time around bout [s]');
         pl.ylabel('deltaF/F')
