@@ -33,13 +33,17 @@ except ImportError:
     import tkinter.filedialog as tkFileDialog
 
 
-class NucleusGraph:
-
+class NucGraph:
+    """
+    Represents a nuclear segmentation that was performed by an outside program which
+    encoded different nuclei as intensities in an image
+    """
     def __init__(self, id, timeseries):
         self.V = []
         self.ID = id
         self.RawTimeseries = timeseries
         self.gcv = []  # the greyscale values of all graph pixels
+        self.shuff_ts = []
 
     @property
     def NPixels(self):
@@ -61,19 +65,31 @@ class NucleusGraph:
     def MaxY(self):
         return max(list(zip(*self.V))[1])
 
+    @property
+    def CenterOfMass(self):
+        x, y, gen = list(zip(*self.V))
+        return np.mean(x), np.mean(y)
+
+    def ComputeGraphShuffles(self, nshuffles):
+        min_shuff = self.FramesPre // 3
+        max_shuff = self.RawTimeseries.size - self.FramesPre // 3
+        shuff_ts = np.zeros((nshuffles, self.RawTimeseries.size))
+        rolls = np.random.randint(min_shuff, max_shuff, size=nshuffles)
+        for i in range(nshuffles):
+            shuff_ts[i, :] = np.roll(self.RawTimeseries, rolls[i])
+        self.shuff_ts = shuff_ts
+
     @staticmethod
-    def NuclearConnComp(stack, sumImage, seedImage, maxDist, minSize):
+    def NuclearConnComp(stack, segmentImage):
         """
-        Attempts to segment sumImage into individual nuclei by growing graphs via BFS from seed voxels
-        obtain from seedImage
+        Uses a presegmentation saved as an image (such as obtained from cell profiler) to build
+        a list of graphs where each graph corresponds to one connected component of one intensity
+        value in segmentImage
         Args:
             stack: The original stack to add time-series data to the graph
-            sumImage: A (potentially tweaked) projection of stack that is used for segmentation
-            seedImage: Greyscale image that contains potential nuclear region seed pixels
-            maxDist: The maximum source-distance to be incorporated into a graph
-            minSize: The minimum number of pixels in a nuclear graph
+            segmentImage: An image with nuclear segmentations encoded by intensity
 
-        Returns: A list of nucleus graphs that segment sumImage
+        Returns: A list of nucleus graphs that segment segmentImage
 
         """
         def BFS(sourceX, sourceY, color):
@@ -82,62 +98,44 @@ class NucleusGraph:
             given (sourceX,sourceY) as starting pixel
             coloring all visited pixels in color
             """
-            pg = NucleusGraph(color, np.zeros(stack.shape[0]))
+            if stack is not None:
+                pg = NucGraph(color, np.zeros(stack.shape[0], dtype=np.float32))
+            else:
+                pg = NucGraph(color, 0)
             Q = deque()
             Q.append((sourceX, sourceY, 0))
-            visited = finalized.copy()  # since we don't know if graph will be accepted, make local copy
             visited[sourceX, sourceY] = color  # mark source as visited
             while len(Q) > 0:
                 v = Q.popleft()
                 x = v[0]
                 y = v[1]
                 pg.V.append(v)  # add current vertex to pixel graph
-                pg.gcv.append(sumImage[x, y])
-                pg.RawTimeseries += stack[:, x, y]  # add current pixel's timeseries
-                # add non-visited neighborhood to queue
+                if sumstack is not None:
+                    pg.gcv.append(sumstack[x, y])
+                    pg.RawTimeseries += stack[:, x, y]  # add current pixel's timeseries
+                # add non-visited neighborhood to queue - 8-connected neighborhood
                 for xn in range(x - 1, x + 2):  # x+1 inclusive!
                     for yn in range(y - 1, y + 2):
-                        if xn < 0 or yn < 0 or xn >= stack.shape[1] or yn >= stack.shape[2] or visited[xn, yn]:
+                        if xn < 0 or yn < 0 or xn >= segmentImage.shape[0] or yn >= segmentImage.shape[1] or visited[xn, yn] != 0:
                             # outside image dimensions or already visited
                             continue
-                        if xn != x and yn != y:  # 4-connected
-                            continue
-                        # determine if the current pixel should be added
-                        if len(pg.gcv) < 3:
-                            minval = pg.gcv[0] / 1.5  # currently only one pixel add anything of at least 2/3 brightness
-                            maxval = pg.gcv[0] * 1.5  # penalize for starting from a darker pixel
-                        else:
-                            m = np.mean(pg.gcv)
-                            s = np.std(pg.gcv)
-                            minval = m - 2 * s  # add as long as brightness >= m-2*sd
-                            maxval = m + 2 * s  # penalize for starting from a darker pixel
-                        if minval <= sumImage[xn, yn] <= maxval and v[2] < maxDist:
+                        # pixel should be added if it has the same value as the source
+                        if segmentImage[xn, yn] == color:
                             Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
                             visited[xn, yn] = color  # mark as visited
             return pg
-
-        finalized = np.zeros_like(sumImage, dtype=np.uint16)
-        usedAsSeed = np.zeros_like(finalized, dtype=np.uint16)
+        if stack is not None:
+            sumstack = np.sum(stack, 0)
+        else:
+            sumstack = None
         conn_comps = []  # list of nucleus graphs
-        # at each iteration we find the pixel with the highest greyscale value in seedImage,
-        # ignoring visited pixels and black pixels, and use it as a source pixel for breadth first search
-        # a pixel is never used twice as a see pixel, however each potential graph that is returned from
-        # breadth first search gets only accepted if it passes a minimum size threhold and only then
-        # are its constituent pixels marked as finalized
-        curr_color = 1  # id counter of connected components
-        while np.max(seedImage * (usedAsSeed == 0) * sumImage) > 0:
-            (x, y) = np.unravel_index(np.argmax(seedImage * (usedAsSeed == 0)), seedImage.shape)
-            pot_graph = BFS(x, y, curr_color)
-            if pot_graph.NPixels >= minSize:
-                conn_comps.append(pot_graph)
-                for v in pot_graph.V:
-                    finalized[v[0], v[1]] = curr_color  # finalize all graph constituents
-                    usedAsSeed[v[0], v[1]] = 1  # also don't use graph constituents as future seeds
-                curr_color += 1  # we take this graph, update color
-            else:
-                # we don't accept this graph, but do not reuse seed regardless, however do not finalize the pixel
-                usedAsSeed[x, y] = 1
-        return conn_comps, finalized
+        visited = np.zeros_like(segmentImage)
+        nr, nc = segmentImage.shape
+        for x in range(nr):
+            for y in range(nc):
+                if visited[x, y] == 0 and segmentImage[x, y] != 0:
+                    conn_comps.append(BFS(x, y, segmentImage[x, y]))
+        return conn_comps, visited
 
 
 class CorrelationGraph:
@@ -280,6 +278,7 @@ def Vigor(cumAngle,winlen=10):
     for i in range(winlen,s):
         vig[i] = std(cumAngle[i-winlen+1:i+1])
     return vig
+
 
 class TailData:
 
