@@ -1,5 +1,5 @@
-#file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
-#unit graphs should have been constructed and saved before using analyzeStack.py script
+# file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
+# unit graphs should have been constructed and saved before using analyzeStack.py script
 
 
 from mh_2P import *
@@ -9,6 +9,8 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 
 from scipy.ndimage.filters import gaussian_filter1d
+
+from ipyparallel import Client
 
 import warnings
 
@@ -31,6 +33,8 @@ def ZScore(trace):
 
 
 def ComputeTraceFourierFraction(trace, startFrame, endFrame, des_freq, frame_rate, aggregate=True):
+    import numpy as np
+    from scipy.ndimage.filters import gaussian_filter1d
     filtered = gaussian_filter1d(trace, frame_rate/8)
     filtered = filtered[startFrame:endFrame]
     if aggregate:
@@ -53,6 +57,8 @@ def ComputeFourierAvgStim(graph, startFrame, endFrame, des_freq, frame_rate, agg
         Computes the fourier transform of the stimulus period on the repeat-averaged
         timeseries.
     """
+    import numpy as np
+    from scipy.ndimage.filters import gaussian_filter1d
     # anti-aliasing
     filtered = gaussian_filter1d(graph.AveragedTimeseries, frame_rate/8)
     filtered = filtered[startFrame:endFrame]
@@ -77,7 +83,8 @@ def ComputeFourierAvgStim(graph, startFrame, endFrame, des_freq, frame_rate, agg
     graph.ang_atStim = np.angle(fft)[ix]
 
 
-def ComputeAveragedTimeseries(timeseries):
+def ComputeAveragedTimeseries(timeseries, n_repeats, n_hangoverFrames):
+    import numpy as np
     l = timeseries.size
     # sum/mean equivalent here (anyways determined by graph size)
     return np.sum(np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats)), 0)
@@ -94,7 +101,7 @@ def ComputeAveragedTimeseries(timeseries):
 #    s_stim = np.std(avg_timeseries[graph.FramesPre:])
 #    return s_stim / s_pre
 
-def ComputeStimulusEffect(graph,timeseries):
+def ComputeStimulusEffect(graph, timeseries, n_repeats, n_hangoverFrames):
     """
     Tries to address whether the activity of a unit
     gets mostly influenced by the stimulus. To that end
@@ -102,6 +109,7 @@ def ComputeStimulusEffect(graph,timeseries):
     with the variation between stimulus periods and their
     given pre periods
     """
+    import numpy as np
     l = timeseries.size
     reps = np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats))
     pre = reps[:, :graph.FramesPre]
@@ -141,6 +149,7 @@ def ComputeDFF(avg_timeseries):
 
 
 def CaConvolve(trace, ca_timeconstant, frame_rate):
+    from mh_2P import TailData
     kernel = TailData.CaKernel(ca_timeconstant, frame_rate)
     return np.convolve(trace, kernel)[:trace.size]
 
@@ -272,7 +281,7 @@ def stimFreq(tail_d):
     return st_b/180
 
 
-def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats):
+def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
     """
     Unpickles segmentation graphs from the indicated files and assigns properties
     that can be used for later analysis
@@ -281,19 +290,21 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats):
         sineAmp: For building the stimulus regressors the sine wave amplitude relative to its offset
         n_shuffles: The number of graph shuffles to compute
         n_repeats: The number of repetitions per imaging plane
+        n_hangoverFrames: The number of "extra" frames at experiment end
 
     Returns:
         A list of segmentation graphs with added analysis properties
     """
     import pickle
     import numpy as np
-    from mh_2P import NucGraph, CorrelationGraph  # imports to understand the pickle
+    from mh_2P import NucGraph, CorrelationGraph, GraphBase  # imports to understand the pickle
+    from analyzeSOOrepeat import CaConvolve, ComputeAveragedTimeseries, ComputeFourierAvgStim, ComputeTraceFourierFraction
     f = open(fname, 'rb')
     graphs = pickle.load(f)
     if len(graphs) > 0:
         for g in graphs:
             g.MotorCorrelation = np.corrcoef(g.RawTimeseries, g.PerFrameVigor)[0, 1]
-            g.AveragedTimeseries = ComputeAveragedTimeseries(g.RawTimeseries)
+            g.AveragedTimeseries = ComputeAveragedTimeseries(g.RawTimeseries, n_repeats, n_hangoverFrames)
             # create stimulus regressors and assign to graph
             try:
                 g.StimOn = stimOn
@@ -333,7 +344,7 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats):
             ComputeFourierAvgStim(g, g.FramesPre + g.FramesFFTGap, g.FramesPre + g.FramesStim, g.StimFrequency,
                                   g.FrameRate, True)
             # compute stimulus induced increases in calcium fluctuations
-            g.StimIndFluct = ComputeStimulusEffect(g, g.RawTimeseries)
+            g.StimIndFluct = ComputeStimulusEffect(g, g.RawTimeseries, n_repeats, n_hangoverFrames)
             # create shuffles
             g.ComputeGraphShuffles(n_shuffles)
             sh_mc = np.zeros(n_shuffles)  # motor correlations
@@ -345,8 +356,8 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats):
                 sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
                 sh_con[i] = np.corrcoef(g.StimOn, row)[0, 1]
                 sh_coff[i] = np.corrcoef(g.StimOff, row)[0, 1]
-                sh_StInFl[i] = ComputeStimulusEffect(g, row)
-                avg = ComputeAveragedTimeseries(row)
+                sh_StInFl[i] = ComputeStimulusEffect(g, row, n_repeats, n_hangoverFrames)
+                avg = ComputeAveragedTimeseries(row, n_repeats, n_hangoverFrames)
                 sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre + g.FramesFFTGap,
                                                           g.FramesPre + g.FramesStim, g.StimFrequency, g.FrameRate,
                                                           True)
@@ -390,9 +401,19 @@ if __name__ == "__main__":
     phase[288+36:288+72] = 1
     phase[72+144+180:-1] = phase[:72+144+180]
 
+    try:
+        rc = Client(timeout=0.1)
+    except OSError:
+        rc = []
 
-    for gf in graphFiles:
-        graph_list += ProcessGraphFile(gf, s_amp, n_shuffles, n_repeats)
+    if len(rc) < 2:
+        for gf in graphFiles:
+            graph_list += ProcessGraphFile(gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames)
+    else:
+        lb_view = rc.load_balanced_view()
+        ar = [lb_view.apply_async(ProcessGraphFile, gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames) for gf in graphFiles]
+        for a in ar:
+            graph_list += a.get()
 
     non_mot_units = []#units that don't pass the motor correlation threshold
     motor_units = []#units that pass the motor correlation threshold
@@ -421,53 +442,10 @@ if __name__ == "__main__":
             continue
         else:
             l = g.PerFrameVigor.size
-            avg_vig = ComputeAveragedTimeseries(g.PerFrameVigor)
+            avg_vig = ComputeAveragedTimeseries(g.PerFrameVigor, n_repeats, n_hangoverFrames)
             all_vigors.append(avg_vig)
             skip_dic[g.SourceFile] = 1
     all_vigors = np.vstack(all_vigors)
-
-    ##manually remove graphs on eyes, etc.
-    #from matplotlib.pyplot import pause
-    #keep_on = np.zeros(len(graph_on))
-    #skip_dic = dict()
-    #for i,g in enumerate(graph_on):
-    #    if g.SourceFile in skip_dic:
-    #        continue
-    #    PlotROI(g)
-    #    pause(0.5)
-    #    inp = ""
-    #    while inp!="y" and inp!="n" and inp!="s" and inp!="p":
-    #        inp = input("Keep unit?[y]es/[n]o/[s]kip plane/sto[p]:")
-    #    if inp=="y":
-    #        keep_on[i] = 1
-    #    elif inp=="p":
-    #        break
-    #    elif inp=="s":
-    #        skip_dic[g.SourceFile] = 1
-    #    pl.close('all')
-    #    print(i/len(graph_on),flush=True)
-
-    #keep_off = np.zeros(len(graph_off))
-    #skip_dic = dict()
-    #for i,g in enumerate(graph_off):
-    #    if g.SourceFile in skip_dic:
-    #        continue
-    #    PlotROI(g)
-    #    pause(0.5)
-    #    inp = ""
-    #    while inp!="y" and inp!="n" and inp!="s" and inp!="p":
-    #        inp = input("Keep unit?[y]es/[n]o/[s]kip plane/sto[p]:")
-    #    if inp=="y":
-    #        keep_off[i] = 1
-    #    elif inp=="p":
-    #        break
-    #    elif inp=="s":
-    #        skip_dic[g.SourceFile] = 1
-    #    pl.close('all')
-    #    print(i/len(graph_off),flush=True)
-
-    #graph_on = [g for i,g in enumerate(graph_on) if keep_on[i]==1]
-    #graph_off = [g for i,g in enumerate(graph_off) if keep_off[i]==1]
 
 
     #prepare some overview plots, using only graphs selected based on step responses
@@ -573,27 +551,3 @@ if __name__ == "__main__":
         sns.tsplot(data=mta,time=mta_time)
         pl.xlabel('Time around bout [s]');
         pl.ylabel('deltaF/F')
-
-
-
-
-
-
-
-    ##check all
-    #from matplotlib.pyplot import pause
-    #skip_dic = dict()
-    #for i,g in enumerate(graph_list):
-    #    if g.SourceFile in skip_dic:
-    #        continue
-    #    PlotGraphInfo(g,i)
-    #    pause(0.5)
-    #    inp = ""
-    #    while inp!="s" and inp!="p" and inp!="c":
-    #        inp = input("[c]ontinue/[s]kip plane/sto[p]:")
-    #    if inp=="p":
-    #        break
-    #    elif inp=="s":
-    #        skip_dic[g.SourceFile] = 1
-    #    pl.close('all')
-    #    print(i/len(graph_list),flush=True)
