@@ -33,17 +33,18 @@ except ImportError:
     import tkinter.filedialog as tkFileDialog
 
 
-class NucGraph:
+class GraphBase:
     """
-    Represents a nuclear segmentation that was performed by an outside program which
-    encoded different nuclei as intensities in an image
+    Base class for pixel based graphs that represent segmented regions in timeseries stacks
     """
-    def __init__(self, id, timeseries):
+    def __init__(self):
         self.V = []
-        self.ID = id
-        self.RawTimeseries = timeseries
-        self.gcv = []  # the greyscale values of all graph pixels
+        self.ID = None
+        self.RawTimeseries = []
         self.shuff_ts = []
+        self.FramesPre = None
+        self.FramesStim = None
+        self.FramesPost = None
 
     @property
     def NPixels(self):
@@ -78,6 +79,20 @@ class NucGraph:
         for i in range(nshuffles):
             shuff_ts[i, :] = np.roll(self.RawTimeseries, rolls[i])
         self.shuff_ts = shuff_ts
+
+
+class NucGraph(GraphBase):
+    """
+    Represents a nuclear segmentation that was performed by an outside program which
+    encoded different nuclei as intensities in an image
+    """
+    def __init__(self, id, timeseries):
+        super.__init__()
+        self.V = []
+        self.ID = id
+        self.RawTimeseries = timeseries
+        self.gcv = []  # the greyscale values of all graph pixels
+        self.shuff_ts = []
 
     @staticmethod
     def NuclearConnComp(stack, segmentImage):
@@ -138,41 +153,13 @@ class NucGraph:
         return conn_comps, visited
 
 
-class CorrelationGraph:
+class CorrelationGraph(GraphBase):
 
     def __init__(self, id, timeseries):
+        super().__init__()
         self.V = []  # list of vertices
         self.ID = id  # id of this graph for easy component reference
         self.Timeseries = timeseries  # the summed pixel-timeseries of the graph
-
-    @property
-    def NPixels(self):
-        return len(self.V)
-
-    @property
-    def MinX(self):
-        return min(list(zip(*self.V))[0])
-
-    @property
-    def MinY(self):
-        return min(list(zip(*self.V))[1])
-
-    @property
-    def MaxX(self):
-        return max(list(zip(*self.V))[0])
-
-    @property
-    def MaxY(self):
-        return max(list(zip(*self.V))[1])
-
-    def ComputeGraphShuffles(self, nshuffles):
-        min_shuff = self.FramesPre
-        max_shuff = self.RawTimeseries.size // 3
-        shuff_ts = np.zeros((nshuffles, self.RawTimeseries.size))
-        rolls = np.random.randint(min_shuff, max_shuff, size=nshuffles)
-        for i in range(nshuffles):
-            shuff_ts[i,:] = np.roll(self.RawTimeseries, rolls[i])
-        self.shuff_ts = shuff_ts
 
     @staticmethod
     def CorrelationConnComps(stack, im_ncorr, corr_thresh, predicate, norm8=True, limit=None, seed_limit=0):
