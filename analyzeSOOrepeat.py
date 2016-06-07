@@ -316,7 +316,6 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
                 # expand by number of repetitions and add hangover frame(s)
                 stimOn = np.tile(stimOn, n_repeats)
                 stimOn = np.append(stimOn, np.zeros((n_hangoverFrames, 1), dtype=np.float32))
-                stimOff = 1 - stimOn
                 # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
                 # half-time inferred to be: 891 ms
                 # => time-constant beta = 0.778
@@ -327,16 +326,14 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
                 # to simplify import, use same convolution method as for calcium kernel instead of temperature
                 # prediction.
                 stimOn = CaConvolve(stimOn, 0.891, g.FrameRate)
-                stimOff = CaConvolve(stimOff, 0.891, g.FrameRate)
                 stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
                 stimOn = (stimOn / stimOn.max()).astype(np.float32)
-                stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
-                stimOff = (stimOff / stimOff.max()).astype(np.float32)
+                stimOff = 1 - stimOn
                 g.StimOn = stimOn
                 g.StimOff = stimOff
             # compute correlation of responses and stimulus regressors
             g.CorrOn = np.corrcoef(g.StimOn, g.RawTimeseries)[0, 1]
-            g.CorrOff = np.corrcoef(g.StimOff, g.RawTimeseries)[0, 1]
+            g.CorrOff = -1 * g.CorrOn  # since stimOff = -1* stimOn
             # compute fourier transform on the averaged timeseries
             ComputeFourierAvgStim(g, g.FramesPre + g.FramesFFTGap, g.FramesPre + g.FramesStim, g.StimFrequency,
                                   g.FrameRate, True)
@@ -352,7 +349,7 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
             for i, row in enumerate(g.shuff_ts):
                 sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
                 sh_con[i] = np.corrcoef(g.StimOn, row)[0, 1]
-                sh_coff[i] = np.corrcoef(g.StimOff, row)[0, 1]
+                sh_coff[i] = -1 * sh_con[i]  # since stimOff = -1* stimOn
                 sh_StInFl[i] = ComputeStimulusEffect(g, row, n_repeats, n_hangoverFrames)
                 avg = ComputeAveragedTimeseries(row, n_repeats, n_hangoverFrames)
                 sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre + g.FramesFFTGap,
