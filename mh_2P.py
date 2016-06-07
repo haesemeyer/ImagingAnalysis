@@ -119,8 +119,9 @@ class NucGraph(GraphBase):
     Represents a nuclear segmentation that was performed by an outside program which
     encoded different nuclei as intensities in an image
     """
+
     def __init__(self, id, timeseries):
-        super.__init__()
+        super().__init__()
         self.V = []
         self.ID = id
         self.RawTimeseries = timeseries
