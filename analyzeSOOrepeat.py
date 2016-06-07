@@ -293,7 +293,7 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
     """
     import pickle
     import numpy as np
-    from analyzeSOOrepeat import CaConvolve, ComputeAveragedTimeseries, ComputeFourierAvgStim, ComputeTraceFourierFraction
+    from analyzeSOOrepeat import CaConvolve, ComputeAveragedTimeseries, ComputeFourierAvgStim, ComputeTraceFourierFraction, ComputeStimulusEffect
     f = open(fname, 'rb')
     graphs = pickle.load(f)
     if len(graphs) > 0:
@@ -327,7 +327,7 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
                 # to simplify import, use same convolution method as for calcium kernel instead of temperature
                 # prediction.
                 stimOn = CaConvolve(stimOn, 0.891, g.FrameRate)
-                stimOff = CaConvolve(stimOn, 0.891, g.FrameRate)
+                stimOff = CaConvolve(stimOff, 0.891, g.FrameRate)
                 stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
                 stimOn = (stimOn / stimOn.max()).astype(np.float32)
                 stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
