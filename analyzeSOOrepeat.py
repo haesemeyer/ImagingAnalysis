@@ -18,8 +18,6 @@ sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis'
 
 import mhba_basic as mb
 
-from mh_lasTemp import LaserTempData
-
 
 def LoadGraphTailData(graph):
     name = graph.SourceFile[:-6]+".tail"
@@ -295,7 +293,6 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
     """
     import pickle
     import numpy as np
-    from mh_2P import NucGraph, CorrelationGraph, GraphBase  # imports to understand the pickle
     from analyzeSOOrepeat import CaConvolve, ComputeAveragedTimeseries, ComputeFourierAvgStim, ComputeTraceFourierFraction
     f = open(fname, 'rb')
     graphs = pickle.load(f)
@@ -322,13 +319,15 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
                 stimOff = 1 - stimOn
                 # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
                 # half-time inferred to be: 891 ms
-                # => time-constant beta = 0.964
-                # NOTE: If correct, this means that heating kinetics in this set-up mimic freely swimming
-                # kinetics more than kinetics in the embedded setup. Maybe because of a) much more focuses beam
+                # => time-constant beta = 0.778
+                # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
+                # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
                 # and b) additional heat-sinking by microscope objective
                 # alpha obviously not determined
-                stimOn = LaserTempData.PredictTemperature(1, 0.964, stimOn, 1 / 2.4)
-                stimOff = LaserTempData.PredictTemperature(1, 0.964, stimOff, 1 / 2.4)
+                # to simplify import, use same convolution method as for calcium kernel instead of temperature
+                # prediction.
+                stimOn = CaConvolve(stimOn, 0.891, g.FrameRate)
+                stimOff = CaConvolve(stimOn, 0.891, g.FrameRate)
                 stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
                 stimOn = (stimOn / stimOn.max()).astype(np.float32)
                 stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
