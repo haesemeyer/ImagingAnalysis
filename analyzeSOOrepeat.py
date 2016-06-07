@@ -401,13 +401,17 @@ if __name__ == "__main__":
 
     try:
         rc = Client(timeout=0.1)
-    except OSError:
+    except:
         rc = []
 
     if len(rc) < 2:
         for gf in graphFiles:
             graph_list += ProcessGraphFile(gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames)
     else:
+        # remotely import graph classes
+        dview = rc[:]
+        with dview.sync_imports():
+            from mh_2P import NucGraph, CorrelationGraph
         lb_view = rc.load_balanced_view()
         ar = [lb_view.apply_async(ProcessGraphFile, gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames) for gf in graphFiles]
         for a in ar:
