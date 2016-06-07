@@ -80,6 +80,39 @@ class GraphBase:
             shuff_ts[i, :] = np.roll(self.RawTimeseries, rolls[i])
         self.shuff_ts = shuff_ts
 
+    @staticmethod
+    def ZScore(trace, axis=-1):
+        if trace.ndim == 2 and axis != -1:
+            m = np.mean(trace, axis, keepdims=True)
+            s = np.std(trace, axis, keepdims=True)
+            return (trace - m) / s
+        else:
+            return (trace - np.mean(trace)) / np.std(trace)
+
+    @staticmethod
+    def FourierMax(timeseries, axis=-1):
+        """
+        Returns the maximal magnitude in the fourier spectrum of the zscored timeseries
+        """
+        return np.max(np.absolute(np.fft.rfft(GraphBase.ZScore(timeseries, axis), axis=axis)), axis=axis)
+
+    def FourierMaxShuffles(self, nshuffles):
+        """
+        Performs shuffles in timeseries and returns the distribution of associated fourier maxima
+        """
+        ts_shuff = np.random.choice(self.RawTimeseries, self.RawTimeseries.size * nshuffles)
+        ts_shuff = np.reshape(ts_shuff, (nshuffles, self.RawTimeseries.size))
+        return self.FourierMax(ts_shuff, axis=1)
+
+    def FourierMaxPValue(self, nshuffles):
+        """
+        Determines the level of significance (p-value) of the fourier maximum in the timeseries using
+        random shuffles as a background distribution
+        """
+        max_real = self.FourierMax(self.RawTimeseries)
+        bg_distrib = self.FourierMaxShuffles(nshuffles)
+        return np.sum(bg_distrib >= max_real) / nshuffles
+
 
 class NucGraph(GraphBase):
     """
