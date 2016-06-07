@@ -40,7 +40,7 @@ class GraphBase:
     def __init__(self):
         self.V = []
         self.ID = None
-        self.RawTimeseries = []
+        self.RawTimeseries = np.array([])
         self.shuff_ts = []
         self.FramesPre = None
         self.FramesStim = None
