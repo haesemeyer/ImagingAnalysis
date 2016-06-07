@@ -10,10 +10,6 @@ import seaborn as sns
 
 from scipy.ndimage.filters import gaussian_filter1d
 
-from sklearn.cluster import KMeans
-
-import pickle
-
 import warnings
 
 import sys
@@ -184,7 +180,7 @@ def PlotAvgDff(graph, ax=None):
     dff = ComputeDFF(graph.AveragedTimeseries)
     time = np.arange(dff.size)/graph.FrameRate
     ax.plot(time, dff, 'r', label='Response')
-    ax.plot(time, graph.StimOn*dff.max(), label='Stimulus')
+    ax.plot(time, graph.StimOn[:dff.size]*dff.max(), label='Stimulus')
     ax.set_xlabel('Time [s]')
     ax.set_ylabel('DFF')
     ax.set_title('Repeat average activity')
@@ -276,114 +272,127 @@ def stimFreq(tail_d):
     return st_b/180
 
 
-if __name__ == "__main__":
-    n_repeats = 2#the number of repeats performed in each plane
-    n_hangoverFrames = 1#the number of "extra" recorded frames at experiment end
-    #our quality score is actually problematic, especially on non-whole-brain data:
-    #1) In focused regions such as the trigeminal, large activity spikes cause poor scores even in the absence of movement (manual check)
-    #2) If the eyes are contained in the stack, as they can move within the agarose they can corrupt the score
-    #=> Until better metric is found set to large value...
-    qual_cut = 0.1#maximum quality score deviation to still consider graph valid
-    n_shuffles = 200
+def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats):
+    """
+    Unpickles segmentation graphs from the indicated files and assigns properties
+    that can be used for later analysis
+    Args:
+        fname: The name of the pickle file with a list of segmentation graphs
+        sineAmp: For building the stimulus regressors the sine wave amplitude relative to its offset
+        n_shuffles: The number of graph shuffles to compute
+        n_repeats: The number of repetitions per imaging plane
 
-    #load unit activity from each imaging plane, compute motor correlations
-    #and repeat averaged time-trace <- note that motor correlations have to
-    #be calculated on non-time averaged data
+    Returns:
+        A list of segmentation graphs with added analysis properties
+    """
+    import pickle
+    import numpy as np
+    from mh_2P import NucGraph, CorrelationGraph  # imports to understand the pickle
+    f = open(fname, 'rb')
+    graphs = pickle.load(f)
+    if len(graphs) > 0:
+        for g in graphs:
+            g.MotorCorrelation = np.corrcoef(g.RawTimeseries, g.PerFrameVigor)[0, 1]
+            g.AveragedTimeseries = ComputeAveragedTimeseries(g.RawTimeseries)
+            # create stimulus regressors and assign to graph
+            try:
+                g.StimOn = stimOn
+                g.StimOff = stimOff
+            except NameError:
+                post_start = g.FramesPre + g.FramesStim
+                step_len = int(15 * g.FrameRate)
+                stimOn = np.zeros(g.AveragedTimeseries.size, dtype=np.float32)
+                sine_frames = np.arange(post_start - g.FramesPre)
+                sine_time = sine_frames / g.FrameRate
+                stimOn[g.FramesPre:post_start] = 1 + sineAmp * np.sin(sine_time * 2 * np.pi * g.StimFrequency)
+                stimOn[post_start + step_len:post_start + 2 * step_len] = 1
+                stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1
+                # expand by number of repetitions and add hangover frame(s)
+                stimOn = np.tile(stimOn, n_repeats)
+                stimOn = np.append(stimOn, np.zeros((n_hangoverFrames, 1), dtype=np.float32))
+                stimOff = 1 - stimOn
+                # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
+                # half-time inferred to be: 891 ms
+                # => time-constant beta = 0.964
+                # NOTE: If correct, this means that heating kinetics in this set-up mimic freely swimming
+                # kinetics more than kinetics in the embedded setup. Maybe because of a) much more focuses beam
+                # and b) additional heat-sinking by microscope objective
+                # alpha obviously not determined
+                stimOn = LaserTempData.PredictTemperature(1, 0.964, stimOn, 1 / 2.4)
+                stimOff = LaserTempData.PredictTemperature(1, 0.964, stimOff, 1 / 2.4)
+                stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
+                stimOn = (stimOn / stimOn.max()).astype(np.float32)
+                stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
+                stimOff = (stimOff / stimOff.max()).astype(np.float32)
+                g.StimOn = stimOn
+                g.StimOff = stimOff
+            # compute correlation of responses and stimulus regressors
+            g.CorrOn = np.corrcoef(g.StimOn, g.RawTimeseries)[0, 1]
+            g.CorrOff = np.corrcoef(g.StimOff, g.RawTimeseries)[0, 1]
+            # compute fourier transform on the averaged timeseries
+            ComputeFourierAvgStim(g, g.FramesPre + g.FramesFFTGap, g.FramesPre + g.FramesStim, g.StimFrequency,
+                                  g.FrameRate, True)
+            # compute stimulus induced increases in calcium fluctuations
+            g.StimIndFluct = ComputeStimulusEffect(g, g.RawTimeseries)
+            # create shuffles
+            g.ComputeGraphShuffles(n_shuffles)
+            sh_mc = np.zeros(n_shuffles)  # motor correlations
+            sh_con = np.zeros_like(sh_mc)  # ON correlations
+            sh_coff = np.zeros_like(sh_mc)  # OFF correlations
+            sh_StInFl = np.zeros_like(sh_mc)  # stimulus modulation
+            sh_mfrac = np.zeros_like(sh_mc)  # magnitude fraction
+            for i, row in enumerate(g.shuff_ts):
+                sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
+                sh_con[i] = np.corrcoef(g.StimOn, row)[0, 1]
+                sh_coff[i] = np.corrcoef(g.StimOff, row)[0, 1]
+                sh_StInFl[i] = ComputeStimulusEffect(g, row)
+                avg = ComputeAveragedTimeseries(row)
+                sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre + g.FramesFFTGap,
+                                                          g.FramesPre + g.FramesStim, g.StimFrequency, g.FrameRate,
+                                                          True)
+            g.sh_m_MotorCorrelation = np.mean(sh_mc)
+            g.sh_std_MotorCorrelation = np.std(sh_mc)
+            g.sh_m_CorrOn = np.mean(sh_con)
+            g.sh_std_CorrOn = np.std(sh_con)
+            g.sh_m_CorrOff = np.mean(sh_coff)
+            g.sh_std_CorrOff = np.std(sh_coff)
+            g.sh_m_StIndFluct = np.nanmean(sh_StInFl)
+            g.sh_std_StIndFluct = np.nanstd(sh_StInFl)
+            g.sh_m_mfrac = np.mean(sh_mfrac)
+            g.sh_std_mfrac = np.std(sh_mfrac)
+            # to reduce memory load, remove graph shuffle traces
+            g.shuff_ts = []
+    f.close()
+    return graphs
+
+
+if __name__ == "__main__":
+    n_repeats = 2  # the number of repeats performed in each plane
+    n_hangoverFrames = 1  # the number of "extra" recorded frames at experiment end
+    # our quality score is actually problematic, especially on non-whole-brain data:
+    # 1) In focused regions such as the trigeminal, large activity spikes cause poor scores even in the absence of movement (manual check)
+    # 2) If the eyes are contained in the stack, as they can move within the agarose they can corrupt the score
+    # => Until better metric is found set to large value...
+    qual_cut = 0.1  # maximum quality score deviation to still consider graph valid
+    n_shuffles = 200
+    s_amp = 0.36  # sine amplitude relative to offset
+
+    # load unit activity from each imaging plane, compute motor correlations
+    # and repeat averaged time-trace <- note that motor correlations have to
+    # be calculated on non-time averaged data
     graphFiles = UiGetFile([('PixelGraphs','.graph')],multiple=True)
     graph_list = []
 
-    #create vector describing stimulus phase of experiment. TODO: Define same way as stimOn below, dependent on graph
+    # create vector describing stimulus phase of experiment. TODO: Define same way as stimOn below, dependent on graph
     phase = np.zeros((72+144+180)*2+1)
     phase[72:72+144] = 1
     phase[72+144+36:72+144+72] = 1
     phase[288+36:288+72] = 1
     phase[72+144+180:-1] = phase[:72+144+180]
 
+
     for gf in graphFiles:
-        try:
-            f = open(gf,'rb')
-            graphs = pickle.load(f)
-            if len(graphs)>0:# and graphs[0].MaxQualScoreDeviation < qual_cut:#don't even process or add graphs from a plane that has a bad quality score
-                for g in graphs:
-                    g.MotorCorrelation = np.corrcoef(g.RawTimeseries,g.PerFrameVigor)[0,1]
-                    g.AveragedTimeseries = ComputeAveragedTimeseries(g.RawTimeseries)
-                    #create stimulus regressors and assign to graph
-                    try:
-                        g.StimOn = stimOn
-                        g.StimOff = stimOff
-                    except NameError:
-                        post_start = g.FramesPre+g.FramesStim
-                        step_len = int(15 * g.FrameRate)
-                        stimOn = stimOnset = stimOffset = np.zeros_like(g.AveragedTimeseries)
-                        stimOn[g.FramesPre:post_start] = 1
-                        stimOn[post_start+step_len:post_start+2*step_len] = 1
-                        stimOn[post_start+3*step_len:post_start+4*step_len] = 1
-                        stimOff = 1-stimOn
-                        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
-                        # half-time inferred to be: 891 ms
-                        # => time-constant beta = 0.964
-                        # NOTE: If correct, this means that heating kinetics in this set-up mimic freely swimming
-                        # kinetics more than kinetics in the embedded setup. Maybe because of a) much more focuses beam
-                        # and b) additional heat-sinking by microscope objective
-                        # alpha obviously not determined
-                        stimOn = LaserTempData.PredictTemperature(1, 0.964, stimOn, 1/2.4)
-                        stimOff = LaserTempData.PredictTemperature(1, 0.964, stimOff, 1/2.4)
-                        stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
-                        stimOn = stimOn / stimOn.max()
-                        stimOff = CaConvolve(stimOff, g.CaTimeConstant, g.FrameRate)
-                        stimOff = stimOff / stimOff.max()
-                        g.StimOn = stimOn
-                        g.StimOff = stimOff
-                    #compute correlation of responses and stimulus regressors
-                    step_start1 = g.FramesPre + g.FramesStim
-                    step_end1 = step_start1 + g.FramesPost
-                    step_start2 = step_end1 + step_start1
-                    step_end2 = step_start2 + g.FramesPost
-                    con1 = np.corrcoef(g.StimOn[step_start1:],g.RawTimeseries[step_start1:step_end1])[0,1]
-                    con2 = np.corrcoef(g.StimOn[step_start1:],g.RawTimeseries[step_start2:step_end2])[0,1]
-                    g.CorrOn = (con1 + con2) / 2
-                    cof1 = np.corrcoef(g.StimOff[step_start1:],g.RawTimeseries[step_start1:step_end1])[0,1]
-                    cof2 = np.corrcoef(g.StimOff[step_start1:],g.RawTimeseries[step_start2:step_end2])[0,1]
-                    g.CorrOff = (cof1 + cof2) / 2
-                    #compute fourier transform on the averaged timeseries
-                    ComputeFourierAvgStim(g,g.FramesPre+g.FramesFFTGap,g.FramesPre+g.FramesStim,g.StimFrequency,g.FrameRate,True)
-                    #compute stimulus induced increases in calcium fluctuations
-                    g.StimIndFluct = ComputeStimulusEffect(g,g.RawTimeseries)
-                    #create shuffles
-                    g.ComputeGraphShuffles(n_shuffles)
-                    sh_mc = np.zeros(n_shuffles)#motor correlations
-                    sh_con = np.zeros_like(sh_mc)#ON correlations
-                    sh_coff = np.zeros_like(sh_mc)#OFF correlations
-                    sh_StInFl = np.zeros_like(sh_mc)#stimulus modulation
-                    sh_mfrac = np.zeros_like(sh_mc)#magnitude fraction
-                    for i, row in enumerate(g.shuff_ts):
-                        sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
-                        con1 = np.corrcoef(g.StimOn[step_start1:], row[step_start1:step_end1])[0, 1]
-                        con2 = np.corrcoef(g.StimOn[step_start1:], row[step_start2:step_end2])[0, 1]
-                        sh_con[i] = (con1 + con2) / 2
-                        cof1 = np.corrcoef(g.StimOff[step_start1:], row[step_start1:step_end1])[0, 1]
-                        cof2 = np.corrcoef(g.StimOff[step_start1:], row[step_start2:step_end2])[0, 1]
-                        sh_coff[i] = (cof1 + cof2) / 2
-                        sh_StInFl[i] = ComputeStimulusEffect(g, row)
-                        avg = ComputeAveragedTimeseries(row)
-                        sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre+g.FramesFFTGap,
-                                                                  g.FramesPre+g.FramesStim, g.StimFrequency, g.FrameRate, True)
-                    g.sh_m_MotorCorrelation = np.mean(sh_mc)
-                    g.sh_std_MotorCorrelation = np.std(sh_mc)
-                    g.sh_m_CorrOn = np.mean(sh_con)
-                    g.sh_std_CorrOn = np.std(sh_con)
-                    g.sh_m_CorrOff = np.mean(sh_coff)
-                    g.sh_std_CorrOff = np.std(sh_coff)
-                    g.sh_m_StIndFluct = np.nanmean(sh_StInFl)
-                    g.sh_std_StIndFluct = np.nanstd(sh_StInFl)
-                    g.sh_m_mfrac = np.mean(sh_mfrac)
-                    g.sh_std_mfrac = np.std(sh_mfrac)
-                    # to reduce memory load, remove graph shuffle traces
-                    g.shuff_ts = []
-                    
-                graph_list += graphs
-        finally:
-            f.close()
+        graph_list += ProcessGraphFile(gf, s_amp, n_shuffles, n_repeats)
 
     non_mot_units = []#units that don't pass the motor correlation threshold
     motor_units = []#units that pass the motor correlation threshold
