@@ -382,7 +382,7 @@ class TailData:
         Creates a calcium decay kernel for the given frameRate
         with the given half-life in seconds
         """
-        fold_length = 4  # make kernel length equal to 4 half-times (decay to 6%)
+        fold_length = 5  # make kernel length equal to 5 half-times (decay to 3%)
         klen = int(fold_length*tau*frameRate)
         tk = np.linspace(0, fold_length*tau, klen, endpoint=False)
         k = 2**(-1*tk/tau)
