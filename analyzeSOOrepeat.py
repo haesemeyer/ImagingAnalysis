@@ -1,9 +1,7 @@
 # file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
-
-from mh_2P import *
-
+from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
