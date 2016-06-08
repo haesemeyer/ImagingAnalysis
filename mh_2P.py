@@ -129,7 +129,7 @@ class NucGraph(GraphBase):
         self.shuff_ts = []
 
     @staticmethod
-    def NuclearConnComp(stack, segmentImage):
+    def NuclearConnComp(stack, segmentImage, predicate):
         """
         Uses a presegmentation saved as an image (such as obtained from cell profiler) to build
         a list of graphs where each graph corresponds to one connected component of one intensity
@@ -168,6 +168,8 @@ class NucGraph(GraphBase):
                         if xn < 0 or yn < 0 or xn >= segmentImage.shape[0] or yn >= segmentImage.shape[1] or visited[xn, yn] != 0:
                             # outside image dimensions or already visited
                             continue
+                        if not predicate(xn, yn):
+                            continue
                         # pixel should be added if it has the same value as the source
                         if segmentImage[xn, yn] == color:
                             Q.append((xn, yn, v[2] + 1))  # add non-visited above threshold neighbor
@@ -182,7 +184,7 @@ class NucGraph(GraphBase):
         nr, nc = segmentImage.shape
         for x in range(nr):
             for y in range(nc):
-                if visited[x, y] == 0 and segmentImage[x, y] != 0:
+                if visited[x, y] == 0 and segmentImage[x, y] != 0 and predicate(x, y):
                     conn_comps.append(BFS(x, y, segmentImage[x, y]))
         return conn_comps, visited
 
