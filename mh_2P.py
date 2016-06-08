@@ -71,12 +71,12 @@ class GraphBase:
         x, y, gen = list(zip(*self.V))
         return np.mean(x), np.mean(y)
 
-    def ComputeGraphShuffles(self, nshuffles):
+    def ComputeGraphRotations(self, nrotations):
         min_shuff = self.FramesPre // 3
         max_shuff = self.RawTimeseries.size - self.FramesPre // 3
-        shuff_ts = np.zeros((nshuffles, self.RawTimeseries.size))
-        rolls = np.random.randint(min_shuff, max_shuff, size=nshuffles)
-        for i in range(nshuffles):
+        shuff_ts = np.zeros((nrotations, self.RawTimeseries.size))
+        rolls = np.random.randint(min_shuff, max_shuff, size=nrotations)
+        for i in range(nrotations):
             shuff_ts[i, :] = np.roll(self.RawTimeseries, rolls[i])
         self.shuff_ts = shuff_ts
 

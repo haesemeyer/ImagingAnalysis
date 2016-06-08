@@ -340,7 +340,7 @@ def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
             # compute stimulus induced increases in calcium fluctuations
             g.StimIndFluct = ComputeStimulusEffect(g, g.RawTimeseries, n_repeats, n_hangoverFrames)
             # create shuffles
-            g.ComputeGraphShuffles(n_shuffles)
+            g.ComputeGraphRotations(n_shuffles)
             sh_mc = np.zeros(n_shuffles)  # motor correlations
             sh_con = np.zeros_like(sh_mc)  # ON correlations
             sh_coff = np.zeros_like(sh_mc)  # OFF correlations
