@@ -96,12 +96,30 @@ class GraphBase:
         """
         return np.max(np.absolute(np.fft.rfft(GraphBase.ZScore(timeseries, axis), axis=axis)), axis=axis)
 
+    @staticmethod
+    def FourierEntropy(timeseries, axis=-1):
+        """
+        Computes the entropy of the fourier spectrum of the zscored timeseries
+        """
+        magnitudes = np.absolute(np.fft.rfft(GraphBase.ZScore(timeseries, axis), axis=axis))
+        sm = np.sum(magnitudes, axis=axis, keepdims=True)
+        magnitudes /= sm
+        e = magnitudes * np.log2(magnitudes)
+        return -1 * np.nansum(e, axis=axis)
+
+    def TimeseriesShuffles(self, nshuffles):
+        """
+        Returns a shuffle matrix of the graphs RawTimeseries
+        """
+        ts_shuff = np.random.choice(self.RawTimeseries, self.RawTimeseries.size * nshuffles)
+        ts_shuff = np.reshape(ts_shuff, (nshuffles, self.RawTimeseries.size))
+        return ts_shuff
+
     def FourierMaxShuffles(self, nshuffles):
         """
         Performs shuffles in timeseries and returns the distribution of associated fourier maxima
         """
-        ts_shuff = np.random.choice(self.RawTimeseries, self.RawTimeseries.size * nshuffles)
-        ts_shuff = np.reshape(ts_shuff, (nshuffles, self.RawTimeseries.size))
+        ts_shuff = self.TimeseriesShuffles(nshuffles)
         return self.FourierMax(ts_shuff, axis=1)
 
     def FourierMaxPValue(self, nshuffles):
@@ -112,6 +130,22 @@ class GraphBase:
         max_real = self.FourierMax(self.RawTimeseries)
         bg_distrib = self.FourierMaxShuffles(nshuffles)
         return np.sum(bg_distrib >= max_real) / nshuffles
+
+    def FourierEntropyShuffles(self, nshuffles):
+        """
+        Performs shuffles in timeseries and returns the distribution of associated fourier entropies
+        """
+        ts_shuff = self.TimeseriesShuffles(nshuffles)
+        return self.FourierEntropy(ts_shuff, axis=1)
+
+    def FourierEntropyPValue(self, nshuffles):
+        """
+        Calculates level of significance of the entropy of the real fourier spectrum being
+        smaller (i.e. more peaky) than the entropy of shuffles
+        """
+        e_real = self.FourierEntropy(self.RawTimeseries)
+        bg_distrib = self.FourierEntropyShuffles(nshuffles)
+        return np.sum(bg_distrib <= e_real) / nshuffles
 
 
 class NucGraph(GraphBase):
