@@ -1,7 +1,7 @@
 # file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
-from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph
+from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, CaConvolve
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -142,12 +142,6 @@ def CorrelateResWithMTA(graph, mta):
 def ComputeDFF(avg_timeseries):
     f0 = np.mean(avg_timeseries[:72])
     return (avg_timeseries-f0)/f0
-
-
-def CaConvolve(trace, ca_timeconstant, frame_rate):
-    from mh_2P import TailData
-    kernel = TailData.CaKernel(ca_timeconstant, frame_rate)
-    return np.convolve(trace, kernel)[:trace.size]
 
 
 def PlotROI(graph, ax=None, motor=False):

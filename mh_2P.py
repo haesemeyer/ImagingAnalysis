@@ -487,6 +487,11 @@ def OpenStack(filename):
         stack[i, :, :] = np.array(im)
     im.close()
     return stack
+
+
+def CaConvolve(trace, ca_timeconstant, frame_rate):
+    kernel = TailData.CaKernel(ca_timeconstant, frame_rate)
+    return np.convolve(trace, kernel)[:trace.size]
     
 
 def FilterStack(stack):
