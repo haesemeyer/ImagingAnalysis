@@ -674,7 +674,7 @@ class SOORepeatExperiment(ImagingData):
             mas = np.absolute(rfft[:, ix])
             s = np.sum(np.absolute(rfft), 1)
             mfracs[:, i] = mas / s
-        return np.mean(mas, 1, keepdims=True), np.std(mas, 1, keepdims=True)
+        return np.mean(mfracs, 1, keepdims=True), np.std(mfracs, 1, keepdims=True)
 
     def stimEffect(self, trace):
         """
