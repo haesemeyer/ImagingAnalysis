@@ -1,16 +1,14 @@
 # file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
-from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, CaConvolve
+from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
 
 from scipy.ndimage.filters import gaussian_filter1d
 
-from ipyparallel import Client
-
-import warnings
+import pickle
 
 import sys
 from scipy.signal import lfilter
@@ -28,92 +26,11 @@ def ZScore(trace):
     return (trace-np.mean(trace))/np.std(trace)
 
 
-def ComputeTraceFourierFraction(trace, startFrame, endFrame, des_freq, frame_rate, aggregate=True):
-    import numpy as np
-    from scipy.ndimage.filters import gaussian_filter1d
-    filtered = gaussian_filter1d(trace, frame_rate/8)
-    filtered = filtered[startFrame:endFrame]
-    if aggregate:
-        # Test if we can aggregate: Find the period length pl in frames. If the length of filtered
-        # is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
-        # and second half to reduce noise in transform (while at the same time reducing resolution)
-        pl = round(1 / des_freq * frame_rate)
-        if (filtered.size/pl) % 2 == 0:
-            filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
-        else:
-            warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
-    fft = np.fft.rfft(filtered - np.mean(filtered))
-    freqs = np.linspace(0, frame_rate/2, fft.shape[0])
-    ix = np.argmin(np.absolute(des_freq-freqs))
-    return np.absolute(fft)[ix] / np.sum(np.absolute(fft))
-
-
-def ComputeFourierAvgStim(graph, startFrame, endFrame, des_freq, frame_rate, aggregate=True):
-    """
-        Computes the fourier transform of the stimulus period on the repeat-averaged
-        timeseries.
-    """
-    import numpy as np
-    from scipy.ndimage.filters import gaussian_filter1d
-    # anti-aliasing
-    filtered = gaussian_filter1d(graph.AveragedTimeseries, frame_rate/8)
-    filtered = filtered[startFrame:endFrame]
-    # TODO: Somehow make the following noise reduction more generally applicable...
-    # if the length of filtered is divisble by 2, break into two blocks and average for noise reduction
-    if aggregate:
-        # Test if we can aggregate: Find the period length pl in frames. If the length of filtered
-        # is a multiple of 2 period lengths (size = 2* N * pl), reshape and average across first
-        # and second half to reduce noise in transform (while at the same time reducing resolution)
-        pl = round(1 / des_freq * frame_rate)
-        if (filtered.size/pl) % 2 == 0:
-            filtered = np.mean(filtered.reshape((2,filtered.size//2)),0)
-        else:
-            warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
-    fft = np.fft.rfft(filtered - np.mean(filtered))
-    freqs = np.linspace(0, frame_rate/2, fft.shape[0])
-    ix = np.argmin(np.absolute(des_freq-freqs))  # index of bin which contains our desired frequency
-    graph.stimFFT = fft
-    graph.stimFFT_freqs = freqs
-    graph.mag_atStim = np.absolute(fft)[ix]
-    graph.mfrac_atStim = graph.mag_atStim / np.sum(np.absolute(fft))
-    graph.ang_atStim = np.angle(fft)[ix]
-
-
 def ComputeAveragedTimeseries(timeseries, n_repeats, n_hangoverFrames):
     import numpy as np
     l = timeseries.size
     # sum/mean equivalent here (anyways determined by graph size)
     return np.sum(np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats)), 0)
-
-
-#def ComputeStimInducedNoise(graph,avg_timeseries):
-#    """
-#    Using information about pre, stim and post frames
-#    from the graph computes the ratio of standard
-#    deviations of timeseries between pre frames
-#    and stimulus-presentation frames (stim+post)
-#    """
-#    s_pre = np.std(avg_timeseries[:graph.FramesPre])
-#    s_stim = np.std(avg_timeseries[graph.FramesPre:])
-#    return s_stim / s_pre
-
-def ComputeStimulusEffect(graph, timeseries, n_repeats, n_hangoverFrames):
-    """
-    Tries to address whether the activity of a unit
-    gets mostly influenced by the stimulus. To that end
-    compares the variation in the two pre-stimulus periods
-    with the variation between stimulus periods and their
-    given pre periods
-    """
-    import numpy as np
-    l = timeseries.size
-    reps = np.reshape(timeseries[0:l-n_hangoverFrames], (n_repeats, (l-1)//n_repeats))
-    pre = reps[:, :graph.FramesPre]
-    m_pre = np.mean(pre, 1)
-    m_stim = np.mean(reps[:, graph.FramesPre:], 1)
-    d_pre = np.std(pre)  # np.abs(m_pre[0]-m_pre[1])
-    d_ps = np.abs(np.mean(m_pre-m_stim))
-    return d_ps / d_pre
 
 
 def ComputeSwimTriggeredAverage(graph_list, tailData, f_pre, f_post):
@@ -271,100 +188,6 @@ def stimFreq(tail_d):
     return st_b/180
 
 
-def ProcessGraphFile(fname, sineAmp, n_shuffles, n_repeats, n_hangoverFrames):
-    """
-    Unpickles segmentation graphs from the indicated files and assigns properties
-    that can be used for later analysis
-    Args:
-        fname: The name of the pickle file with a list of segmentation graphs
-        sineAmp: For building the stimulus regressors the sine wave amplitude relative to its offset
-        n_shuffles: The number of graph shuffles to compute
-        n_repeats: The number of repetitions per imaging plane
-        n_hangoverFrames: The number of "extra" frames at experiment end
-
-    Returns:
-        A list of segmentation graphs with added analysis properties
-    """
-    import pickle
-    import numpy as np
-    from analyzeSOOrepeat import CaConvolve, ComputeAveragedTimeseries, ComputeFourierAvgStim, ComputeTraceFourierFraction, ComputeStimulusEffect
-    f = open(fname, 'rb')
-    graphs = pickle.load(f)
-    if len(graphs) > 0:
-        for g in graphs:
-            g.MotorCorrelation = np.corrcoef(g.RawTimeseries, g.PerFrameVigor)[0, 1]
-            g.AveragedTimeseries = ComputeAveragedTimeseries(g.RawTimeseries, n_repeats, n_hangoverFrames)
-            # create stimulus regressors and assign to graph
-            try:
-                g.StimOn = stimOn
-                g.StimOff = stimOff
-            except NameError:
-                post_start = g.FramesPre + g.FramesStim
-                step_len = int(15 * g.FrameRate)
-                stimOn = np.zeros(g.AveragedTimeseries.size, dtype=np.float32)
-                sine_frames = np.arange(post_start - g.FramesPre)
-                sine_time = sine_frames / g.FrameRate
-                stimOn[g.FramesPre:post_start] = 1 + sineAmp * np.sin(sine_time * 2 * np.pi * g.StimFrequency)
-                stimOn[post_start + step_len:post_start + 2 * step_len] = 1
-                stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1
-                # expand by number of repetitions and add hangover frame(s)
-                stimOn = np.tile(stimOn, n_repeats)
-                stimOn = np.append(stimOn, np.zeros((n_hangoverFrames, 1), dtype=np.float32))
-                # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
-                # half-time inferred to be: 891 ms
-                # => time-constant beta = 0.778
-                # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
-                # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
-                # and b) additional heat-sinking by microscope objective
-                # alpha obviously not determined
-                # to simplify import, use same convolution method as for calcium kernel instead of temperature
-                # prediction.
-                stimOn = CaConvolve(stimOn, 0.891, g.FrameRate)
-                stimOn = CaConvolve(stimOn, g.CaTimeConstant, g.FrameRate)
-                stimOn = (stimOn / stimOn.max()).astype(np.float32)
-                stimOff = 1 - stimOn
-                g.StimOn = stimOn
-                g.StimOff = stimOff
-            # compute correlation of responses and stimulus regressors
-            g.CorrOn = np.corrcoef(g.StimOn, g.RawTimeseries)[0, 1]
-            g.CorrOff = -1 * g.CorrOn  # since stimOff = -1* stimOn
-            # compute fourier transform on the averaged timeseries
-            ComputeFourierAvgStim(g, g.FramesPre + g.FramesFFTGap, g.FramesPre + g.FramesStim, g.StimFrequency,
-                                  g.FrameRate, True)
-            # compute stimulus induced increases in calcium fluctuations
-            g.StimIndFluct = ComputeStimulusEffect(g, g.RawTimeseries, n_repeats, n_hangoverFrames)
-            # create shuffles
-            g.ComputeGraphRotations(n_shuffles)
-            sh_mc = np.zeros(n_shuffles)  # motor correlations
-            sh_con = np.zeros_like(sh_mc)  # ON correlations
-            sh_coff = np.zeros_like(sh_mc)  # OFF correlations
-            sh_StInFl = np.zeros_like(sh_mc)  # stimulus modulation
-            sh_mfrac = np.zeros_like(sh_mc)  # magnitude fraction
-            for i, row in enumerate(g.shuff_ts):
-                sh_mc[i] = np.corrcoef(row, g.PerFrameVigor)[0, 1]
-                sh_con[i] = np.corrcoef(g.StimOn, row)[0, 1]
-                sh_coff[i] = -1 * sh_con[i]  # since stimOff = -1* stimOn
-                sh_StInFl[i] = ComputeStimulusEffect(g, row, n_repeats, n_hangoverFrames)
-                avg = ComputeAveragedTimeseries(row, n_repeats, n_hangoverFrames)
-                sh_mfrac[i] = ComputeTraceFourierFraction(avg, g.FramesPre + g.FramesFFTGap,
-                                                          g.FramesPre + g.FramesStim, g.StimFrequency, g.FrameRate,
-                                                          True)
-            g.sh_m_MotorCorrelation = np.mean(sh_mc)
-            g.sh_std_MotorCorrelation = np.std(sh_mc)
-            g.sh_m_CorrOn = np.mean(sh_con)
-            g.sh_std_CorrOn = np.std(sh_con)
-            g.sh_m_CorrOff = np.mean(sh_coff)
-            g.sh_std_CorrOff = np.std(sh_coff)
-            g.sh_m_StIndFluct = np.nanmean(sh_StInFl)
-            g.sh_std_StIndFluct = np.nanstd(sh_StInFl)
-            g.sh_m_mfrac = np.mean(sh_mfrac)
-            g.sh_std_mfrac = np.std(sh_mfrac)
-            # to reduce memory load, remove graph shuffle traces
-            g.shuff_ts = []
-    f.close()
-    return graphs
-
-
 if __name__ == "__main__":
     n_repeats = 2  # the number of repeats performed in each plane
     n_hangoverFrames = 1  # the number of "extra" recorded frames at experiment end
@@ -389,44 +212,70 @@ if __name__ == "__main__":
     phase[288+36:288+72] = 1
     phase[72+144+180:-1] = phase[:72+144+180]
 
-    try:
-        rc = Client(timeout=0.1)
-    except:
-        rc = []
+    # load all units from file
+    for fname in graphFiles:
+        f = open(fname, 'rb')
+        graphs = pickle.load(f)
+        graph_list += graphs
 
-    if len(rc) < 2:
-        for gf in graphFiles:
-            graph_list += ProcessGraphFile(gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames)
-    else:
-        # remotely import graph classes
-        dview = rc[:]
-        with dview.sync_imports():
-            from mh_2P import NucGraph, CorrelationGraph
-        lb_view = rc.load_balanced_view()
-        ar = [lb_view.apply_async(ProcessGraphFile, gf, s_amp, n_shuffles, n_repeats, n_hangoverFrames) for gf in graphFiles]
-        for a in ar:
-            graph_list += a.get()
+    data = SOORepeatExperiment(np.vstack([g.RawTimeseries for g in graph_list]),
+                               np.vstack([g.PerFrameVigor for g in graph_list]),
+                               72, 144, 180, 2, graph_list[0].CaTimeConstant)
 
-    non_mot_units = []#units that don't pass the motor correlation threshold
-    motor_units = []#units that pass the motor correlation threshold
+    ts_avg = data.repeatAveragedTimeseries(data.nRepeats, data.nHangoverFrames)
+    motor_correlation, m_sh_mc, std_sh_mc = data.motorCorrelation(n_shuffles)
+    corr_on, m_sh_con, std_sh_con = data.onStimulusCorrelation(n_shuffles)
+    corr_off, m_sh_cof, std_sh_cof = data.offStimulusCorrelation(n_shuffles)
+    fft, freqs, mag, mfrac, ang = data.computeFourierMetrics(True)
+    stim_fluct, m_sh_sid, std_sh_sid = data.computeStimulusEffect(n_shuffles)
+    m_sh_mfrac, std_sh_mfrac = data.computeFourierFractionShuffles(n_shuffles, True)
 
-    #identify motor units and restrict further analysis to non-motor units
+    # temporarily re-assign all information to graphs in order to re-use code below...
+    for i, g in enumerate(graph_list):
+        g.MotorCorrelation = motor_correlation[i][0]
+        g.AveragedTimeseries = ts_avg[i, :]
+        g.StimOn = data.stimOn
+        g.StimOff = data.stimOff
+        g.CorrOn = corr_on[i][0]
+        g.CorrOff = corr_off[i][0]
+        g.stimFFT = fft[i, :]
+        g.stimFFT_freqs = freqs
+        g.mag_atStim = mag[i]
+        g.mfrac_atStim = mfrac[i]
+        g.ang_atStim = ang[i]
+        g.StimIndFluct = stim_fluct[i]
+        # shuffles
+        g.sh_m_MotorCorrelation = m_sh_mc[i][0]
+        g.sh_std_MotorCorrelation = std_sh_mc[i][0]
+        g.sh_m_CorrOn = m_sh_con[i][0]
+        g.sh_std_CorrOn = std_sh_con[i][0]
+        g.sh_m_CorrOff = m_sh_cof[i][0]
+        g.sh_std_CorrOff = std_sh_cof[i][0]
+        g.sh_m_StIndFluct = m_sh_sid[i][0]
+        g.sh_std_StIndFluct = std_sh_sid[i][0]
+        g.sh_m_mfrac = m_sh_mfrac[i][0]
+        g.sh_std_mfrac = std_sh_mfrac[i][0]
+
+    non_mot_units = []  # units that don't pass the motor correlation threshold
+    motor_units = []  # units that pass the motor correlation threshold
+
+    # identify motor units and restrict further analysis to non-motor units
     for g in graph_list:
         if g.MotorCorrelation <= 0.5:
             non_mot_units.append(g)
         else:
             motor_units.append(g)
 
-    #call units that show significant modulation in their standard deviation
-    #as well as significant locking to our sign-wave potential stimulus units
+    # call units that show significant modulation in their standard deviation
+    # as well as significant locking to our sign-wave potential stimulus units
     pot_stim_units = [g for g in non_mot_units if (g.StimIndFluct > g.sh_m_StIndFluct+2*g.sh_std_StIndFluct) and
                       (g.mfrac_atStim > g.sh_m_mfrac + 2*g.sh_std_mfrac)]
 
-    #identify on and off graphs based on respective correlation > 0.5
+    # identify on and off graphs based on respective correlation > 0.5
     graph_on = [g for g in pot_stim_units if g.CorrOn>g.sh_m_CorrOn+2*g.sh_std_CorrOn and g.CorrOn > 0.4]
     graph_off = [g for g in pot_stim_units if g.CorrOff>g.sh_m_CorrOff+2*g.sh_std_CorrOff and g.CorrOff > 0.4]
 
-    #create plot of average per-frame-swim vigor across experiments - count each plane only once
+    # create plot of average per-frame-swim vigor across experiments - count each plane only once
     skip_dic = dict()
     all_vigors = []
     for g in graph_list:
@@ -440,17 +289,17 @@ if __name__ == "__main__":
     all_vigors = np.vstack(all_vigors)
 
 
-    #prepare some overview plots, using only graphs selected based on step responses
+    # prepare some overview plots, using only graphs selected based on step responses
     all_on = np.vstack([ComputeDFF(g.AveragedTimeseries) for g in graph_on])
     all_off = np.vstack([ComputeDFF(g.AveragedTimeseries) for g in graph_off])
     phases_on = np.hstack([g.ang_atStim for g in graph_on])/np.pi*5+5
     phases_off = np.hstack([g.ang_atStim for g in graph_off])/np.pi*5+5
 
     with sns.axes_style('whitegrid'):
-        pl.figure();
+        pl.figure()
         sns.kdeplot(phases_on,label='On',cut=0)
         sns.kdeplot(phases_off,label='Off',cut=0)
-        pl.xlim(0,10)
+        pl.xlim(0, 10)
         pl.xlabel('Phase of response at 0.1 Hz')
         pl.ylabel('Density')
         pl.legend()
