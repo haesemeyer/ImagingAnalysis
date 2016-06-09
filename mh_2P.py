@@ -18,6 +18,8 @@ import cv2
 
 import sys
 
+import warnings
+
 try:
     sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
     import mhba_basic as mb
@@ -307,6 +309,406 @@ class CorrelationGraph(GraphBase):
             curr_color += 1
         return conn_comps, visited
 # class CorrelationGraph
+
+
+class ImagingData:
+    """
+    Represents timeseries data from segmented regions across imaging planes and potentially experiments
+    of the same structure
+    """
+    def __init__(self, imagingData, swimVigor):
+        """
+        Creates a new ImagingData class
+        Args:
+            imagingData: An n-units by n-frames sized matrix of timeseries data
+            swimVigor:  An n-units by n-frames sized matrix of ca-convolved swim vigor at imaging frame rate
+        """
+        if imagingData.shape != swimVigor.shape:
+            raise ValueError("Imaging data and swim vigor need to have the same dimensions")
+        self.RawData = imagingData
+        self.Vigor = swimVigor.astype(np.float32)
+
+    @property
+    def NFrames(self):
+        return self.RawData.shape[1]
+
+    @property
+    def NUnits(self):
+        return self.RawData.shape[0]
+
+    def motorCorrelation(self, nrolls=0, rollMin=0, rollMax=None):
+        """
+        Computes the correlation between imaging responses and motor activity for each unit (row in data matrices)
+        Args:
+            nrolls: Optionally also computes mean and standard deviation of shuffle correlations
+            rollMin: The minimum shuffle distance
+            rollMax: The maximum shuffle distance. If None will be set to the number of columns, i.e. timepoints
+
+        Returns: For each unit the correlation of its activity to the motor output and optionally shuffled mean
+                 and standard deviation
+
+        """
+        return self.correlate(self.RawData, self.Vigor, nrolls, rollMin, rollMax)
+
+    def stimulusCorrelation(self, stimulus, nrolls=0, rollMin=0, rollMax=None):
+        """
+        Computes the correlation between imaging responses and a given stimulus for each unit (row in data matrix)
+        Args:
+            stimulus: The stimulus regressor. Either 1D with the same length as rows in the imaging data matrix, or same
+             size as imaging data matrix.
+            nrolls: Optionally also computes mean and standard deviation of shuffle correlations
+            rollMin: The minimum shuffle distance
+            rollMax: The maximum shuffle distance. If None will be set to the number of columns, i.e. timepoints
+
+        Returns: For each unite the correlation of its activity to the motor output and optionally shuffled mean
+                 and standard deviation
+
+        """
+        if stimulus.shape != self.RawData.shape:
+            # try to expand stimulus to same size as RawData
+            if stimulus.ndim == 2:
+                if stimulus.shape[0] != 1 or stimulus.shape[1] != self.NFrames:
+                    raise ValueError("Stimulus shape does not match (1,NFrames)")
+                stimulus = np.repeat(stimulus, self.NUnits, 0)
+            elif stimulus.ndim == 1:
+                if stimulus.size != self.NFrames:
+                    raise ValueError("Need one stimulus frame per imaging frame")
+                stimulus = np.repeat(stimulus[None, :], self.NUnits, 0)
+            else:
+                raise ValueError("Incompatible stimulus dimensionality")
+        # now the stimulus should have the same shape as the data
+        return self.correlate(self.RawData, stimulus, nrolls, rollMin, rollMax)
+
+    def repeatAveragedTimeseries(self, n_repeats, n_hangover=1):
+        """
+        Computes a repeat average across the raw timeseries
+        Args:
+            n_repeats: The number of experimental repeats
+            n_hangover: The number of "extra frames" tucked on the end
+
+        Returns:
+
+        """
+        return self.computeRepeatAverage(self.RawData, n_repeats, n_hangover)
+
+    def fourierEntropy(self, nshuffles):
+        """
+        Computes the entropy of the fourier spectrum magnitudes and optionally and associated level of significance
+        Args:
+            nshuffles: The number of shuffles to perform
+
+        Returns:
+            [0]: For each unit the entropy of fourier magnitudes
+            [1]: The level of significance (p-value) in comparison to shuffled distribution
+
+        """
+
+        ent_real = self.fourierEnt(self.RawData)
+        if nshuffles < 2:
+            return ent_real, None
+        ent_shuff = np.zeros((self.RawData.shape[0], nshuffles), dtype=np.float32)
+        for i in range(nshuffles):
+            # we want to randomize elements but *only* along the time axis
+            shuffle = np.random.choice(np.arange(self.RawData.shape[1]), self.RawData.shape[1])
+            sh = self.RawData[:, shuffle]
+            ent_shuff[:, i] = self.fourierEnt(sh)
+        pv = np.sum(ent_real[:, None] >= ent_shuff, 1) / nshuffles
+        return ent_real, pv
+
+    @staticmethod
+    def fourierEnt(trace):
+        magnitudes = np.absolute(np.fft.rfft(ImagingData.zscore(trace), axis=1))
+        sm = np.sum(magnitudes, 1, keepdims=True)
+        magnitudes /= sm
+        e = magnitudes * np.log2(magnitudes)
+        return -1 * np.nansum(e, 1)
+
+    @staticmethod
+    def meanSubtract(m):
+        """
+        Returns a matrix with the row-means subtracted out
+        """
+        return m - np.mean(m, 1, keepdims=True)
+
+    @staticmethod
+    def zscore(m):
+        """
+        Returns a matrix with each row being zscored
+        """
+        return (m - np.mean(m, 1, keepdims=True)) / np.std(m, 1, keepdims=True)
+
+    @staticmethod
+    def correlate(m1, m2, nrolls, rollMin, rollMax):
+        """
+            Efficiently computes the row-wise correlation and optionally shuffles for m1 and m2
+            Args:
+                m1: First matrix
+                m2: Second matrix
+                nrolls: Optionally also computes mean and standard deviation of shuffle correlations
+                rollMin: The minimum shuffle distance
+                rollMax: The maximum shuffle distance. If None will be set to the number of columns, i.e. timepoints
+
+            Returns: For each row in m1 and m2 their pairwise correlation
+
+            """
+        if m1.shape != m2.shape:
+            raise ValueError("Both matrices need to have same shape")
+        ms1 = ImagingData.meanSubtract(m1)
+        ms2 = ImagingData.meanSubtract(m2)
+        dot = np.sum(ms1 * ms2, 1, keepdims=True)
+        n1 = np.linalg.norm(ms1, axis=1, keepdims=True)
+        n2 = np.linalg.norm(ms2, axis=1, keepdims=True)
+        nprod = n1 * n2
+        corr_real = dot / nprod
+        if nrolls < 2:
+            return corr_real, None, None
+        if rollMax is None:
+            rollMax = ms1.shape[1]
+        if rollMax <= rollMin:
+            raise ValueError("rollMax has to be strictly greater than rollMin")
+        c_shuff = np.zeros((m1.shape[0], nrolls), dtype=np.float32)
+        rl = np.random.randint(rollMin, rollMax, nrolls)
+        for i in range(nrolls):
+            sh = np.roll(ms1, rl[i], 1)
+            # NOTE: The roll along rows does not affect the row-mean and does not affect the norm
+            dot = np.sum(sh * ms2, 1, keepdims=True)
+            c_shuff[:, i] = (dot / nprod).flatten()  # unfortunately numpy cannot assign shape(n,1) to a single column
+        return corr_real, np.mean(c_shuff, 1, keepdims=True), np.std(c_shuff, 1, keepdims=True)
+
+    @staticmethod
+    def computeRepeatAverage(timeseries, n_repeats, n_hangover):
+        l = timeseries.shape[1]
+        if (l-n_hangover) % n_repeats != 0:
+            raise ValueError("Can't divide timeseries into the given number of repeats")
+        repLen = (l-n_hangover) // n_repeats
+        byBlock = np.reshape(timeseries[:, :l - n_hangover], (timeseries.shape[0], repLen, n_repeats), order='F')
+        return np.mean(byBlock, 2)
+
+    @staticmethod
+    def computeTraceFourierTransform(timeseries, aaFilterWindow, frameRate, start=0, end=None):
+        """
+        Computes the fourier transform along the rows of a given matrix, optionally only within a given window
+        Args:
+            timeseries: Matrix of imaging timeseries with n-units rows and n-timepoints columns
+            aaFilterWindow: Size of the anti-aliasing filter applied to the timeseries
+            frameRate: The imaging framerate in Hz to obtain frequencies corresponding to transform
+            start: Start-frame (inclusive).
+            end: End-frame (exclusive). If None set to end of trace
+
+        Returns:
+            [0]: rfft of the timeseries along rows
+            [1]: The associated frequencies
+
+        """
+        if aaFilterWindow > 0:
+            fts = gaussian_filter(timeseries, (0, aaFilterWindow))
+        else:
+            fts = timeseries
+        if end is None:
+            end = timeseries.shape[1]
+        rft = np.fft.rfft(fts[:, start:end], axis=1)
+        freqs = np.linspace(0, frameRate/2, rft.shape[1])
+        return rft, freqs
+
+
+class SOORepeatExperiment(ImagingData):
+    """
+    Represents a sine-on-off stimulation experiment with per-plane repeats
+    """
+    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant):
+        """
+        Creates a new sine-on-off repeat experiment class
+        Args:
+            imagingData: Imaging data across all units (rows)
+            swimVigor: Swim vigor matrix
+            preFrames: Number of pre-stimulus frames
+            stimFrames: Number of stimulus frames
+            postFrames: Number of post-stimulus frames
+            nRepeats: Number of per-plane repeats
+            caTimeConstant: The time-constant of the used calcium indicator
+        """
+        super().__init__(imagingData, swimVigor)
+        self.preFrames = preFrames
+        self.stimFrames = stimFrames
+        self.postFrames = postFrames
+        self.nRepeats = nRepeats
+        self.caTimeConstant = caTimeConstant
+        # the following parameters would only very rarely change
+        self.nHangoverFrames = 1
+        self.sine_amp = 0.51  # the amplitude of the sine-wave relativ to its offset
+        self.frameRate = 2.4  # the imaging framerate
+        self.stimFrequency = 0.1  # the sine stimulus frequency in Hz
+        self.stimOn = np.array([])
+        self.stimOff = np.array([])
+        self.stimFFTGap = int(self.frameRate * 20)
+        # construct our stimulus regressors
+        self.computeStimulusRegressors()
+
+    def computeStimulusRegressors(self):
+        """
+        Computes all relevant stimulus reqgressors and assigns them to the class can be called after
+        class parameters were changed
+        """
+        post_start = self.preFrames + self.stimFrames
+        step_len = int(15 * self.frameRate)
+        rep_len = (self.RawData.shape[1] - self.nHangoverFrames) // self.nRepeats
+        stimOn = np.zeros(rep_len, dtype=np.float32)
+        sine_frames = np.arange(post_start - self.preFrames)
+        sine_time = sine_frames / self.frameRate
+        stimOn[self.preFrames:post_start] = 1 + self.sine_amp * np.sin(sine_time * 2 * np.pi * self.stimFrequency)
+        stimOn[post_start + step_len:post_start + 2 * step_len] = 1
+        stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1
+        # expand by number of repetitions and add hangover frame(s)
+        stimOn = np.tile(stimOn, self.nRepeats)
+        stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
+        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
+        # half-time inferred to be: 891 ms
+        # => time-constant beta = 0.778
+        # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
+        # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
+        # and b) additional heat-sinking by microscope objective
+        # alpha obviously not determined
+        # to simplify import, use same convolution method as for calcium kernel instead of temperature
+        # prediction.
+        stimOn = CaConvolve(stimOn, 0.891, self.frameRate)
+        stimOn = CaConvolve(stimOn, self.caTimeConstant, self.frameRate)
+        stimOn = (stimOn / stimOn.max()).astype(np.float32)
+        stimOff = 1 - stimOn
+        self.stimOn = stimOn
+        self.stimOff = stimOff
+
+    def onStimulusCorrelation(self, nrolls):
+        """
+        For each unit computes correlation with our on stimulus regressor and optionally shuffle measures
+        Args:
+            nrolls: Number of rolls to perform when computing shuffles
+
+        Returns:
+            [0]: Correlations with the ON regressor
+            [1]: Average shuffle correlation
+            [2]: Standard deviation of shuffle correlations
+
+        """
+        return self.stimulusCorrelation(self.stimOn, nrolls, self.preFrames//3, self.RawData.shape[1]-self.preFrames//3)
+
+    def offStimulusCorrelation(self, nrolls):
+        """
+        For each unit computes correlation with our off stimulus regressor and optionally shuffle measures
+        Args:
+            nrolls: Number of rolls to perform when computing shuffles
+
+        Returns:
+            [0]: Correlations with the OFF regressor
+            [1]: Average shuffle correlation
+            [2]: Standard deviation of shuffle correlations
+
+        """
+        return self.stimulusCorrelation(self.stimOff, nrolls, self.preFrames//3,
+                                        self.RawData.shape[1]-self.preFrames//3)
+
+    def motorCorrelation(self, nrolls):
+        """
+            For each unit computes correlation with the swim vigor
+            Args:
+                nrolls: Number of rolls to perform when computing shuffles
+
+            Returns:
+                [0]: Correlations with the swim vigor regressor
+                [1]: Average shuffle correlation
+                [2]: Standard deviation of shuffle correlations
+
+            """
+        return super().motorCorrelation(nrolls, self.preFrames//3, self.RawData.shape[1]-self.preFrames//3)
+
+    def computeFourierMetrics(self, aggregate=True):
+        """
+        Computes the fourier transform and various derived metrics for each unit
+        Args:
+            aggregate: Whether to perform 2-fold aggregation of the stimulus trace in addtion to repeat averaging
+
+        Returns:
+            [0]: The fourier transform of the stimulus period
+            [1]: The associated frequencies
+            [2]: The magnitude at the stimulus frequency
+            [3]: The magnitude fraction at the stimulus frequency
+            [4]: The phase angle at the stimulus frequency
+
+        """
+        avg = self.repeatAveragedTimeseries(self.nRepeats, self.nHangoverFrames)
+        sl = avg[:, self.preFrames+self.stimFFTGap:self.preFrames+self.stimFrames]
+        if aggregate:
+            pl = round(1 / self.stimFrequency * self.frameRate)
+            if (sl.shape[1] / pl) % 2 == 0:
+                sl = self.aggregate(sl)
+            else:
+                warnings.warn('Could not aggregate for fourier due to phase alignment mismatch')
+        rfft, freqs = self.computeTraceFourierTransform(self.meanSubtract(sl), self.frameRate/8, self.frameRate)
+        ix = np.argmin(np.absolute(self.stimFrequency - freqs))  # index of bin which contains our stimulus frequency
+        mag_atStim = np.absolute(rfft[:, ix])
+        mfrac_atStim = mag_atStim / np.sum(np.absolute(rfft), 1)
+        ang_atStim = np.angle(rfft[:, ix])
+        return rfft, freqs, mag_atStim, mfrac_atStim, ang_atStim
+
+    def computeFourierFractionShuffles(self, nrolls, aggregate=True):
+        """
+        Computes shuffle mean and standard deviation of the fourier magnitude fraction at the stimulus frequency
+        Args:
+            nrolls: The number of shuffles to perform
+            aggregate: Whether to perform 2-fold aggregation of the stimulus trace in addtion to repeat averaging
+
+        Returns:
+            [0]: The average of the shuffles
+            [1]: The standard deviation of the shuffles
+
+        """
+        rolls = np.random.randint(self.preFrames//3, self.RawData.shape[1]-self.preFrames//3, nrolls)
+        mfracs = np.zeros((self.RawData.shape[0], nrolls), dtype=np.float32)
+        for i in range(nrolls):
+            r = np.roll(self.RawData, rolls[i], 1)
+            a = self.computeRepeatAverage(r, self.nRepeats, self.nHangoverFrames)
+            a = a[:, self.preFrames+self.stimFFTGap:self.preFrames+self.stimFrames]
+            if aggregate:
+                a = self.aggregate(a)
+            rfft, freqs = self.computeTraceFourierTransform(self.meanSubtract(a), self.frameRate/8, self.frameRate)
+            ix = np.argmin(np.absolute(self.stimFrequency - freqs))
+            mas = np.absolute(rfft[:, ix])
+            s = np.sum(np.absolute(rfft), 1)
+            mfracs[:, i] = mas / s
+        return np.mean(mas, 1, keepdims=True), np.std(mas, 1, keepdims=True)
+
+    def stimEffect(self, trace):
+        """
+        Computes the repeat-average difference of average activity between stimulus and pre-stimulus periods as a
+        fraction of pre-stimulus standard deviations
+        """
+        l = trace.shape[1]
+        if (l - self.nHangoverFrames) % self.nRepeats != 0:
+            raise ValueError("Can't divide timeseries into the given number of repeats")
+        repLen = (l - self.nHangoverFrames) // self.nRepeats
+        byBlock = np.reshape(trace[:, :l - self.nHangoverFrames], (trace.shape[0], repLen, self.nRepeats), order='F')
+        pre = byBlock[:, :self.preFrames, :]
+        m_pre = np.mean(pre, 1)
+        stim = byBlock[:, self.preFrames:, :]
+        m_stim = np.mean(stim, 1)
+        d_pre = np.std(pre, (1, 2))
+        d_ps = np.abs(np.mean(m_pre - m_stim, 1))
+        return d_ps / d_pre
+
+    def computeStimulusEffect(self, nrolls):
+        se_real = self.stimEffect(self.RawData)
+        if nrolls < 2:
+            return se_real, None, None
+        rolls = np.random.randint(self.preFrames//3, self.RawData.shape[1]-self.preFrames//3, nrolls)
+        se_shuff = np.zeros((self.RawData.shape[0], nrolls), dtype=np.float32)
+        for i in range(nrolls):
+            r = np.roll(self.RawData, rolls[i], 1)
+            se_shuff[:, i] = self.stimEffect(r)
+        return se_real, np.mean(se_shuff, 1, keepdims=True), np.std(se_shuff, 1, keepdims=True)
+
+    @staticmethod
+    def aggregate(timeseries):
+        return ImagingData.computeRepeatAverage(timeseries, 2, 0)
+
 
 
 class PixelGraph:
