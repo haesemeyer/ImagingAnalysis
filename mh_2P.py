@@ -473,7 +473,7 @@ class ImagingData:
             # NOTE: The roll along rows does not affect the row-mean and does not affect the norm
             dot = np.sum(sh * ms2, 1, keepdims=True)
             c_shuff[:, i] = (dot / nprod).flatten()  # unfortunately numpy cannot assign shape(n,1) to a single column
-        return corr_real, np.mean(c_shuff, 1, keepdims=True), np.std(c_shuff, 1, keepdims=True)
+        return corr_real.flatten(), np.mean(c_shuff, 1), np.std(c_shuff, 1)
 
     @staticmethod
     def computeRepeatAverage(timeseries, n_repeats, n_hangover):
@@ -674,7 +674,7 @@ class SOORepeatExperiment(ImagingData):
             mas = np.absolute(rfft[:, ix])
             s = np.sum(np.absolute(rfft), 1)
             mfracs[:, i] = mas / s
-        return np.mean(mfracs, 1, keepdims=True), np.std(mfracs, 1, keepdims=True)
+        return np.mean(mfracs, 1), np.std(mfracs, 1)
 
     def stimEffect(self, trace):
         """
@@ -703,7 +703,7 @@ class SOORepeatExperiment(ImagingData):
         for i in range(nrolls):
             r = np.roll(self.RawData, rolls[i], 1)
             se_shuff[:, i] = self.stimEffect(r)
-        return se_real, np.mean(se_shuff, 1, keepdims=True), np.std(se_shuff, 1, keepdims=True)
+        return se_real, np.mean(se_shuff, 1), np.std(se_shuff, 1)
 
     @staticmethod
     def aggregate(timeseries):

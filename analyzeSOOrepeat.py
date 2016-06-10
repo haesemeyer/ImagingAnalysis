@@ -232,12 +232,12 @@ if __name__ == "__main__":
 
     # temporarily re-assign all information to graphs in order to re-use code below...
     for i, g in enumerate(graph_list):
-        g.MotorCorrelation = motor_correlation[i][0]
+        g.MotorCorrelation = motor_correlation[i]
         g.AveragedTimeseries = ts_avg[i, :]
         g.StimOn = data.stimOn
         g.StimOff = data.stimOff
-        g.CorrOn = corr_on[i][0]
-        g.CorrOff = corr_off[i][0]
+        g.CorrOn = corr_on[i]
+        g.CorrOff = corr_off[i]
         g.stimFFT = fft[i, :]
         g.stimFFT_freqs = freqs
         g.mag_atStim = mag[i]
@@ -245,16 +245,16 @@ if __name__ == "__main__":
         g.ang_atStim = ang[i]
         g.StimIndFluct = stim_fluct[i]
         # shuffles
-        g.sh_m_MotorCorrelation = m_sh_mc[i][0]
-        g.sh_std_MotorCorrelation = std_sh_mc[i][0]
-        g.sh_m_CorrOn = m_sh_con[i][0]
-        g.sh_std_CorrOn = std_sh_con[i][0]
-        g.sh_m_CorrOff = m_sh_cof[i][0]
-        g.sh_std_CorrOff = std_sh_cof[i][0]
-        g.sh_m_StIndFluct = m_sh_sid[i][0]
-        g.sh_std_StIndFluct = std_sh_sid[i][0]
-        g.sh_m_mfrac = m_sh_mfrac[i][0]
-        g.sh_std_mfrac = std_sh_mfrac[i][0]
+        g.sh_m_MotorCorrelation = m_sh_mc[i]
+        g.sh_std_MotorCorrelation = std_sh_mc[i]
+        g.sh_m_CorrOn = m_sh_con[i]
+        g.sh_std_CorrOn = std_sh_con[i]
+        g.sh_m_CorrOff = m_sh_cof[i]
+        g.sh_std_CorrOff = std_sh_cof[i]
+        g.sh_m_StIndFluct = m_sh_sid[i]
+        g.sh_std_StIndFluct = std_sh_sid[i]
+        g.sh_m_mfrac = m_sh_mfrac[i]
+        g.sh_std_mfrac = std_sh_mfrac[i]
 
     non_mot_units = []  # units that don't pass the motor correlation threshold
     motor_units = []  # units that pass the motor correlation threshold
