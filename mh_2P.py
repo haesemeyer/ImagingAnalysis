@@ -1278,3 +1278,135 @@ def hessian_eigval_images(h):
             evi1[x, y] = e1
             evi2[x, y] = e2
     return evi1, evi2
+
+
+def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, regions=None):
+    """
+    Function to match each time-slice in expStack to a corresponding
+    z-section in preStack
+    Args:
+        preStack: The stable z pre-stack, assumed to have 21 slices per z-plane
+        expStack: The experimental time-stack
+        nRegions: The number of regions to be used for matching - ignored if regions!=None
+        radius: The radius of each region (region itself is square exscribing a circle of this radius) ignored if
+            regions!=None
+        regions: The regions to use for identification. If None regions will be chosen randomly
+
+    Returns:
+        [0]: An array of indices that indicate the most likely position in preStack of each expStack slice
+        [1]: The matrix of per-slice region correlations
+        [2]: The regions used
+    """
+
+    def IdentifyRegions():
+        """
+        Uses simple heuristics to identify good regions to be used for matching
+        Returns:
+            A list of regions, with each region being a list of pixel tuples (x,y)
+        """
+        area = nRegions * np.pi * (radius ** 2)
+        if area > sum_stack.shape[1] * sum_stack.shape[2] / 4:
+            raise ValueError("Region identification fails if total region area larger than quarter of slice area")
+        # sequentially pick non-overlapping region centers - in first pass three times as many as nRegions
+        centers = []
+        counter = 0
+        while len(centers) < nRegions * 10:
+            counter += 1
+            if counter > nRegions * 200:
+                break
+            x = np.random.randint(0, sum_stack.shape[1])
+            y = np.random.randint(0, sum_stack.shape[2])
+            if x < radius or y < radius or x+radius >= sum_stack.shape[1] or y+radius >= sum_stack.shape[2]:
+                continue
+            if np.mean(sum_stack[:, x, y]) < 2:
+                continue
+            if len(centers) == 0:
+                centers.append((x, y))
+            else:
+                all_c = np.vstack(centers)
+                cur_c = np.array([x, y])[None, :]
+                d = np.sqrt(np.sum((all_c-cur_c)**2, 1))
+                assert d.size == len(centers)
+                if d.min() > 4*radius:
+                    centers.append((x, y))
+
+                # d = [np.sqrt((c[0]-x)**2 + (c[1]-y)**2) for c in centers]
+                # # test if the minimal distance of all centers to the new point is larger than the radius
+                # if min(d) > 4*radius:
+                #     centers.append((x, y))
+        regions = []
+        for c in centers:
+            r = []
+            xs = c[0] - radius
+            ys = c[1] - radius
+            for x in range(xs, c[0]+radius+1):
+                for y in range(ys, c[1]+radius+1):
+                    r.append((x, y))
+            regions.append(r)
+        rs = GetRegionSeries(regions, sum_stack)
+        # we want to keep regions that contain signal (i.e maximum value > radius**2) and whose standard deviation
+        # is the largest
+        regions = [r for i, r in enumerate(regions) if np.max(rs[i, :]) > radius**2]
+        rs = rs[np.max(rs, 1) > radius**2, :]
+        assert len(regions) == rs.shape[0]
+        augmented = [(r, np.std(lfilter(np.ones(5)/5, 1, rs[i, :]))/np.mean(rs[i, :])) for i, r in enumerate(regions)]
+        augmented = sorted(augmented, key=lambda x: x[1], reverse=True)
+        if len(augmented) < nRegions:
+            print(len(regions), " regions pass signal threshold")
+            print("Only ", len(augmented), " regions could be returned")
+            return [r[0] for r in augmented]
+        else:
+            return [augmented[i][0] for i in range(nRegions)]
+
+    def GetRegionSeries(regions, stack):
+        """
+        Given a list of regions and a stack returns the time/space series for each region as a matrix
+        """
+        return np.vstack([np.sum(np.vstack([stack[:, v[0], v[1]] for v in r]), 0) for r in regions])
+
+    # make pre-stack projection
+    psvalid = preStack[1:, :, :]
+    assert psvalid.shape[0] % 21 == 0
+    sum_stack = np.zeros((preStack.shape[0] // 21, preStack.shape[1], preStack.shape[2]), dtype=np.float32)
+    for i in range(sum_stack.shape[0]):
+        sum_stack[i, :, :] = np.sum(preStack[i * 21:(i + 1) * 21, :, :], 0)
+    if regions is None:
+        regions = IdentifyRegions()
+    pre_series = GetRegionSeries(regions, sum_stack)
+    exp_series = GetRegionSeries(regions, expStack)
+    # time-filter experimental series
+    exp_series = lfilter(np.ones(5)/5, 1, exp_series, axis=1)
+    # mean-subtract and normalize columns
+    pre_series -= np.mean(pre_series, 0, keepdims=True)
+    pre_series /= np.linalg.norm(pre_series, axis=0, keepdims=True)
+    exp_series -= np.mean(exp_series, 0, keepdims=True)
+    exp_series /= np.linalg.norm(exp_series, axis=0, keepdims=True)
+    slices = np.zeros(expStack.shape[0], dtype=int)
+    corrs = np.zeros((pre_series.shape[1], expStack.shape[0]), dtype=float)
+    for i in range(expStack.shape[0]):
+        cs = exp_series[:, i][:, None]  # fingerprint of current slice
+        corrs[:, i] = np.sum(cs * pre_series, 0)
+        slices[i] = np.argmax(corrs[:, i])
+    return slices, corrs, regions
+
+
+def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, nIter=50):
+    """
+    Performs multiple iterations of PostMatchSlices and returns the median trace
+    Args:
+        preStack: The stable z pre-stack, assumed to have 21 slices per z-plane
+        expStack: The experimental time-stack
+        nRegions: The number of regions to be used for matching
+        radius: The radius of each region (region itself is square exscribing a circle of this radius)
+        nIter: Number of iterations to perform
+
+    Returns:
+        [0]: An array of indices that indicate the most likely position in preStack of each expStack slice
+        [1]: The MAD of the slice index trace
+    """
+
+    all_slices = np.zeros((nIter, expStack.shape[0]))
+    for i in range(nIter):
+        s = PostMatchSlices(preStack, expStack, nRegions, radius)[0]
+        all_slices[i, :] = s
+    return np.median(all_slices, 0), np.median(np.abs(np.median(all_slices, 0)-all_slices), 0)
