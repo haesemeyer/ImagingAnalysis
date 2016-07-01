@@ -9,6 +9,7 @@ import seaborn as sns
 
 from scipy.ndimage.filters import gaussian_filter
 from scipy.signal import lfilter
+from scipy.interpolate import interp1d
 
 from numba import jit
 import numba
@@ -1280,7 +1281,7 @@ def hessian_eigval_images(h):
     return evi1, evi2
 
 
-def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, regions=None):
+def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, interpolate=False, regions=None):
     """
     Function to match each time-slice in expStack to a corresponding
     z-section in preStack
@@ -1290,6 +1291,7 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, regions=None):
         nRegions: The number of regions to be used for matching - ignored if regions!=None
         radius: The radius of each region (region itself is square exscribing a circle of this radius) ignored if
             regions!=None
+        interpolate: If true, slice positions will be interpolated 5 fold
         regions: The regions to use for identification. If None regions will be chosen randomly
 
     Returns:
@@ -1374,6 +1376,14 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, regions=None):
         regions = IdentifyRegions()
     pre_series = GetRegionSeries(regions, sum_stack)
     exp_series = GetRegionSeries(regions, expStack)
+    sl_indices = np.arange(pre_series.shape[1])
+    if interpolate:
+        ind_interp = np.linspace(0, sl_indices.max(), sl_indices.size*5, endpoint=True)
+        f_interp = interp1d(sl_indices, pre_series, axis=1)
+        pre_series = f_interp(ind_interp)
+        sl_indices = ind_interp
+        assert pre_series.shape[0] == exp_series.shape[0]
+        assert pre_series.shape[1] == sum_stack.shape[0]*5
     # time-filter experimental series
     exp_series = lfilter(np.ones(5)/5, 1, exp_series, axis=1)
     # mean-subtract and normalize columns
@@ -1381,16 +1391,16 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, regions=None):
     pre_series /= np.linalg.norm(pre_series, axis=0, keepdims=True)
     exp_series -= np.mean(exp_series, 0, keepdims=True)
     exp_series /= np.linalg.norm(exp_series, axis=0, keepdims=True)
-    slices = np.zeros(expStack.shape[0], dtype=int)
+    slices = np.zeros(expStack.shape[0])
     corrs = np.zeros((pre_series.shape[1], expStack.shape[0]), dtype=float)
     for i in range(expStack.shape[0]):
         cs = exp_series[:, i][:, None]  # fingerprint of current slice
         corrs[:, i] = np.sum(cs * pre_series, 0)
-        slices[i] = np.argmax(corrs[:, i])
+        slices[i] = sl_indices[np.argmax(corrs[:, i])]
     return slices, corrs, regions
 
 
-def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, nIter=50):
+def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, interpolate=False, nIter=50):
     """
     Performs multiple iterations of PostMatchSlices and returns the median trace
     Args:
@@ -1398,6 +1408,7 @@ def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, nIter=50):
         expStack: The experimental time-stack
         nRegions: The number of regions to be used for matching
         radius: The radius of each region (region itself is square exscribing a circle of this radius)
+        interpolate: If true, slice positions will be interpolated 5 fold
         nIter: Number of iterations to perform
 
     Returns:
@@ -1407,7 +1418,7 @@ def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, nIter=50):
 
     all_slices = np.zeros((nIter, expStack.shape[0]))
     for i in range(nIter):
-        s = PostMatchSlices(preStack, expStack, nRegions, radius)[0]
+        s = PostMatchSlices(preStack, expStack, nRegions, radius, interpolate)[0]
         all_slices[i, :] = s
     return np.median(all_slices, 0), np.median(np.abs(np.median(all_slices, 0)-all_slices), 0)
 
@@ -1426,8 +1437,10 @@ def ZCorrectTrace(preStack, slice_locations, graph):
     """
     if slice_locations.size != graph.RawTimeseries.size:
         raise ValueError("Each frame in graph.RawTimeseries needs to have a corresponding slice_location")
+    sl_indices = np.arange(preStack.shape[0])
     preValues = np.sum(np.vstack([preStack[:, v[0], v[1]] for v in graph.V]), 0)
     preValues /= preValues.max()
-    corrector = np.array([preValues[s] for s in slice_locations.astype(int)])
+    f_interp = interp1d(sl_indices, preValues)
+    corrector = np.array([f_interp(s) for s in slice_locations])
     corrector = gaussian_filter(corrector, 6)
     return graph.RawTimeseries / corrector
