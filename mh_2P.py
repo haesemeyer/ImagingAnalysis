@@ -1410,3 +1410,24 @@ def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, nIter=50):
         s = PostMatchSlices(preStack, expStack, nRegions, radius)[0]
         all_slices[i, :] = s
     return np.median(all_slices, 0), np.median(np.abs(np.median(all_slices, 0)-all_slices), 0)
+
+
+def ZCorrectTrace(preStack, slice_locations, graph):
+    """
+    Corrrects the raw fluorescence trace of graph using intensity variations in the preStack according to
+    predicted slice locations of each frame
+    Args:
+        preStack: The pre-stack around the acquisition plane
+        slice_locations: Predicted slice locations
+        graph: Unit graph with RawTimeseries and (V)ertices attribute
+
+    Returns:
+        Corrected version of RawTimeseries attribute
+    """
+    if slice_locations.size != graph.RawTimeseries.size:
+        raise ValueError("Each frame in graph.RawTimeseries needs to have a corresponding slice_location")
+    preValues = np.sum(np.vstack([preStack[:, v[0], v[1]] for v in graph.V]), 0)
+    preValues /= preValues.max()
+    corrector = np.array([preValues[s] for s in slice_locations.astype(int)])
+    corrector = gaussian_filter(corrector, 6)
+    return graph.RawTimeseries / corrector
