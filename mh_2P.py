@@ -1423,24 +1423,27 @@ def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, interpolate=False
     return np.median(all_slices, 0), np.median(np.abs(np.median(all_slices, 0)-all_slices), 0)
 
 
-def ZCorrectTrace(preStack, slice_locations, graph):
+def ZCorrectTrace(preStack, slice_locations, timeseries, vertices):
     """
-    Corrrects the raw fluorescence trace of graph using intensity variations in the preStack according to
+    Corrrects the raw fluorescence trace using intensity variations in the preStack according to
     predicted slice locations of each frame
     Args:
-        preStack: The pre-stack around the acquisition plane
+        preStack: The pre-stack around the acquisition plane (note slices already summed!!!!)
         slice_locations: Predicted slice locations
-        graph: Unit graph with RawTimeseries and (V)ertices attribute
+        timeseries: The fluorescence timeseries to correct
+        vertices: (row,column) tuples of points of the unit graph corresponding to the timeseries
 
     Returns:
         Corrected version of RawTimeseries attribute
     """
-    if slice_locations.size != graph.RawTimeseries.size:
-        raise ValueError("Each frame in graph.RawTimeseries needs to have a corresponding slice_location")
+    if slice_locations.size != timeseries.size:
+        raise ValueError("Each frame in timeseries needs to have a corresponding slice_location")
     sl_indices = np.arange(preStack.shape[0])
-    preValues = np.sum(np.vstack([preStack[:, v[0], v[1]] for v in graph.V]), 0)
+    preValues = np.zeros(preStack.shape[0])
+    for v in vertices:
+        preValues += preStack[:, v[0], v[1]]
     preValues /= preValues.max()
     f_interp = interp1d(sl_indices, preValues)
     corrector = np.array([f_interp(s) for s in slice_locations])
-    corrector = gaussian_filter(corrector, 6)
-    return graph.RawTimeseries / corrector
+    corrector = gaussian_filter(corrector, 1)
+    return timeseries / corrector
