@@ -2,6 +2,7 @@
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment
+from mh_2P import MedianPostMatch, ZCorrectTrace
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -177,19 +178,54 @@ def PlotCycleGraphList(glist):
 def restFreq(tail_d):
     if tail_d.bouts is None:
         return 0
-    st_b = np.sum(phase[tail_d.boutFrames.astype(int)] == 0)
+    st_b = np.sum(data.stimOn[tail_d.boutFrames.astype(int)] == 0)
     return st_b/150
 
 
 def stimFreq(tail_d):
     if tail_d.bouts is None:
         return 0
-    st_b = np.sum(phase[tail_d.boutFrames.astype(int)] == 1)
+    st_b = np.sum(data.stimOn[tail_d.boutFrames.astype(int)] != 0)
     return st_b/180
 
 
+def tryZCorrect(graphs, eyemask=None):
+    sf = graphs[0].SourceFile
+    stabFile = sf.replace("_0.tif", "_stableZ_0.tif")
+    try:
+        stack = OpenStack(sf)
+        pre = OpenStack(stabFile)
+    except IOError:
+        print("Could not load stableZ prestack for ", sf)
+        return
+    # if information is present mask out pixels on eyes
+    if eyemask is not None:
+        eyemask[eyemask > 0] = 1
+        eyemask[eyemask <= 0] = 0
+        stack = stack * eyemask
+        pre = pre * eyemask
+    sl = MedianPostMatch(pre, stack, interpolate=True, nIter=100)[0]
+    # create slice-summed projection of pre-stack
+    sum_stack = np.zeros((pre.shape[0] // 21, pre.shape[1], pre.shape[2]), dtype=np.float32)
+    for i in range(sum_stack.shape[0]):
+        sum_stack[i, :, :] = np.sum(pre[i * 21:(i + 1) * 21, :, :], 0)
+    for g in graphs:
+        g.Original = g.RawTimeseries.copy()
+        g.RawTimeseries = ZCorrectTrace(sum_stack, sl, g.RawTimeseries, g.V)
+
+
 if __name__ == "__main__":
-    n_repeats = 2  # the number of repeats performed in each plane
+    n_repeats = int(input("Please enter the number of repeats:"))  # the number of repeats performed in each plane
+    n_pre = int(input("Please enter the number of pre-frames:"))
+    ans = ""
+    while ans != 'n' and ans != 'y':
+        ans = input("Load eye mask file? [y/n]:")
+    if ans == 'n':
+        eyemask = None
+    else:
+        mfile = UiGetFile([('Eye mask file', 'EYEMASK*')])
+        eyemask = OpenStack(mfile)
+
     n_hangoverFrames = 1  # the number of "extra" recorded frames at experiment end
     # our quality score is actually problematic, especially on non-whole-brain data:
     # 1) In focused regions such as the trigeminal, large activity spikes cause poor scores even in the absence of movement (manual check)
@@ -205,22 +241,16 @@ if __name__ == "__main__":
     graphFiles = UiGetFile([('PixelGraphs','.graph')],multiple=True)
     graph_list = []
 
-    # create vector describing stimulus phase of experiment. TODO: Define same way as stimOn below, dependent on graph
-    phase = np.zeros((72+144+180)*2+1)
-    phase[72:72+144] = 1
-    phase[72+144+36:72+144+72] = 1
-    phase[288+36:288+72] = 1
-    phase[72+144+180:-1] = phase[:72+144+180]
-
     # load all units from file
     for fname in graphFiles:
         f = open(fname, 'rb')
         graphs = pickle.load(f)
+        tryZCorrect(graphs, eyemask)
         graph_list += graphs
 
     data = SOORepeatExperiment(np.vstack([g.RawTimeseries for g in graph_list]),
                                np.vstack([g.PerFrameVigor for g in graph_list]),
-                               72, 144, 180, 2, graph_list[0].CaTimeConstant)
+                               n_pre, 144, 180, n_repeats, graph_list[0].CaTimeConstant)
 
     ts_avg = data.repeatAveragedTimeseries(data.nRepeats, data.nHangoverFrames)
     motor_correlation, m_sh_mc, std_sh_mc = data.motorCorrelation(n_shuffles)
@@ -229,6 +259,13 @@ if __name__ == "__main__":
     fft, freqs, mag, mfrac, ang = data.computeFourierMetrics(True)
     stim_fluct, m_sh_sid, std_sh_sid = data.computeStimulusEffect(n_shuffles)
     m_sh_mfrac, std_sh_mfrac = data.computeFourierFractionShuffles(n_shuffles, True)
+    # correlation for transient on and off
+    trans_on = np.r_[0, np.diff(data.stimOn)]
+    trans_on[trans_on < 0] = 0
+    c_transOn = data.stimulusCorrelation(trans_on)[0]
+    trans_off = np.r_[0, np.diff(data.stimOff)]
+    trans_off[trans_off < 0] = 0
+    c_transOff = data.stimulusCorrelation(trans_off)[0]
 
     # temporarily re-assign all information to graphs in order to re-use code below...
     for i, g in enumerate(graph_list):
@@ -237,7 +274,9 @@ if __name__ == "__main__":
         g.StimOn = data.stimOn
         g.StimOff = data.stimOff
         g.CorrOn = corr_on[i]
+        g.Corr_TOn = c_transOn[i]
         g.CorrOff = corr_off[i]
+        g.Corr_TOff = c_transOff[i]
         g.stimFFT = fft[i, :]
         g.stimFFT_freqs = freqs
         g.mag_atStim = mag[i]
@@ -326,17 +365,11 @@ if __name__ == "__main__":
         pl.legend()
         pl.title('Average response of ON (heat-sens.) and OFF (cold-sens.) units')
 
-    exp_stim = np.zeros_like(graph_on[0].RawTimeseries)[:-1]
-    exp_stim[72:72+144] = np.sin(np.arange(144)/2.4*2*np.pi*0.1)*300 + 700;
-    exp_stim[72+144+36:288] = 700
-    exp_stim[288+36:288+72] = 700
-    exp_stim[72+144+180:] = exp_stim[:72+144+180]
-
     with sns.axes_style('whitegrid'):
         pl.figure()
-        pl.plot(exp_stim,'k')
+        pl.plot(data.stimOn, 'k')
         pl.xlabel('Frames - 48=20s')
-        pl.ylabel('Stimulus laser [mA]')
+        pl.ylabel('Stim ON')
         pl.title('Paradigm for each imaging plane')
 
     #plot average swim vigor across planes
@@ -371,7 +404,7 @@ if __name__ == "__main__":
         m_vig = gaussian_filter1d(np.mean(mb.Bin1D(vigor_mat.copy(),2,axis=1),0),10)
         time = np.linspace(0,m_vig.size/50,m_vig.size)
         ax.plot(time,m_vig)
-        ax.plot(np.arange(phase.size)/2.4,phase*3)
+        ax.plot(np.arange(data.stimOn.size)/2.4,data.stimOn*3)
         ax.set_xlim(0,time.max())
         ax.set_ylabel('Average swim vigor')
         ax.set_xlabel('Time [s]')
