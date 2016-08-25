@@ -252,6 +252,8 @@ if __name__ == "__main__":
                                np.vstack([g.PerFrameVigor for g in graph_list]),
                                n_pre, 144, 180, n_repeats, graph_list[0].CaTimeConstant)
 
+    data.graph_info = [(g.SourceFile, g.V) for g in graph_list]
+
     ts_avg = data.repeatAveragedTimeseries(data.nRepeats, data.nHangoverFrames)
     motor_correlation, m_sh_mc, std_sh_mc = data.motorCorrelation(n_shuffles)
     corr_on, m_sh_con, std_sh_con = data.onStimulusCorrelation(n_shuffles)
