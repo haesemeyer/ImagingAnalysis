@@ -1314,7 +1314,7 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, interpolate=False
         counter = 0
         while len(centers) < nRegions * 10:
             counter += 1
-            if counter > nRegions * 200:
+            if counter > nRegions * 500:
                 break
             x = np.random.randint(0, sum_stack.shape[1])
             y = np.random.randint(0, sum_stack.shape[2])
@@ -1345,6 +1345,9 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, interpolate=False
                 for y in range(ys, c[1]+radius+1):
                     r.append((x, y))
             regions.append(r)
+        if len(regions) == 0:
+            print("DID NOT IDENTIFY A SINGLE REGION")
+            return []
         rs = GetRegionSeries(regions, sum_stack)
         # we want to keep regions that contain signal (i.e maximum value > radius**2) and whose standard deviation
         # is the largest
@@ -1374,6 +1377,8 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, interpolate=False
         sum_stack[i, :, :] = np.sum(preStack[i * 21:(i + 1) * 21, :, :], 0)
     if regions is None:
         regions = IdentifyRegions()
+    if len(regions) == 0:
+        return None, None, None
     pre_series = GetRegionSeries(regions, sum_stack)
     exp_series = GetRegionSeries(regions, expStack)
     sl_indices = np.arange(pre_series.shape[1])
@@ -1419,8 +1424,11 @@ def MedianPostMatch(preStack, expStack, nRegions=25, radius=5, interpolate=False
     all_slices = np.zeros((nIter, expStack.shape[0]))
     for i in range(nIter):
         s = PostMatchSlices(preStack, expStack, nRegions, radius, interpolate)[0]
-        all_slices[i, :] = s
-    return np.median(all_slices, 0), np.median(np.abs(np.median(all_slices, 0)-all_slices), 0)
+        if s is not None:
+            all_slices[i, :] = s
+        else:
+            all_slices[i, :] = np.nan
+    return np.nanmedian(all_slices, 0), np.nanmedian(np.abs(np.nanmedian(all_slices, 0)-all_slices), 0)
 
 
 def ZCorrectTrace(preStack, slice_locations, timeseries, vertices):
