@@ -215,8 +215,16 @@ def tryZCorrect(graphs, eyemask=None):
 
 
 if __name__ == "__main__":
+    interpol_freq = 5  # the frequency to which we interpolate before analysis
+    s_stim = 60
+    n_stim = s_stim * interpol_freq  # the number of stimulus frames at interpol_freq
+    s_post = 75
+    n_post = s_post * interpol_freq
+
     n_repeats = int(input("Please enter the number of repeats:"))  # the number of repeats performed in each plane
-    n_pre = int(input("Please enter the number of pre-frames:"))
+    s_pre = int(input("Please enter the number of pre-seconds:"))
+    n_pre = s_pre * interpol_freq
+    t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
     ans = ""
     while ans != 'n' and ans != 'y':
         ans = input("Load eye mask file? [y/n]:")
@@ -226,12 +234,8 @@ if __name__ == "__main__":
         mfile = UiGetFile([('Eye mask file', 'EYEMASK*')])
         eyemask = OpenStack(mfile)
 
-    n_hangoverFrames = 1  # the number of "extra" recorded frames at experiment end
-    # our quality score is actually problematic, especially on non-whole-brain data:
-    # 1) In focused regions such as the trigeminal, large activity spikes cause poor scores even in the absence of movement (manual check)
-    # 2) If the eyes are contained in the stack, as they can move within the agarose they can corrupt the score
-    # => Until better metric is found set to large value...
-    qual_cut = 0.1  # maximum quality score deviation to still consider graph valid
+    n_hangoverFrames = 0  # the number of "extra" recorded frames at experiment end - = 0 after interpolation
+
     n_shuffles = 200
     s_amp = 0.36  # sine amplitude relative to offset
 
@@ -248,9 +252,15 @@ if __name__ == "__main__":
         tryZCorrect(graphs, eyemask)
         graph_list += graphs
 
-    data = SOORepeatExperiment(np.vstack([g.RawTimeseries for g in graph_list]),
-                               np.vstack([g.PerFrameVigor for g in graph_list]),
-                               n_pre, 144, 180, n_repeats, graph_list[0].CaTimeConstant)
+    frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
+    # endpoint=False in the following call will remove hangover frame
+    interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
+    ipol = lambda y: np.interp(interp_times, frame_times, y)
+
+    data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
+                               np.vstack([ipol(g.PerFrameVigor) for g in graph_list]),
+                               n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
+                               nHangoverFrames=0, frameRate=interpol_freq)
 
     data.graph_info = [(g.SourceFile, g.V) for g in graph_list]
 
