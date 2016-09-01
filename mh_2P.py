@@ -516,7 +516,7 @@ class SOORepeatExperiment(ImagingData):
     """
     Represents a sine-on-off stimulation experiment with per-plane repeats
     """
-    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant):
+    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs):
         """
         Creates a new sine-on-off repeat experiment class
         Args:
@@ -535,9 +535,15 @@ class SOORepeatExperiment(ImagingData):
         self.nRepeats = nRepeats
         self.caTimeConstant = caTimeConstant
         # the following parameters would only very rarely change
-        self.nHangoverFrames = 1
+        if "nHangoverFrames" in kwargs:
+            self.nHangoverFrames = kwargs["nHangoverFrames"]
+        else:
+            self.nHangoverFrames = 1
         self.sine_amp = 0.51  # the amplitude of the sine-wave relativ to its offset
-        self.frameRate = 2.4  # the imaging framerate
+        if "frameRate" in kwargs:
+            self.frameRate = kwargs["frameRate"]
+        else:
+            self.frameRate = 2.4  # the imaging framerate
         self.stimFrequency = 0.1  # the sine stimulus frequency in Hz
         self.stimOn = np.array([])
         self.stimOff = np.array([])
