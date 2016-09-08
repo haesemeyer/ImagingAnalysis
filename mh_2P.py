@@ -732,6 +732,17 @@ class SOORepeatExperiment(ImagingData):
             se_shuff[:, i] = self.stimEffect(r)
         return se_real, np.mean(se_shuff, 1), np.std(se_shuff, 1)
 
+    def computeVarianceQualScore(self):
+        l = self.RawData.shape[1]
+        if (l - self.nHangoverFrames) % self.nRepeats != 0:
+            raise ValueError("Can't divide timeseries into the given number of repeats")
+        repLen = (l - self.nHangoverFrames) // self.nRepeats
+        byBlock = np.reshape(self.RawData[:, :l - self.nHangoverFrames],
+                             (self.RawData.shape[0], repLen, self.nRepeats), order='F')
+        var_blockAvg = np.var(np.mean(byBlock, 2), 1)
+        avg_blockVar = np.mean(np.var(byBlock, 1), 1)
+        return var_blockAvg / avg_blockVar
+
     @staticmethod
     def aggregate(timeseries):
         return ImagingData.computeRepeatAverage(timeseries, 2, 0)
