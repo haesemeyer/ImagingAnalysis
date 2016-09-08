@@ -717,9 +717,9 @@ class SOORepeatExperiment(ImagingData):
         m_pre = np.mean(pre, 1)
         stim = byBlock[:, self.preFrames:, :]
         m_stim = np.mean(stim, 1)
-        d_pre = np.std(pre, (1, 2))
-        d_ps = np.abs(np.mean(m_pre - m_stim, 1))
-        return d_ps / d_pre
+        d_pre = np.std(pre, 1)
+        d_ps = np.abs(m_pre - m_stim)
+        return np.mean(d_ps / d_pre, 1)
 
     def computeStimulusEffect(self, nrolls):
         se_real = self.stimEffect(self.RawData)
