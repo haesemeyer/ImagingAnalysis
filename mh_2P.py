@@ -656,6 +656,26 @@ class SOORepeatExperiment(ImagingData):
         ang_atStim = np.angle(rfft[:, ix])
         return rfft, freqs, mag_atStim, mfrac_atStim, ang_atStim
 
+    def computeStimulusLocking(self):
+        """
+        For each unit computes the magnitude fraction at the stimulus frequency during stimulation over the magnitude
+        at the stimulus frequency during the pre-stimulation period. Data is repeat-averaged but not aggregated
+        """
+        avg = self.repeatAveragedTimeseries(self.nRepeats, self.nHangoverFrames)
+        stim = avg[:, self.preFrames+self.stimFFTGap:self.preFrames+self.stimFrames]
+        pre = avg[:, self.stimFFTGap:self.preFrames]
+        rfft_stim, freqs_stim = self.computeTraceFourierTransform(self.meanSubtract(stim), self.frameRate/8,
+                                                                  self.frameRate)
+        ix_stim = np.argmin(np.absolute(self.stimFrequency - freqs_stim))
+        mag_atStim_stim = np.absolute(rfft_stim[:, ix_stim]) / rfft_stim.shape[1]
+        # mfrac_stimPeriod = mag_atStim_stim / np.sum(np.absolute(rfft_stim), 1)
+        rfft_pre, freqs_pre = self.computeTraceFourierTransform(self.meanSubtract(pre), self.frameRate / 8,
+                                                                self.frameRate)
+        ix_pre = np.argmin(np.absolute(self.stimFrequency - freqs_pre))
+        mag_atStim_pre = np.absolute(rfft_pre[:, ix_pre]) / rfft_pre.shape[1]
+        # mfrac_prePeriod = mag_atStim_pre / np.sum(np.absolute(rfft_pre), 1)
+        return np.nan_to_num(mag_atStim_stim - mag_atStim_pre)
+
     def computeFourierFractionShuffles(self, nrolls, aggregate=True):
         """
         Computes shuffle mean and standard deviation of the fourier magnitude fraction at the stimulus frequency
