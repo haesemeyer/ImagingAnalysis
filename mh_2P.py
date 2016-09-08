@@ -850,21 +850,26 @@ class TailData:
         else:
             return self.bouts[:, 0].astype(int), self.bouts[:, 1].astype(int)
 
-    def FrameBoutStarts(self, image_freq):
+    @property
+    def FrameBoutStarts(self):
         """
         Returns a convolved per-frame bout-start trace
             image_freq: Imaging frequency
         """
         if self.bouts is None:
             return None
-        bf = self.boutFrames.astype(int)
-        bf = bf[bf != -1]
-        starting = np.zeros(self.scanFrame.max()+1)
-        for s in bf:
-            # loop to allow double bouts in one frame to be counted
-            starting[s] += 1.0
-        frameKernel = TailData.CaKernel(self.ca_timeconstant, image_freq)
-        return np.convolve(starting, frameKernel, mode='full')[:starting.size]
+        bs = self.bouts[:, 0].astype(int)
+        starting = np.zeros(self.vigor.size)
+        starting[bs] = 1
+        conv_starting = np.convolve(starting, self.ca_kernel, mode='full')[:starting.size]
+        # collect all valid scan-frames
+        sf = np.unique(self.scanFrame)
+        sf = sf[sf != -1]
+        sf = np.sort(sf)
+        per_f_s = np.zeros(sf.size)
+        for i, s in enumerate(sf):
+            per_f_s[i] = np.mean(conv_starting[self.scanFrame == s])
+        return per_f_s
 
     def PlotBouts(self):
         bs, be = self.BoutStartsEnds
