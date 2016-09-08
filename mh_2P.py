@@ -799,15 +799,18 @@ class TailData:
         self.cumAngles = np.rad2deg(fileData[:, 2])
         # self.RemoveTrackErrors()
         self.vigor = Vigor(self.cumAngles, 8)
-        self.bouts = mb.DetectTailBouts(self.cumAngles, threshold=10, frameRate=frameRate, vigor=self.vigor)
+        # compute vigor bout threshold
+        t = np.mean(self.vigor[self.vigor < 25]) + 2*np.std(self.vigor[self.vigor < 25])
+        print("Vigor threshold = ", t)
+        self.bouts = mb.DetectTailBouts(self.cumAngles, threshold=t, frameRate=frameRate, vigor=self.vigor)
         if self.bouts is not None and self.bouts.size == 0:
             self.bouts = None
-        if not self.bouts is None:
+        if self.bouts is not None:
             bs = self.bouts[:, 0].astype(int)
             self.boutFrames = self.scanFrame[bs]
         else:
             self.boutFrames = []
-        self.ca_kernel = TailData.CaKernel(ca_timeconstant,frameRate)
+        self.ca_kernel = TailData.CaKernel(ca_timeconstant, frameRate)
         self.ca_timeconstant = ca_timeconstant
         self.frameRate = frameRate
         # compute tail velocities based on 10-window filtered cumulative angle trace
