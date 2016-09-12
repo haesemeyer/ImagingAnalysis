@@ -2,7 +2,7 @@
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment
-from mh_2P import MedianPostMatch, ZCorrectTrace
+from mh_2P import MedianPostMatch, ZCorrectTrace, TailDataDict
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -216,14 +216,14 @@ def tryZCorrect(graphs, eyemask=None):
 
 if __name__ == "__main__":
     interpol_freq = 5  # the frequency to which we interpolate before analysis
-    s_stim = 60
-    n_stim = s_stim * interpol_freq  # the number of stimulus frames at interpol_freq
     s_post = 75
     n_post = s_post * interpol_freq
 
     n_repeats = int(input("Please enter the number of repeats:"))  # the number of repeats performed in each plane
     s_pre = int(input("Please enter the number of pre-seconds:"))
     n_pre = s_pre * interpol_freq
+    s_stim = int(input("Please enter the number of stimulus-seconds:"))
+    n_stim = s_stim * interpol_freq  # the number of stimulus frames at interpol_freq
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
     ans = ""
     while ans != 'n' and ans != 'y':
@@ -252,17 +252,27 @@ if __name__ == "__main__":
         tryZCorrect(graphs, eyemask)
         graph_list += graphs
 
+    tdd = TailDataDict(graph_list[0].CaTimeConstant)
+    # add frame bout start trace to graphs if required
+    for g in graph_list:
+        if hasattr(g, 'BoutStartTrace'):
+            continue
+        tdata = tdd[g.SourceFile]
+        g.BoutStartTrace = tdata.PerFrameVigor
+
     frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
     # endpoint=False in the following call will remove hangover frame
     interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
     ipol = lambda y: np.interp(interp_times, frame_times, y)
 
     data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
-                               np.vstack([ipol(g.PerFrameVigor) for g in graph_list]),
+                               np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
                                n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
                                nHangoverFrames=0, frameRate=interpol_freq)
 
     data.graph_info = [(g.SourceFile, g.V) for g in graph_list]
+    data.original_time_per_frame = t_per_frame
+
 
     ts_avg = data.repeatAveragedTimeseries(data.nRepeats, data.nHangoverFrames)
     motor_correlation, m_sh_mc, std_sh_mc = data.motorCorrelation(n_shuffles)
