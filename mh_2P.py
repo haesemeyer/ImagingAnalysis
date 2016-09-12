@@ -1215,6 +1215,7 @@ def ReAlign(stack, maxShift):
             target = (0, size)
         return source, target
 
+    maxShift = int(maxShift)
     x_shifts = np.zeros(stack.shape[0])
     y_shifts = np.zeros_like(x_shifts)
     re_aligned = stack.copy()
