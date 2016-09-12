@@ -908,7 +908,39 @@ class TailData:
         return k
 
 
-#TailData
+# TailData
+
+
+class TailDataDict:
+
+    def __init__(self, ca_timeConstant=1.796, frameRate=100):
+        self._td_dict = dict()
+        self.ca_timeConstant = ca_timeConstant
+        self.frameRate = frameRate
+
+    def __getitem__(self, item):
+        if type(item) != str:
+            raise TypeError('Indexer needs to be string (filename)')
+        if len(item) > 4 and item[-4:] == 'tail':
+            tf = item
+        else:
+            tf = self.tailFile(item)
+        if tf in self._td_dict:
+            return self._td_dict[tf]
+        else:
+            try:
+                td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate)
+            except:
+                raise KeyError('Could not find taildata for file')
+            if td is None:
+                raise KeyError('Could not find taildata for file')
+            self._td_dict[tf] = td
+            return td
+
+    @staticmethod
+    def tailFile(tif_name):
+        return tif_name[:-6]+'.tail'
+# TailDataDict
 
 
 def UiGetFile(filetypes=[('Tiff stack', '.tif;.tiff')], multiple=False):
