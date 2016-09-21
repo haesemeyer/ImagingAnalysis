@@ -2,7 +2,7 @@
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment
-from mh_2P import MedianPostMatch, ZCorrectTrace, TailDataDict
+from mh_2P import MedianPostMatch, ZCorrectTrace, TailDataDict, SLHRepeatExperiment
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -225,6 +225,13 @@ if __name__ == "__main__":
     s_stim = int(input("Please enter the number of stimulus-seconds:"))
     n_stim = s_stim * interpol_freq  # the number of stimulus frames at interpol_freq
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
+    ans = ""
+    is_lo_hi = False
+    while ans != 'n' and ans != 'y':
+        ans = input("Is this a lo hi experiment? [y/n]:")
+    if ans == 'y':
+        is_lo_hi = True
+
     ans = ""
     while ans != 'n' and ans != 'y':
         ans = input("Load eye mask file? [y/n]:")
