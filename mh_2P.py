@@ -748,6 +748,70 @@ class SOORepeatExperiment(ImagingData):
         return ImagingData.computeRepeatAverage(timeseries, 2, 0)
 
 
+class SLHRepeatExperiment(SOORepeatExperiment):
+    """
+    Represents a sine-on-off stimulation experiment with per-plane repeats in which the first
+    on stimuli during the post phase are at average sine stimulus strength and the second at
+    maximum sine stimulus strength
+    """
+    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs):
+        """
+        Creates a new sine-on-off lo-hi repeat experiment class
+        Args:
+            imagingData: Imaging data across all units (rows)
+            swimVigor: Swim vigor matrix
+            preFrames: Number of pre-stimulus frames
+            stimFrames: Number of stimulus frames
+            postFrames: Number of post-stimulus frames
+            nRepeats: Number of per-plane repeats
+            caTimeConstant: The time-constant of the used calcium indicator
+        """
+        super().__init__(imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs)
+
+    def computeStimulusRegressors(self):
+        """
+        Computes all relevant stimulus reqgressors and assigns them to the class can be called after
+        class parameters were changed
+        """
+        post_start = self.preFrames + self.stimFrames
+        step_len = int(15 * self.frameRate)
+        rep_len = (self.RawData.shape[1] - self.nHangoverFrames) // self.nRepeats
+        stimOn = np.zeros(rep_len, dtype=np.float32)
+        sine_frames = np.arange(post_start - self.preFrames)
+        sine_time = sine_frames / self.frameRate
+        stimOn[self.preFrames:post_start] = 1 + self.sine_amp * np.sin(sine_time * 2 * np.pi * self.stimFrequency)
+        stimOn[post_start + step_len:post_start + 2 * step_len] = 1
+        stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1 + self.sine_amp
+        # expand by number of repetitions and add hangover frame(s)
+        stimOn = np.tile(stimOn, self.nRepeats)
+        stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
+        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
+        # half-time inferred to be: 891 ms
+        # => time-constant beta = 0.778
+        # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
+        # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
+        # and b) additional heat-sinking by microscope objective
+        # alpha obviously not determined
+        # to simplify import, use same convolution method as for calcium kernel instead of temperature
+        # prediction.
+        stimOn = CaConvolve(stimOn, 0.891, self.frameRate)
+        # derive transient regressors, then convolve
+        transOn = np.r_[0, np.diff(stimOn)]
+        transOn[transOn < 0] = 0
+        transOff = np.r_[0, np.diff(-1*stimOn)]
+        transOff[transOff < 0] = 0
+        stimOn = CaConvolve(stimOn, self.caTimeConstant, self.frameRate)
+        stimOn = (stimOn / stimOn.max()).astype(np.float32)
+        transOn = CaConvolve(transOn, self.caTimeConstant, self.frameRate)
+        transOn = (transOn / transOn.max()).astype(np.float32)
+        transOff = CaConvolve(transOff, self.caTimeConstant, self.frameRate)
+        transOff = (transOff / transOff.max()).astype(np.float32)
+        stimOff = 1 - stimOn
+        self.stimOn = stimOn
+        self.stimOff = stimOff
+        self.transOn = transOn
+        self.transOff = transOff
+
 
 class PixelGraph:
 
