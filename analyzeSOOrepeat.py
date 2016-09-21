@@ -262,24 +262,30 @@ if __name__ == "__main__":
     tdd = TailDataDict(graph_list[0].CaTimeConstant)
     # add frame bout start trace to graphs if required
     for g in graph_list:
-        if hasattr(g, 'BoutStartTrace'):
+        if hasattr(g, 'BoutStartTrace') and g.BoutStartTrace is not None:
             continue
         tdata = tdd[g.SourceFile]
-        g.BoutStartTrace = tdata.PerFrameVigor
+        g.BoutStartTrace = tdata.FrameBoutStarts
 
     frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
     # endpoint=False in the following call will remove hangover frame
     interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
     ipol = lambda y: np.interp(interp_times, frame_times, y)
-
-    data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
-                               np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
-                               n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
-                               nHangoverFrames=0, frameRate=interpol_freq)
+    if is_lo_hi:
+        data = SLHRepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
+                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+                                   n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
+                                   nHangoverFrames=0, frameRate=interpol_freq)
+    else:
+        data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
+                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+                                   n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
+                                   nHangoverFrames=0, frameRate=interpol_freq)
 
     data.graph_info = [(g.SourceFile, g.V) for g in graph_list]
     data.original_time_per_frame = t_per_frame
 
+    # stop
 
     ts_avg = data.repeatAveragedTimeseries(data.nRepeats, data.nHangoverFrames)
     motor_correlation, m_sh_mc, std_sh_mc = data.motorCorrelation(n_shuffles)
