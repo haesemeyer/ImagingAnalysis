@@ -924,7 +924,9 @@ class TailData:
             image_freq: Imaging frequency
         """
         if self.bouts is None:
-            return None
+            sf = np.unique(self.scanFrame)
+            sf = sf[sf != -1]
+            return np.zeros(sf.size)
         bs = self.bouts[:, 0].astype(int)
         starting = np.zeros(self.vigor.size)
         starting[bs] = 1
