@@ -1456,9 +1456,9 @@ def PostMatchSlices(preStack, expStack, nRegions=25, radius=5, interpolate=False
         # sequentially pick non-overlapping region centers - in first pass three times as many as nRegions
         centers = []
         counter = 0
-        while len(centers) < nRegions * 10:
+        while len(centers) < nRegions * 20:
             counter += 1
-            if counter > nRegions * 500:
+            if counter > nRegions * 1000:
                 break
             x = np.random.randint(0, sum_stack.shape[1])
             y = np.random.randint(0, sum_stack.shape[2])
