@@ -512,13 +512,14 @@ class ImagingData:
         return rft, freqs
 
 
-class SOORepeatExperiment(ImagingData):
+class RepeatExperiment(ImagingData):
     """
-    Represents a sine-on-off stimulation experiment with per-plane repeats
+    Represents any experiment with a per-plane repeated structure and a defined
+    set of stimulus and motor regressors
     """
     def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs):
         """
-        Creates a new sine-on-off repeat experiment class
+        Creates a new RepeatExperiment
         Args:
             imagingData: Imaging data across all units (rows)
             swimVigor: Swim vigor matrix
@@ -544,45 +545,11 @@ class SOORepeatExperiment(ImagingData):
             self.frameRate = kwargs["frameRate"]
         else:
             self.frameRate = 2.4  # the imaging framerate
-        self.stimFrequency = 0.1  # the sine stimulus frequency in Hz
         self.stimOn = np.array([])
         self.stimOff = np.array([])
-        self.stimFFTGap = int(self.frameRate * 20)
-        # construct our stimulus regressors
-        self.computeStimulusRegressors()
 
     def computeStimulusRegressors(self):
-        """
-        Computes all relevant stimulus reqgressors and assigns them to the class can be called after
-        class parameters were changed
-        """
-        post_start = self.preFrames + self.stimFrames
-        step_len = int(15 * self.frameRate)
-        rep_len = (self.RawData.shape[1] - self.nHangoverFrames) // self.nRepeats
-        stimOn = np.zeros(rep_len, dtype=np.float32)
-        sine_frames = np.arange(post_start - self.preFrames)
-        sine_time = sine_frames / self.frameRate
-        stimOn[self.preFrames:post_start] = 1 + self.sine_amp * np.sin(sine_time * 2 * np.pi * self.stimFrequency)
-        stimOn[post_start + step_len:post_start + 2 * step_len] = 1
-        stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1
-        # expand by number of repetitions and add hangover frame(s)
-        stimOn = np.tile(stimOn, self.nRepeats)
-        stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
-        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
-        # half-time inferred to be: 891 ms
-        # => time-constant beta = 0.778
-        # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
-        # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
-        # and b) additional heat-sinking by microscope objective
-        # alpha obviously not determined
-        # to simplify import, use same convolution method as for calcium kernel instead of temperature
-        # prediction.
-        stimOn = CaConvolve(stimOn, 0.891, self.frameRate)
-        stimOn = CaConvolve(stimOn, self.caTimeConstant, self.frameRate)
-        stimOn = (stimOn / stimOn.max()).astype(np.float32)
-        stimOff = 1 - stimOn
-        self.stimOn = stimOn
-        self.stimOff = stimOff
+        pass
 
     def onStimulusCorrelation(self, nrolls):
         """
@@ -626,6 +593,115 @@ class SOORepeatExperiment(ImagingData):
 
             """
         return super().motorCorrelation(nrolls, self.preFrames//3, self.RawData.shape[1]-self.preFrames//3)
+
+    def stimEffect(self, trace):
+        """
+        Computes the repeat-average difference of average activity between stimulus and pre-stimulus periods as a
+        fraction of pre-stimulus standard deviations
+        """
+        l = trace.shape[1]
+        if (l - self.nHangoverFrames) % self.nRepeats != 0:
+            raise ValueError("Can't divide timeseries into the given number of repeats")
+        repLen = (l - self.nHangoverFrames) // self.nRepeats
+        byBlock = np.reshape(trace[:, :l - self.nHangoverFrames], (trace.shape[0], repLen, self.nRepeats), order='F')
+        pre = byBlock[:, :self.preFrames, :]
+        m_pre = np.mean(pre, 1)
+        stim = byBlock[:, self.preFrames:, :]
+        m_stim = np.mean(stim, 1)
+        d_pre = np.std(pre, 1)
+        d_ps = np.abs(m_pre - m_stim)
+        return np.mean(d_ps / d_pre, 1)
+
+    def computeStimulusEffect(self, nrolls):
+        se_real = self.stimEffect(self.RawData)
+        if nrolls < 2:
+            return se_real, None, None
+        rolls = np.random.randint(self.preFrames//3, self.RawData.shape[1]-self.preFrames//3, nrolls)
+        se_shuff = np.zeros((self.RawData.shape[0], nrolls), dtype=np.float32)
+        for i in range(nrolls):
+            r = np.roll(self.RawData, rolls[i], 1)
+            se_shuff[:, i] = self.stimEffect(r)
+        return se_real, np.mean(se_shuff, 1), np.std(se_shuff, 1)
+
+    def computeVarianceQualScore(self):
+        l = self.RawData.shape[1]
+        if (l - self.nHangoverFrames) % self.nRepeats != 0:
+            raise ValueError("Can't divide timeseries into the given number of repeats")
+        repLen = (l - self.nHangoverFrames) // self.nRepeats
+        byBlock = np.reshape(self.RawData[:, :l - self.nHangoverFrames],
+                             (self.RawData.shape[0], repLen, self.nRepeats), order='F')
+        var_blockAvg = np.var(np.mean(byBlock, 2), 1)
+        avg_blockVar = np.mean(np.var(byBlock, 1), 1)
+        return var_blockAvg / avg_blockVar
+
+
+class SOORepeatExperiment(RepeatExperiment):
+    """
+    Represents a sine-on-off stimulation experiment with per-plane repeats
+    """
+    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs):
+        """
+        Creates a new sine-on-off repeat experiment class
+        Args:
+            imagingData: Imaging data across all units (rows)
+            swimVigor: Swim vigor matrix
+            preFrames: Number of pre-stimulus frames
+            stimFrames: Number of stimulus frames
+            postFrames: Number of post-stimulus frames
+            nRepeats: Number of per-plane repeats
+            caTimeConstant: The time-constant of the used calcium indicator
+        """
+        super().__init__(imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs)
+        self.stimFrequency = 0.1  # the sine stimulus frequency in Hz
+        self.transOn = np.array([])
+        self.transOff = np.array([])
+        self.stimFFTGap = int(self.frameRate * 20)
+        # construct our stimulus regressors
+        self.computeStimulusRegressors()
+
+    def computeStimulusRegressors(self):
+        """
+        Computes all relevant stimulus reqgressors and assigns them to the class can be called after
+        class parameters were changed
+        """
+        post_start = self.preFrames + self.stimFrames
+        step_len = int(15 * self.frameRate)
+        rep_len = (self.RawData.shape[1] - self.nHangoverFrames) // self.nRepeats
+        stimOn = np.zeros(rep_len, dtype=np.float32)
+        sine_frames = np.arange(post_start - self.preFrames)
+        sine_time = sine_frames / self.frameRate
+        stimOn[self.preFrames:post_start] = 1 + self.sine_amp * np.sin(sine_time * 2 * np.pi * self.stimFrequency)
+        stimOn[post_start + step_len:post_start + 2 * step_len] = 1
+        stimOn[post_start + 3 * step_len:post_start + 4 * step_len] = 1
+        # expand by number of repetitions and add hangover frame(s)
+        stimOn = np.tile(stimOn, self.nRepeats)
+        stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
+        # NOTE: heating half-time inferred from phase shift observed in "responses" in pure RFP stack
+        # half-time inferred to be: 891 ms
+        # => time-constant beta = 0.778
+        # NOTE: If correct, this means that heating kinetics in this set-up are about half way btw. freely
+        # swimming kinetics and kinetics in the embedded setup. Maybe because of a) much more focuses beam
+        # and b) additional heat-sinking by microscope objective
+        # alpha obviously not determined
+        # to simplify import, use same convolution method as for calcium kernel instead of temperature
+        # prediction.
+        stimOn = CaConvolve(stimOn, 0.891, self.frameRate)
+        # derive transient regressors, then convolve
+        transOn = np.r_[0, np.diff(stimOn)]
+        transOn[transOn < 0] = 0
+        transOff = np.r_[0, np.diff(-1*stimOn)]
+        transOff[transOff < 0] = 0
+        stimOn = CaConvolve(stimOn, self.caTimeConstant, self.frameRate)
+        stimOn = (stimOn / stimOn.max()).astype(np.float32)
+        transOn = CaConvolve(transOn, self.caTimeConstant, self.frameRate)
+        transOn = (transOn / transOn.max()).astype(np.float32)
+        transOff = CaConvolve(transOff, self.caTimeConstant, self.frameRate)
+        transOff = (transOff / transOff.max()).astype(np.float32)
+        stimOff = 1 - stimOn
+        self.stimOn = stimOn
+        self.stimOff = stimOff
+        self.transOn = transOn
+        self.transOff = transOff
 
     def computeFourierMetrics(self, aggregate=True):
         """
@@ -702,46 +778,6 @@ class SOORepeatExperiment(ImagingData):
             s = np.sum(np.absolute(rfft), 1)
             mfracs[:, i] = mas / s
         return np.mean(mfracs, 1), np.std(mfracs, 1)
-
-    def stimEffect(self, trace):
-        """
-        Computes the repeat-average difference of average activity between stimulus and pre-stimulus periods as a
-        fraction of pre-stimulus standard deviations
-        """
-        l = trace.shape[1]
-        if (l - self.nHangoverFrames) % self.nRepeats != 0:
-            raise ValueError("Can't divide timeseries into the given number of repeats")
-        repLen = (l - self.nHangoverFrames) // self.nRepeats
-        byBlock = np.reshape(trace[:, :l - self.nHangoverFrames], (trace.shape[0], repLen, self.nRepeats), order='F')
-        pre = byBlock[:, :self.preFrames, :]
-        m_pre = np.mean(pre, 1)
-        stim = byBlock[:, self.preFrames:, :]
-        m_stim = np.mean(stim, 1)
-        d_pre = np.std(pre, 1)
-        d_ps = np.abs(m_pre - m_stim)
-        return np.mean(d_ps / d_pre, 1)
-
-    def computeStimulusEffect(self, nrolls):
-        se_real = self.stimEffect(self.RawData)
-        if nrolls < 2:
-            return se_real, None, None
-        rolls = np.random.randint(self.preFrames//3, self.RawData.shape[1]-self.preFrames//3, nrolls)
-        se_shuff = np.zeros((self.RawData.shape[0], nrolls), dtype=np.float32)
-        for i in range(nrolls):
-            r = np.roll(self.RawData, rolls[i], 1)
-            se_shuff[:, i] = self.stimEffect(r)
-        return se_real, np.mean(se_shuff, 1), np.std(se_shuff, 1)
-
-    def computeVarianceQualScore(self):
-        l = self.RawData.shape[1]
-        if (l - self.nHangoverFrames) % self.nRepeats != 0:
-            raise ValueError("Can't divide timeseries into the given number of repeats")
-        repLen = (l - self.nHangoverFrames) // self.nRepeats
-        byBlock = np.reshape(self.RawData[:, :l - self.nHangoverFrames],
-                             (self.RawData.shape[0], repLen, self.nRepeats), order='F')
-        var_blockAvg = np.var(np.mean(byBlock, 2), 1)
-        avg_blockVar = np.mean(np.var(byBlock, 1), 1)
-        return var_blockAvg / avg_blockVar
 
     @staticmethod
     def aggregate(timeseries):
