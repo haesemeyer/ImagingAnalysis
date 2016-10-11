@@ -849,6 +849,53 @@ class SLHRepeatExperiment(SOORepeatExperiment):
         self.transOff = transOff
 
 
+class HeatPulseExperiment(RepeatExperiment):
+    """
+    Represents an experiment with heat-pulse presentation during stimulus phase
+    10s base current, followed by 350ms 0 current followed by 300ms peak current
+    and subsequent return to baseline
+    """
+
+    def __init__(self, imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs):
+        super().__init__(imagingData, swimVigor, preFrames, stimFrames, postFrames, nRepeats, caTimeConstant, **kwargs)
+        if "baseCurrent" in kwargs:
+            self.baseCurrent = kwargs["baseCurrent"]
+        else:
+            self.baseCurrent = 71  # mW at coll output for 700 mA current
+        if "peakCurrent" in kwargs:
+            self.peakCurrent = kwargs["peakCurrent"]
+        else:
+            self.peakCurrent = 280  # mW at coll output for 2000 mA current
+        self.computeStimulusRegressors()
+
+    def computeStimulusRegressors(self):
+        rep_len = (self.RawData.shape[1] - self.nHangoverFrames) // self.nRepeats
+        rep_time = rep_len / self.frameRate
+        # first create regressor at 1000Hz then interpolate down
+        stimOn = np.zeros(int(rep_time * 1000), dtype=np.float32)
+        pre_time = self.preFrames / self.frameRate
+        stim_time = self.stimFrames / self.frameRate
+        stimOn[int(pre_time*1000) : int((pre_time+stim_time)*1000)] = self.baseCurrent
+        baseTime = 1000 * 10
+        troughStart = int(pre_time*1000 + baseTime)
+        troughEnd = troughStart + 350
+        peakEnd = troughEnd + 300
+        stimOn[troughStart:troughEnd] = 0
+        stimOn[troughEnd:peakEnd] = self.peakCurrent
+        # interpolate back to actual time
+        i_time = np.arange(rep_len) / self.frameRate
+        stimOn = np.interp(i_time, np.arange(stimOn.size)/1000, stimOn)
+        # expand by number of repetitions and add hangover frame(s)
+        stimOn = np.tile(stimOn, self.nRepeats)
+        stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
+        stimOn = CaConvolve(stimOn, 0.891, self.frameRate)  # convert to temp
+        stimOn = CaConvolve(stimOn, self.caTimeConstant, self.frameRate)  # convert to calcium transient
+        stimOn = (stimOn / stimOn.max()).astype(np.float32)  # normalize
+        stimOff = 1 - stimOn
+        self.stimOn = stimOn
+        self.stimOff = stimOff
+
+
 class PixelGraph:
 
     def __init__(self,id):
