@@ -1,7 +1,7 @@
 # file to analyze 2-photon imaging data from sine-on-off experiments with repeat presentation
 # unit graphs should have been constructed and saved before using analyzeStack.py script
 
-from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment
+from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, HeatPulseExperiment
 from mh_2P import MedianPostMatch, ZCorrectTrace, TailDataDict, SLHRepeatExperiment
 import numpy as np
 import matplotlib.pyplot as pl
@@ -216,21 +216,25 @@ def tryZCorrect(graphs, eyemask=None):
 
 if __name__ == "__main__":
     interpol_freq = 5  # the frequency to which we interpolate before analysis
-    s_post = 75
-    n_post = s_post * interpol_freq
+
 
     n_repeats = int(input("Please enter the number of repeats:"))  # the number of repeats performed in each plane
     s_pre = int(input("Please enter the number of pre-seconds:"))
     n_pre = s_pre * interpol_freq
     s_stim = int(input("Please enter the number of stimulus-seconds:"))
     n_stim = s_stim * interpol_freq  # the number of stimulus frames at interpol_freq
+    try:
+        s_post = int(input("Please enter the number of post-seconds or press enter for 75:"))
+    except:
+        print("Assuming default value of 75s")
+        s_post = 75
+    n_post = s_post * interpol_freq
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
     ans = ""
-    is_lo_hi = False
-    while ans != 'n' and ans != 'y':
-        ans = input("Is this a lo hi experiment? [y/n]:")
-    if ans == 'y':
-        is_lo_hi = True
+
+    exp_type = int(input("Experiment type: SOORepeat [0], LoHi [1], HeatPulse[2]"))
+    if exp_type < 0 or exp_type > 2:
+        raise ValueError("Invalid experiment type selected")
 
     ans = ""
     while ans != 'n' and ans != 'y':
@@ -271,13 +275,18 @@ if __name__ == "__main__":
     # endpoint=False in the following call will remove hangover frame
     interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
     ipol = lambda y: np.interp(interp_times, frame_times, y)
-    if is_lo_hi:
+    if exp_type == 1:
         data = SLHRepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
                                    np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
                                    n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
                                    nHangoverFrames=0, frameRate=interpol_freq)
-    else:
+    elif exp_type == 0:
         data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
+                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+                                   n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
+                                   nHangoverFrames=0, frameRate=interpol_freq)
+    elif exp_type == 2:
+        data = HeatPulseExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
                                    np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
                                    n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
                                    nHangoverFrames=0, frameRate=interpol_freq)
