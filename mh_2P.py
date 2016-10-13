@@ -944,8 +944,9 @@ class TailData:
         if np.sum(self.scanFrame == maxFrame) < 0.75*avgCount:
             self.scanFrame[self.scanFrame == maxFrame] = -1
         self.cumAngles = np.rad2deg(fileData[:, 2])
-        # self.RemoveTrackErrors()
-        self.vigor = Vigor(self.cumAngles, 8)
+        self.ca_original = self.cumAngles.copy()
+        self.RemoveTrackErrors()
+        self.vigor = Vigor(self.cumAngles, 6)  # just below the number of our minimum bout frames (8)
         # compute vigor bout threshold
         t = np.mean(self.vigor[self.vigor < 25]) + 2*np.std(self.vigor[self.vigor < 25])
         print("Vigor threshold = ", t)
@@ -969,13 +970,17 @@ class TailData:
         """
         If part of the agarose gel boundary is visible in the frame
         the tracker will occasionally latch onto it for single frames.
-        Tries to detect this instances and corrects them
+        Tries to detect these instances and corrects them
         """
-        for i in range(1,self.cumAngles.size-1):
+        vicinity = np.array([-2, -1, 1, 2])
+        for i in range(2, self.cumAngles.size-2):
             d_pre = self.cumAngles[i] - self.cumAngles[i-1]
             d_post = self.cumAngles[i+1] - self.cumAngles[i]
-            if (d_pre>45 and d_post<-45) or (d_pre<-45 and d_post>45):# the current point is surrounded by two similar cumulative angles that are both 45 degrees away in the same direction
-                if np.abs(self.cumAngles[i-1] - self.cumAngles[i+1]) < 10:# the angles before and after the current point are similar
+            # the current point is surrounded by two similar cumulative angles
+            # that are both 45 degrees away in the same direction
+            if (d_pre > 30 and d_post < -30) or (d_pre < -30 and d_post > 30):
+                # the angles in the vicinity of the current point are similar
+                if np.ptp(self.cumAngles[vicinity+i]) < 10:
                     self.cumAngles[i] = (self.cumAngles[i-1] + self.cumAngles[i+1])/2
 
     @property
