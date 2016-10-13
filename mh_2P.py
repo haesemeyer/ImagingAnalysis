@@ -1688,6 +1688,6 @@ def ZCorrectTrace(preStack, slice_locations, timeseries, vertices):
         preValues += preStack[:, v[0], v[1]]
     preValues /= preValues.max()
     f_interp = interp1d(sl_indices, preValues)
-    corrector = np.array([f_interp(s) for s in slice_locations])
+    corrector = f_interp(slice_locations)  # np.array([f_interp(s) for s in slice_locations])
     corrector = gaussian_filter(corrector, 1)
     return timeseries / corrector
