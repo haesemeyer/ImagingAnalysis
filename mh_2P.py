@@ -1094,6 +1094,10 @@ class TailDataDict:
     @staticmethod
     def tailFile(tif_name):
         return tif_name[:-6]+'.tail'
+
+    @property
+    def fileNames(self):
+        return self._td_dict.keys()
 # TailDataDict
 
 
