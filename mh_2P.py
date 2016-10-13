@@ -938,7 +938,7 @@ class TailData:
         # and the isScanning indicator will not immediately switch off. Therefore, if
         # the highest index frame has less than 75% of the average per-index frame-number
         # set it to -1 as well
-        c = Counter(self.scanFrame[self.scanFrame!=-1])
+        c = Counter(self.scanFrame[self.scanFrame != -1])
         avgCount = np.mean(list(c.values()))
         maxFrame = np.max(self.scanFrame)
         if np.sum(self.scanFrame == maxFrame) < 0.75*avgCount:
@@ -965,6 +965,17 @@ class TailData:
         fca = lfilter(np.ones(10)/10, 1, self.cumAngles)
         self.velocity = np.hstack((0, np.diff(fca)))
         self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
+        # compute a time-trace assuming a constant frame-rate which starts at 0
+        # for the first camera frame during the first acquisition frame
+        frames = np.arange(self.cumAngles.size)
+        first_frame = np.min(frames[frames != -1])
+        frames -= first_frame
+        self.frameTime = (frames / frameRate).astype(np.float32)
+        # create bout-start trace at original frame-rate
+        self.starting = np.zeros_like(self.frameTime)
+        if self.bouts is not None:
+            self.starting[self.bouts[:, 0].astype(int)] = 1
+
 
     def RemoveTrackErrors(self):
         """
@@ -1006,6 +1017,14 @@ class TailData:
             return self.bouts[:, 0].astype(int), self.bouts[:, 1].astype(int)
 
     @property
+    def ConvolvedStarting(self):
+        """
+        Returns a convolved version of the camera frame-rate
+        bout start trace
+        """
+        return np.convolve(self.starting, self.ca_kernel, mode='full')[:self.starting.size]
+
+    @property
     def FrameBoutStarts(self):
         """
         Returns a convolved per-frame bout-start trace
@@ -1015,10 +1034,7 @@ class TailData:
             sf = np.unique(self.scanFrame)
             sf = sf[sf != -1]
             return np.zeros(sf.size)
-        bs = self.bouts[:, 0].astype(int)
-        starting = np.zeros(self.vigor.size)
-        starting[bs] = 1
-        conv_starting = np.convolve(starting, self.ca_kernel, mode='full')[:starting.size]
+        conv_starting = self.ConvolvedStarting
         # collect all valid scan-frames
         sf = np.unique(self.scanFrame)
         sf = sf[sf != -1]
