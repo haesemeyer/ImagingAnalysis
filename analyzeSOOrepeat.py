@@ -214,6 +214,23 @@ def tryZCorrect(graphs, eyemask=None):
         g.RawTimeseries = ZCorrectTrace(sum_stack, sl, g.RawTimeseries, g.V)
 
 
+def frameBoutStarts(expData):
+    done = dict()
+    starts = []
+    for i in range(expData.Vigor.shape[0]):
+        name = expData.graph_info[i][0]
+        if name in done:
+            continue
+        done[name] = True
+        tdata = tdd[name]
+        bstarts = tdata.starting
+        times = tdata.frameTime
+        digitized = np.digitize(times, i_t)
+        t = np.array([bstarts[digitized == i].sum() for i in range(1, interp_times.size + 1)])
+        starts.append(t)
+    return np.vstack(starts)
+
+
 if __name__ == "__main__":
     interpol_freq = 5  # the frequency to which we interpolate before analysis
 
