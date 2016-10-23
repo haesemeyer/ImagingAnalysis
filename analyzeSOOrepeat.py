@@ -282,31 +282,52 @@ if __name__ == "__main__":
 
     tdd = TailDataDict(graph_list[0].CaTimeConstant)
     # add frame bout start trace to graphs if required
-    for g in graph_list:
-        if hasattr(g, 'BoutStartTrace') and g.BoutStartTrace is not None:
-            continue
-        tdata = tdd[g.SourceFile]
-        g.BoutStartTrace = tdata.FrameBoutStarts
+    # for g in graph_list:
+    #     # if hasattr(g, 'BoutStartTrace') and g.BoutStartTrace is not None:
+    #     #    continue
+    #     tdata = tdd[g.SourceFile]
+    #     g.BoutStartTrace = tdata.FrameBoutStarts
 
     frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
     # endpoint=False in the following call will remove hangover frame
     interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
-    ipol = lambda y: np.interp(interp_times, frame_times, y)
+
+    # interpolate calcium data
+    ipol = lambda y: np.interp(interp_times, frame_times, y[:frame_times.size])
+    interp_data = np.vstack([ipol(g.RawTimeseries) for g in graph_list])
+
+    # interpolate convolved bout starts (means interpolating down from original 100Hz trace)
+    traces = dict()
+    bstarts = []
+    # for binning, we want to have one more subdivision of the times and include the endpoint - later each time-bin
+    # will correspond to one timepoint in interp_times above
+    i_t = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats + 1, endpoint=True)
+    for g in graph_list:
+        if g.SourceFile not in traces:
+            tdata = tdd[g.SourceFile]
+            conv_bstarts = tdata.ConvolvedStarting
+            times = tdata.frameTime
+            digitized = np.digitize(times, i_t)
+            t = np.array([conv_bstarts[digitized == i].sum() for i in range(1, interp_times.size+1)])
+            traces[g.SourceFile] = t
+        bstarts.append(traces[g.SourceFile])
+    interp_starts = np.vstack(bstarts)
+
     if exp_type == 1:
-        data = SLHRepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
-                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+        data = SLHRepeatExperiment(interp_data,
+                                   interp_starts,
                                    n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
                                    nHangoverFrames=0, frameRate=interpol_freq)
     elif exp_type == 0:
-        data = SOORepeatExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
-                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+        data = SOORepeatExperiment(interp_data,
+                                   interp_starts,
                                    n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
                                    nHangoverFrames=0, frameRate=interpol_freq)
     elif exp_type == 2:
-        data = HeatPulseExperiment(np.vstack([ipol(g.RawTimeseries) for g in graph_list]),
-                                   np.vstack([ipol(g.BoutStartTrace) for g in graph_list]),
+        data = HeatPulseExperiment(interp_data,
+                                   interp_starts,
                                    n_pre, n_stim, n_post, n_repeats, graph_list[0].CaTimeConstant,
-                                   nHangoverFrames=0, frameRate=interpol_freq)
+                                   nHangoverFrames=0, frameRate=interpol_freq, baseCurrent=0)
 
     data.graph_info = [(g.SourceFile, g.V) for g in graph_list]
     data.original_time_per_frame = t_per_frame
