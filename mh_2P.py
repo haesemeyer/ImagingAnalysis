@@ -877,14 +877,13 @@ class HeatPulseExperiment(RepeatExperiment):
         stim_time = self.stimFrames / self.frameRate
         stimOn[int(pre_time*1000) : int((pre_time+stim_time)*1000)] = self.baseCurrent
         baseTime = 1000 * 10
-        troughStart = int(pre_time*1000 + baseTime)
-        troughEnd = troughStart + 350
-        peakEnd = troughEnd + 300
-        stimOn[troughStart:troughEnd] = 0
-        stimOn[troughEnd:peakEnd] = self.peakCurrent
-        # interpolate back to actual time
-        i_time = np.arange(rep_len) / self.frameRate
-        stimOn = np.interp(i_time, np.arange(stimOn.size)/1000, stimOn)
+        peakStart = int(pre_time*1000 + baseTime)
+        peakEnd = peakStart + 500
+        stimOn[peakStart:peakEnd] = self.peakCurrent
+        # bin back to actual time
+        i_time = np.arange(rep_len+1) / self.frameRate
+        digitized = np.digitize(np.arange(stimOn.size)/1000, i_time)
+        stimOn = np.array([[stimOn[digitized == i].mean() for i in range(1, i_time.size)]])
         # expand by number of repetitions and add hangover frame(s)
         stimOn = np.tile(stimOn, self.nRepeats)
         stimOn = np.append(stimOn, np.zeros((self.nHangoverFrames, 1), dtype=np.float32))
