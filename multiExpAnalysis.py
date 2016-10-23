@@ -226,22 +226,64 @@ if __name__ == "__main__":
         is_pot_stim = np.r_[is_pot_stim, ips]
         if i == 0:
             all_activity = data.RawData
+            all_motor = data.Vigor
         else:
             all_activity = np.r_[all_activity, data.RawData]
+            all_motor = np.r_[all_motor, data.Vigor]
         p = data.computeFourierMetrics()[4]
         stim_phase = np.r_[stim_phase, p]
+
     # compute correlation matrix of all time-series data
     corr_mat = np.corrcoef(all_activity[is_pot_stim, :])
-    # get all cells that have at least 10 other cells with a timeseries R2>0.5 and are spread
-    # across at least 2 experiments
+    # plot correlation heatmap sorted by number of correlated companions
+    fig, ax = pl.subplots()
+    sns.heatmap(corr_mat[:250, :250], xticklabels=50, yticklabels=50, ax=ax)
+    pl.title('Cell to cell signal correlations examples')
+
+    # generate plot of number of cells to analyze for different "other cell" and "n experiment" criteria
+    n_exp_to_test = [0, 1, 2, 3, 4, 5]
+    n_cells_to_test = list(range(30))
+    exp_above = np.zeros((len(n_exp_to_test), corr_mat.shape[1]))
+    cells_above = np.zeros((len(n_cells_to_test), corr_mat.shape[1]))
+    for i, net in enumerate(n_exp_to_test):
+        exp_above[i, :] = n_exp_r2_above_thresh(corr_mat, 0.5, exp_id[is_pot_stim]) >= net
+    for i, nct in enumerate(n_cells_to_test):
+        cells_above[i, :] = n_r2_above_thresh(corr_mat, 0.5) >= nct
+
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        for i, net in enumerate(n_exp_to_test):
+            n_remain = []
+            for j, nct in enumerate(n_cells_to_test):
+                n_remain.append(np.sum(np.logical_and(exp_above[i, :], cells_above[j, :])) / corr_mat.shape[0])
+            ax.plot(n_cells_to_test, n_remain, 'o', label="At least "+str(net)+" other fish")
+        ax.set_xlabel('Number of other cells with $R^2$ > 0.5')
+        ax.set_ylabel('Fraction of stimulus cells to analyze')
+        ax.set_xlim(-0.2)
+        ax.set_yscale('log')
+        ax.legend()
+
+    # get all cells that have at least 19 other cells with a timeseries R2>0.5 and are spread
+    # across at least 3 experiments
     exp_g_1 = n_exp_r2_above_thresh(corr_mat, 0.5, exp_id[is_pot_stim]) > 2
     c_g_9 = n_r2_above_thresh(corr_mat, 0.5) > 19
     to_analyze = np.logical_and(exp_g_1, c_g_9)
     analysis_data = all_activity[is_pot_stim, :][to_analyze, :]
+    # marks, which of all units where used to derive regressors
+    discovery_unit_marker = np.zeros(all_activity.shape[0], dtype=bool)
+    discovery_unit_marker[is_pot_stim] = to_analyze
+
+    del corr_mat
+
+    # remove NaN containing traces from activity and motor matrix
+    no_nan_aa = np.sum(np.isnan(all_activity), 1) == 0
+    all_activity = all_activity[no_nan_aa, :]
+    all_motor = all_motor[no_nan_aa, :]
+    discovery_unit_marker = discovery_unit_marker[no_nan_aa]
 
     # analyze per-experiment swim vigors
-    all_expVigors = np.vstack([np.mean(expVigor(data), 0) for data in exp_data])
-    all_expVigors = all_expVigors / np.mean(all_expVigors, 1, keepdims=True)
+    # all_expVigors = np.vstack([np.mean(expVigor(data), 0) for data in exp_data])
+    # all_expVigors = all_expVigors / np.mean(all_expVigors, 1, keepdims=True)
 
     # TODO: The following is experiment specific - needs cleanup!
     avg_analysis_data = np.zeros((analysis_data.shape[0], analysis_data.shape[1] // 3))
@@ -250,5 +292,227 @@ if __name__ == "__main__":
     avg_analysis_data += analysis_data[:, 825*2:]
     norm_data = avg_analysis_data/np.percentile(avg_analysis_data, 20, 1, keepdims=True)  # F/F0
     # Note: currently we anyway normalize in NonNegMatFact so normalization above kinda useless
-    nnmf, fit, fildata = nnmf, fit, fildata = NonNegMatFact(norm_data, 5, 5)
+    n_regs = 10  # extract 5 components for our regressors
+    nnmf, fit, fildata = NonNegMatFact(norm_data, 5, n_regs)
     W = np.array(nnmf.W)  # cells / components weight matrix
+    H = np.array(nnmf.H)
+    # plot connectivity matrix - which timepoints are encoded similarly
+    fix, ax = pl.subplots()
+    sns.heatmap(nnmf.connectivity(), xticklabels=50, yticklabels=50, cmap='bone_r', ax=ax)
+    ax.set_title('Time connectivity')
+
+    # extract our stimulus regressors by aggresively thresholding at the 95th percentile for weights
+    # also plot the corresponding cluster means
+    reg_orig = np.empty((analysis_data.shape[1], n_regs))
+    time = np.arange(reg_orig.shape[0]) / 5
+    for i in range(n_regs):
+        cut = np.percentile(W[:, i], 95)
+        reg_orig[:, i] = np.mean(dff(analysis_data[W[:, i] >= cut, :]), 0)
+    # copy regressors and sort by correlation to data.stimOn - since we expect this to be most prevalent group
+    reg_trans = reg_orig.copy()
+    c = np.array([np.corrcoef(reg_orig[:, i], data.stimOn)[0, 1] for i in range(n_regs)])
+    reg_trans = reg_trans[:, np.argsort(c)[::-1]]
+
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        for i in range(n_regs):
+            lab = 'Cluster ' + str(i)
+            ax.plot(time, reg_trans[:, i], label=lab)
+        ax.legend(loc=2)
+        ax.set_title('Stimulus based clusters')
+        ax.set_xlabel('Time [s]')
+        ax.set_ylabel('dF/ F0')
+
+    # create matrix, that for each unit contains its correlation to each regressor as well as to the plane's motor reg
+    reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1))
+    for i in range(all_activity.shape[0]):
+        for j in range(n_regs):
+            reg_corr_mat[i, j] = np.corrcoef(all_activity[i, :], reg_trans[:, j])[0, 1]
+        reg_corr_mat[i, -1] = np.corrcoef(all_activity[i, :], all_motor[i, :])[0, 1]
+
+    reg_corr_mat[np.abs(reg_corr_mat) < 0.5] = 0
+    no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
+    reg_corr_mat = reg_corr_mat[no_nan, :]
+
+    # plot regressor correlation matrix - all units no clustering
+    fig, ax = pl.subplots()
+    sns.heatmap(reg_corr_mat, vmin=-1, vmax=1, center=0, yticklabels=50000)
+    ax.set_title('Regressor correlations, thresholded at 0.5')
+
+    # remove all rows that don't have at least one above-threshold correlation
+    ab_thresh = np.sum(reg_corr_mat > 0, 1) > 0
+    reg_corr_mat = reg_corr_mat[ab_thresh, :]
+
+    from sklearn.cluster import KMeans
+    km = KMeans(n_clusters=10)
+    km.fit(reg_corr_mat)
+    # plot sorted by cluster identity
+    fig, ax = pl.subplots()
+    sns.heatmap(reg_corr_mat[np.argsort(km.labels_), :], vmin=-1, vmax=1, center=0, yticklabels=2500)
+    # plot cluster boundaries
+    covered = 0
+    for i in range(km.n_clusters):
+        covered += np.sum(km.labels_ == i)
+        ax.plot([0, n_regs+1], [km.labels_.size-covered, km.labels_.size-covered], 'k')
+    ax.set_title('Above threshold correlations clustered and sorted')
+
+    # determine which fraction of each cluster is made up of the units initially picked for regressor estimations
+    dum = discovery_unit_marker[no_nan][ab_thresh]
+    cluster_contrib = []
+    for i in range(km.n_clusters):
+        cluster_contrib.append([np.sum(dum[km.labels_ == i]) / np.sum(km.labels_ == i)])
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        sns.barplot(data=cluster_contrib, ax=ax)
+
+    # run gram-schmitt process
+
+    def project(u, v):
+        """
+        Projects the vector v orthogonally onto the line spanned by u
+        """
+        return np.dot(v, u)/np.dot(u, u)*u
+
+    def gram_schmidt(v, *args):
+        """
+        Transforms the vector v into a vector that is orthogonal to each vector
+        in args and has unit length
+        """
+        start = v
+        for u in args:
+            start -= project(u, v)
+        return start / np.linalg.norm(start)
+
+    all_u = []
+    orthonormals = np.empty_like(reg_trans)
+    for i in range(n_regs):
+        v = reg_trans[:, i].copy()
+        if i == 0:
+            orthonormals[:, 0] = v / np.linalg.norm(v)
+            all_u.append(orthonormals[:, 0])
+        else:
+            orthonormals[:, i] = gram_schmidt(v, *all_u)
+            all_u.append(orthonormals[:, i])
+
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        for i in range(n_regs):
+            lab = 'Regressor ' + str(i)
+            ax.plot(time, orthonormals[:, i], label=lab)
+        ax.legend(loc=2)
+        ax.set_title('Stimulus based orthogonal regressors')
+        ax.set_xlabel('Time [s]')
+        ax.set_ylabel('dF/ F0')
+
+    # perform linear regression using the stimulus regressors
+    from sklearn.linear_model import LinearRegression
+    lr = LinearRegression()
+    lr.fit(orthonormals, all_activity.T)
+    # compute residuals and mean-distance - re-transpose to original shape
+    residuals = (all_activity.T - (np.dot(orthonormals, lr.coef_.T) + lr.intercept_)).T
+    mean_dist = all_activity - np.mean(all_activity, 1, keepdims=True)
+    # compute R2 values
+    r2_sensory_fit = 1 - np.sum(residuals**2, 1) / np.sum(mean_dist**2, 1)
+    del residuals
+    del mean_dist
+    # recompute regressions unit-by-unit (should be done plane-by-plane for efficiency!!!) with motor regressors
+    # NOTE: As null distribution maybe a version with shuffled (wrong-plane) motor regressors could be computed!
+    r2_sensory_motor_fit = []
+    for i in range(all_activity.shape[0]):
+        mot_reg = gram_schmidt(all_motor[i, :], *all_u)
+        regs = np.c_[orthonormals, mot_reg]
+        if np.any(np.isnan(regs)):
+            r2_sensory_motor_fit.append(0)
+        else:
+            lr.fit(regs, all_activity[i, :])
+            r2_sensory_motor_fit.append(lr.score(regs, all_activity[i, :]))
+    r2_sensory_motor_fit = np.array(r2_sensory_motor_fit)
+
+    r2_sensory_motor_shuffle = []
+    for i in range(all_activity.shape[0]):
+        shift = np.random.randint(50000, 100000)
+        pick = (i + shift) % all_motor.shape[0]
+        mot_reg = gram_schmidt(all_motor[pick, :], *all_u)
+        regs = np.c_[orthonormals, mot_reg]
+        if np.any(np.isnan(regs)):
+            r2_sensory_motor_shuffle.append(0)
+        else:
+            lr.fit(regs, all_activity[i, :])
+            r2_sensory_motor_shuffle.append(lr.score(regs, all_activity[i, :]))
+
+    r2_sensory_motor_shuffle = np.array(r2_sensory_motor_shuffle)
+
+    # compute confidence band based on shuffle
+    ci = 99
+    bedges = np.linspace(0, 1, 51)
+    bc = bedges[:-1] + np.diff(bedges)/2
+    conf = np.zeros(bc.size)
+    for i in range(bedges.size - 1):
+        all_in = np.logical_and(r2_sensory_fit >= bedges[i], r2_sensory_fit < bedges[i + 1])
+        if np.sum(all_in > 0):
+            conf[i] = np.percentile(r2_sensory_motor_shuffle[all_in], ci)
+        else:
+            conf[i] = np.nan
+
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        ax.scatter(r2_sensory_fit, r2_sensory_motor_shuffle, alpha=0.4, color='r', s=3)
+        ax.plot([0, 1], [0, 1], 'k--')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('$R^2$ Sensory regression')
+        ax.set_ylabel('$R^2$ Sensory + Motor regression')
+        ax.set_title('Shuffled motor regressor control')
+
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        ax.scatter(r2_sensory_fit, r2_sensory_motor_fit, alpha=0.4, s=3)
+        ax.plot([0, 1], [0, 1], 'k--')
+        # plot confidence band
+        ax.fill_between(bc, bc, conf, color='m', alpha=0.5)
+        ax.plot(bc, conf, 'm')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('$R^2$ Sensory regression')
+        ax.set_ylabel('$R^2$ Sensory + Motor regression')
+        ax.set_title('Boost of fit by including motor regressor')
+
+    # at various timeshifts of the motor regressor compute pure motor r2
+    t_shifts = [0, 1, 2, 5, 10, 20]
+    motor_shift_r2 = np.zeros((len(t_shifts), all_motor.shape[0]))
+    for i, ts in enumerate(t_shifts):
+        shifted = np.roll(all_motor, ts, 1)
+        for j in range(all_motor.shape[0]):
+            c = np.corrcoef(all_activity[j, :], shifted[j, :])[0, 1]**2
+            if not np.isnan(c):
+                motor_shift_r2[i, j] = c
+
+    r2_bins = np.linspace(0, 1, 20)
+    r2bc = r2_bins[:-1] + np.diff(r2_bins)/2
+    motor_shift_h = np.vstack([np.histogram(row, r2_bins)[0] for row in motor_shift_r2])
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        for i, ts in enumerate(t_shifts):
+            ax.plot(r2bc, motor_shift_h[i, :], label='Shift of ' + str(ts/5) + ' s')
+        ax.set_yscale('log')
+        ax.legend()
+        ax.set_xlabel('$R^2$ of motor correlation')
+        ax.set_ylabel('Count')
+
+    #REMOVE THE FOLLOWING LATER
+    eid = exp_id[no_nan_aa]
+    eid2 = eid[no_nan][ab_thresh]
+    fb = eid2 < 3
+    mhb = np.logical_and(eid2 > 2, eid2 < 8)
+    trig = eid2 > 7
+    region_mat = np.zeros((10, 3))
+    for i in range(10):
+        region_mat[i, 0] = np.sum(fb[km.labels_ == i])
+        region_mat[i, 1] = np.sum(mhb[km.labels_ == i])
+        region_mat[i, 2] = np.sum(trig[km.labels_ == i])
+    rm_norm = region_mat / np.sum(region_mat, 0, keepdims=True)
+    rm_norm = rm_norm / np.sum(rm_norm, 1, keepdims=True)
+    pl.figure()
+    sns.heatmap(rm_norm, cmap='bone_r', xticklabels=['FB', 'MB-HB', 'TG'])
+    pl.title('Contribution of "Brain regions" to clusters')
+
