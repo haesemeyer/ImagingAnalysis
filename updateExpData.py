@@ -12,7 +12,6 @@ def recomputeVigor(data):
     Args:
         data (RepeatExperiment): The data structure to update
     """
-    assert data is RepeatExperiment
     n_frames = (data.preFrames + data.stimFrames + data.postFrames) * data.nRepeats
     n_seconds = n_frames / data.frameRate
     tdd = TailDataDict()
