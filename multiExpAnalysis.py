@@ -14,7 +14,7 @@ def dff(fluomat):
     return(fluomat-f0)/f0
 
 
-def NonNegMatFact(rawData, frameRate, nComponents):
+def NonNegMatFact(rawData, frameRate, nComponents, beta=5e-4):
     # filter data with savitzky golay filter - polynomial order 3
     # win_len = int(2 * frameRate)
     # if win_len % 2 == 0:
@@ -25,8 +25,8 @@ def NonNegMatFact(rawData, frameRate, nComponents):
     fil_data -= np.min(fil_data, 1, keepdims=True)  # we need to ensure that no negative values present so true min used
     max99 = np.percentile(fil_data, 99, 1, keepdims=True)
     fil_data /= max99
-    snmf = nimfa.Snmf(fil_data, seed="random_vcol", rank=nComponents, max_iter=50, version="l", eta=-1, beta=5e-4,
-                      i_conv=10, w_min_change=0)
+    snmf = nimfa.Nmf(fil_data, seed="random_vcol", rank=nComponents, max_iter=100, n_run=30,
+                     update='divergence', objective='div')
     return snmf, snmf(), fil_data
 
 
