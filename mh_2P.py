@@ -939,7 +939,7 @@ class TailData:
         # the highest index frame has less than 75% of the average per-index frame-number
         # set it to -1 as well
         c = Counter(self.scanFrame[self.scanFrame != -1])
-        avgCount = np.mean(list(c.values()))
+        avgCount = np.median(list(c.values()))
         maxFrame = np.max(self.scanFrame)
         if np.sum(self.scanFrame == maxFrame) < 0.75*avgCount:
             self.scanFrame[self.scanFrame == maxFrame] = -1
@@ -966,9 +966,12 @@ class TailData:
         self.velocity = np.hstack((0, np.diff(fca)))
         self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
         # compute a time-trace assuming a constant frame-rate which starts at 0
-        # for the first camera frame during the first acquisition frame
+        # for the likely first camera frame during the first acquisition frame
+        # we infer this frame by going back avgCount frames from the first frame
+        # of the second (!) scan frame (i.e. this should then be the first frame
+        # of the first scan frame)
         frames = np.arange(self.cumAngles.size)
-        first_frame = np.min(frames[frames != -1])
+        first_frame = np.min(frames[self.scanFrame == 1]) - avgCount.astype(int)
         frames -= first_frame
         self.frameTime = (frames / frameRate).astype(np.float32)
         # create bout-start trace at original frame-rate
