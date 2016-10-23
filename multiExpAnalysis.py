@@ -63,7 +63,7 @@ def n_exp_r2_above_thresh(corr_mat, r2_thresh, exp_ids):
     return np.array([np.unique(exp_ids[above]).size-1 for above in corr_above])
 
 
-def MakeCorrelationGraphStack(experiment_data, corr_red, corr_green, corr_blue):
+def MakeCorrelationGraphStack(experiment_data, corr_red, corr_green, corr_blue, cutOff=0.5):
     def ZPIndex(fname):
         try:
             ix = int(fname[-8:-6])
@@ -86,15 +86,50 @@ def MakeCorrelationGraphStack(experiment_data, corr_red, corr_green, corr_blue):
             if gi[0] != sfn:
                 continue
             # this graph-info comes from the same plane, check if we corelate
-            if corr_red[j] > 0.5:
+            if corr_red[j] > cutOff:
                 for v in gi[1]:
                     projection[v[0], v[1], 0] = 1
-            if corr_green[j] > 0.5:
+            if corr_green[j] > cutOff:
                 for v in gi[1]:
                     projection[v[0], v[1], 1] = 1
-            if corr_blue[j] > 0.5:
+            if corr_blue[j] > cutOff:
                 for v in gi[1]:
                     projection[v[0], v[1], 2] = 1
+        z_stack[i, :, :, :] = projection
+    return z_stack
+
+
+def MakeMaskStack(experiment_data, col_red, col_green, col_blue, cutOff=0.0, scaleMax=1.0):
+    def ZPIndex(fname):
+        try:
+            ix = int(fname[-8:-6])
+        except ValueError:
+            ix = int(fname[-7:-6])
+        return ix
+
+    # rescale channels
+    col_red[col_red < cutOff] = 0
+    col_red /= scaleMax
+    col_red[col_red > 1] = 1
+    col_green[col_green < cutOff] = 0
+    col_green /= scaleMax
+    col_green[col_green > 1] = 1
+    col_blue[col_blue < cutOff] = 0
+    col_blue /= scaleMax
+    col_blue[col_blue > 1] = 1
+    stack_filenames = set([info[0] for info in experiment_data.graph_info])
+    stack_filenames = sorted(stack_filenames, key=ZPIndex)
+    z_stack = np.zeros((len(stack_filenames), 512, 512, 3))
+    for i, sfn in enumerate(stack_filenames):
+        projection = np.zeros((512, 512, 3), dtype=float)
+        for j, gi in enumerate(experiment_data.graph_info):
+            if gi[0] != sfn:
+                continue
+            # this graph-info comes from the same plane color according to our channel information
+            for v in gi[1]:
+                projection[v[0], v[1], 0] = col_red[j]
+                projection[v[0], v[1], 1] = col_green[j]
+                projection[v[0], v[1], 2] = col_blue[j]
         z_stack[i, :, :, :] = projection
     return z_stack
 
@@ -118,9 +153,44 @@ def MakeAndSaveMajorTypeStack(experiment_data):
     c_on[no_act] = 0
     c_off = np.array([np.corrcoef(experiment_data.stimOff, trace)[0, 1] for trace in experiment_data.RawData])
     c_off[no_act] = 0
-    c_ton = np.array([np.corrcoef(pot_tOn, trace)[0, 1] for trace in experiment_data.RawData])
-    c_ton[no_act] = 0
-    zstack = MakeCorrelationGraphStack(experiment_data, c_on, c_ton, c_off)
+    # c_ton = np.array([np.corrcoef(pot_tOn, trace)[0, 1] for trace in experiment_data.RawData])
+    # c_ton[no_act] = 0
+    zstack = MakeCorrelationGraphStack(experiment_data, c_on, c_on, c_off)
+    SaveProjectionStack(zstack)
+
+
+def MakeAndSaveRegressionStack(experiment_data):
+    global orthonormals
+    r2_vals = np.zeros(experiment_data.RawData.shape[0])
+    for i, row in enumerate(experiment_data.RawData):
+        if np.any(np.isnan(row)):
+            continue
+        lreg = LinearRegression()
+        lreg.fit(orthonormals, row)
+        r2_vals[i] = lreg.score(orthonormals, row)
+    zstack = MakeCorrelationGraphStack(experiment_data, r2_vals, np.zeros_like(r2_vals), np.zeros_like(r2_vals),
+                                       cutOff=0.6)
+    SaveProjectionStack(zstack)
+
+
+def MakeAndSaveROIStack(experiment_data):
+    """
+    Creates an ROI only (i.e. no gcamp background) stack of sensory driven units scaled by R2 in red
+    and motor driven units scaled by R2 in blue
+    """
+    global orthonormals
+    r2_sensory = np.zeros(experiment_data.RawData.shape[0])
+    r2_motor = np.zeros_like(r2_sensory)
+    for i, row in enumerate(experiment_data.RawData):
+        if np.any(np.isnan(row)):
+            continue
+        lreg = LinearRegression()
+        lreg.fit(orthonormals, row)
+        r2_sensory[i] = lreg.score(orthonormals, row)
+        if np.any(np.isnan(experiment_data.Vigor[i, :])):
+            continue
+        r2_motor[i] = np.corrcoef(experiment_data.Vigor[i, :], row)[0, 1]**2
+    zstack = MakeMaskStack(experiment_data, r2_sensory, np.zeros_like(r2_sensory), r2_motor, 0.5, 1.0)
     SaveProjectionStack(zstack)
 
 
