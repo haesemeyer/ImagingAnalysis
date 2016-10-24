@@ -31,7 +31,7 @@ def recomputeVigor(data):
         bstarts.append(traces[info[0]])
     vigor = np.vstack(bstarts)
     assert vigor.shape[0] == data.Vigor.shape[0] and vigor.shape[1] == data.Vigor.shape[1]
-    data.Vigor = vigor
+    data.Vigor = vigor.astype(np.float32)
 
 
 if __name__ == "__main__":
