@@ -356,6 +356,20 @@ if __name__ == "__main__":
         ax.plot([0, n_regs+1], [km.labels_.size-covered, km.labels_.size-covered], 'k')
     ax.set_title('Above threshold correlations clustered and sorted')
 
+    # create vector which for all units in all_activity marks their cluster label or -1 if not part of
+    # above threshold cluster - note: membership has same size as all originally combined data and should therefore
+    # allow to trace back the membership of each experimental timeseries however in order to be used as indexer
+    # into all_activity it first need to be reduced to membership[no_nan_aa]
+    membership = np.zeros(exp_id.size, dtype=np.int32)
+    membership[no_nan_aa][no_nan] = -1
+    membership[no_nan_aa][no_nan][np.logical_not(ab_thresh)] = -1
+    for lab in km.labels_:
+        membership[no_nan_aa][no_nan][ab_thresh][km.labels_ == lab] = lab
+    assert np.all(membership != 0)
+    assert membership.size == no_nan_aa.size
+    assert membership[no_nan_aa].size == all_activity.shape[0]
+    assert membership.size == sum([e.RawData.shape[0] for e in exp_data])
+
     # determine which fraction of each cluster is made up of the units initially picked for regressor estimations
     dum = discovery_unit_marker[no_nan][ab_thresh]
     cluster_contrib = []
