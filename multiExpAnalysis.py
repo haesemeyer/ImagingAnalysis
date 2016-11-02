@@ -272,7 +272,7 @@ if __name__ == "__main__":
         ax.set_yscale('log')
         ax.legend()
 
-    # get all cells that have at least 19 other cells with a timeseries R2>0.5 and are spread
+    # get all cells that have at least 20 other cells with a timeseries R2>0.5 and are spread
     # across at least 3 experiments
     exp_g_1 = n_exp_r2_above_thresh(corr_mat, 0.5, exp_id[is_pot_stim]) > 2
     c_g_9 = n_r2_above_thresh(corr_mat, 0.5) > 19
