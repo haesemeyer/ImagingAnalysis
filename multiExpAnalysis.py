@@ -321,16 +321,24 @@ if __name__ == "__main__":
     reg_trans = reg_orig.copy()
     c = np.array([np.corrcoef(reg_orig[:, i], data.stimOn)[0, 1] for i in range(n_regs)])
     reg_trans = reg_trans[:, np.argsort(c)[::-1]]
+    c = np.sort(c)[::-1]
 
     with sns.axes_style('whitegrid'):
-        fig, ax = pl.subplots()
+        fig, (ax_on, ax_off) = pl.subplots(ncols=2)
         for i in range(n_regs):
-            lab = 'Cluster ' + str(i)
-            ax.plot(time, reg_trans[:, i], label=lab)
-        ax.legend(loc=2)
-        ax.set_title('Stimulus based clusters')
-        ax.set_xlabel('Time [s]')
-        ax.set_ylabel('dF/ F0')
+            lab = 'Regressor ' + str(i)
+            if c[i] > 0:
+                ax_on.plot(time, reg_trans[:, i], label=lab)
+            else:
+                ax_off.plot(time, reg_trans[:, i], label=lab)
+        ax_on.legend(loc=2)
+        ax_off.legend(loc=2)
+        ax_on.set_title('ON type regressors')
+        ax_on.set_xlabel('Time [s]')
+        ax_on.set_ylabel('dF/ F0')
+        ax_off.set_title('OFF type regressors')
+        ax_off.set_xlabel('Time [s]')
+        ax_off.set_ylabel('dF/ F0')
 
     # create matrix, that for each unit contains its correlation to each regressor as well as to the plane's motor reg
     reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1))
@@ -343,13 +351,14 @@ if __name__ == "__main__":
     no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
     reg_corr_mat = reg_corr_mat[no_nan, :]
 
+    ab_thresh = np.sum(np.abs(reg_corr_mat > 0), 1) > 0
+
     # plot regressor correlation matrix - all units no clustering
     fig, ax = pl.subplots()
-    sns.heatmap(reg_corr_mat, vmin=-1, vmax=1, center=0, yticklabels=50000)
+    sns.heatmap(reg_corr_mat[np.argsort(ab_thresh)[::-1], :], vmin=-1, vmax=1, center=0, yticklabels=50000)
     ax.set_title('Regressor correlations, thresholded at 0.5')
 
     # remove all rows that don't have at least one above-threshold correlation
-    ab_thresh = np.sum(reg_corr_mat > 0, 1) > 0
     reg_corr_mat = reg_corr_mat[ab_thresh, :]
 
     from sklearn.cluster import KMeans
