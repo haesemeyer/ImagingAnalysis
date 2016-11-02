@@ -194,7 +194,7 @@ def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clus
     zstack = MakeMaskStack(experiment_data, (unit_cluster_ids == clusterNumber).astype(np.float32),
                            np.zeros(unit_cluster_ids.size), np.zeros(unit_cluster_ids.size), 0.5, 1.0)
     # recode and reformat zstack for nrrd saving
-    nrrdStack = np.zeros((zstack.shape[1], zstack.shape[2], zstack.shape[0]), dtype=np.uint8, order='F')
+    nrrdStack = np.zeros((zstack.shape[2], zstack.shape[1], zstack.shape[0]), dtype=np.uint8, order='F')
     for i in range(zstack.shape[0]):
         nrrdStack[:, :, i] = (zstack[i, :, :, 0]*255).astype(np.uint8).T
     header = MakeNrrdHeader(nrrdStack, 500/512/exp_zoom_factor)
