@@ -38,24 +38,24 @@ if __name__ == "__main__":
         # Realignment creates really bad artefacts in the 780nm RFP stacks whenever the eye is present - worse than
         # gcamp stacks
         stack = ReAlign(stack, 4 * zoom_level)[0]
-        np.save(f[:-4] + "_stack.npy", stack.astype(np.uint8))
+        if not is_ref:
+            np.save(f[:-4] + "_stack.npy", stack.astype(np.uint8))
         print("Stack realigned", flush=True)
 
         if is_ref:
             if i == 0:
-                z_stack = np.zeros((stack.shape[2], stack.shape[1], len(fnames)))
+                z_stack = np.zeros((stack.shape[2], stack.shape[1], len(fnames)), dtype=np.uint8)
             # for reference stacks use common cutoff and save whole stack into nrrd file:
             projection = np.mean(stack, 0)
             projection /= 0.75
             projection[projection > 1] = 1
             projection *= (2**8-1)
-            z_stack[:, :, i] = projection.T  # necessary otherwise x and y are switched
+            z_stack[:, :, i] = projection.T.astype(np.uint8)  # necessary otherwise x and y are switched
             if i == len(fnames)-1:
                 header = MakeNrrdHeader(z_stack, 500/512/zoom_level)
                 plane_mark = stackName.find('_Z_')
                 out_name = stackName[:plane_mark] + '.nrrd'
                 nrrd.write(save_dir + "/" + out_name, z_stack, header)
-            cv2.imwrite(save_dir + "/" + "MAX_" + stackName, projection.astype(np.uint8))
         else:
             projection = np.sum(stack, 0)
             projection = cutOutliers(projection, 99.9) * (2**16-1)
