@@ -442,7 +442,7 @@ if __name__ == "__main__":
     # NOTE: As null distribution maybe a version with shuffled (wrong-plane) motor regressors could be computed!
     r2_sensory_motor_fit = []
     for i in range(all_activity.shape[0]):
-        mot_reg = gram_schmidt(all_motor[i, :], *all_u)
+        mot_reg = gram_schmidt(all_motor[i, :].copy(), *all_u)
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
             r2_sensory_motor_fit.append(0)
@@ -455,7 +455,7 @@ if __name__ == "__main__":
     for i in range(all_activity.shape[0]):
         shift = np.random.randint(50000, 100000)
         pick = (i + shift) % all_motor.shape[0]
-        mot_reg = gram_schmidt(all_motor[pick, :], *all_u)
+        mot_reg = gram_schmidt(all_motor[pick, :].copy(), *all_u)
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
             r2_sensory_motor_shuffle.append(0)
