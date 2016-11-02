@@ -1709,3 +1709,28 @@ def ZCorrectTrace(preStack, slice_locations, timeseries, vertices):
     corrector = f_interp(slice_locations)  # np.array([f_interp(s) for s in slice_locations])
     corrector = gaussian_filter(corrector, 1)
     return timeseries / corrector
+
+
+def MakeNrrdHeader(stack, xy_size, z_size=2.5, unit='"microns"'):
+    """
+    Creates an Nrrd file header with the corresponding dimension information set
+    """
+    if stack.ndim != 3:
+        raise ValueError('Stack has to be 3D')
+    if stack.dtype != np.uint8:
+        raise ValueError('Stack has to be of type np.uint8')
+    header = dict()
+    header['dimension'] = stack.ndim
+    header['encoding'] = 'gzip'
+    header['keyvaluepairs'] = dict()
+    header['kinds'] = ['domain'] * 3
+    header['labels'] = ['"x"', '"y"', '"z"']
+    header['sizes'] = list(stack.shape)
+    header['space dimension'] = 3
+    header['space directions'] = [[str(xy_size), '0', '0'],
+                                  ['0', str(xy_size), '0'],
+                                  ['0', '0', str(z_size)]]
+    header['space origin'] = ['0', '0', '0']
+    header['space units'] = [unit] * 3
+    header['type'] = 'unsigned char'
+    return header
