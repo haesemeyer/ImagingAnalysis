@@ -360,12 +360,12 @@ if __name__ == "__main__":
     # above threshold cluster - note: membership has same size as all originally combined data and should therefore
     # allow to trace back the membership of each experimental timeseries however in order to be used as indexer
     # into all_activity it first need to be reduced to membership[no_nan_aa]
-    membership = np.zeros(exp_id.size, dtype=np.int32)
-    membership[no_nan_aa][no_nan] = -1
-    membership[no_nan_aa][no_nan][np.logical_not(ab_thresh)] = -1
-    for lab in km.labels_:
-        membership[no_nan_aa][no_nan][ab_thresh][km.labels_ == lab] = lab
-    assert np.all(membership != 0)
+    membership = np.zeros(exp_id.size, dtype=np.float32) - 1
+    temp_no_nan_aa = np.zeros(np.sum(no_nan_aa), dtype=np.float32) - 1
+    temp_no_nan = np.zeros(np.sum(no_nan), dtype=np.float32) - 1
+    temp_no_nan[ab_thresh] = km.labels_
+    temp_no_nan_aa[no_nan] = temp_no_nan
+    membership[no_nan_aa] = temp_no_nan_aa
     assert membership.size == no_nan_aa.size
     assert membership[no_nan_aa].size == all_activity.shape[0]
     assert membership.size == sum([e.RawData.shape[0] for e in exp_data])
