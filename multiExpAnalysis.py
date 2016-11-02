@@ -1,4 +1,5 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
+from mh_2P import MakeNrrdHeader
 import numpy as np
 import nimfa
 from scipy.signal import savgol_filter
@@ -7,10 +8,11 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 
 import pickle
-
+import nrrd
 
 def dff(fluomat):
     f0 = np.median(fluomat[:, :144], 1, keepdims=True)
+    f0[f0 == 0] = 0.1
     return(fluomat-f0)/f0
 
 
@@ -173,25 +175,32 @@ def MakeAndSaveRegressionStack(experiment_data):
     SaveProjectionStack(zstack)
 
 
-def MakeAndSaveROIStack(experiment_data):
+def GetExperimentBaseName(exp_data):
+    fullName = exp_data.graph_info[0][0]
+    plane_start = fullName.find('_Z_')
+    return fullName[:plane_start]
+
+
+def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clusterNumber):
     """
-    Creates an ROI only (i.e. no gcamp background) stack of sensory driven units scaled by R2 in red
-    and motor driven units scaled by R2 in blue
+    Creates ROI only (no anatomy background) stacks of all ROIs that belong
+    to the given clusterNumber
+    Args:
+        experiment_data: The experiment for which to save the stack
+        exp_zoom_factor: Zoom factor used during acquisition in order to save correct pixel sizes in nrrd file
+        unit_cluster_ids: For each unit in experiment data its cluster id
+        clusterNumber: The cluster number for which to create stack. If a list one stack per list will be saved
     """
-    global orthonormals
-    r2_sensory = np.zeros(experiment_data.RawData.shape[0])
-    r2_motor = np.zeros_like(r2_sensory)
-    for i, row in enumerate(experiment_data.RawData):
-        if np.any(np.isnan(row)):
-            continue
-        lreg = LinearRegression()
-        lreg.fit(orthonormals, row)
-        r2_sensory[i] = lreg.score(orthonormals, row)
-        if np.any(np.isnan(experiment_data.Vigor[i, :])):
-            continue
-        r2_motor[i] = np.corrcoef(experiment_data.Vigor[i, :], row)[0, 1]**2
-    zstack = MakeMaskStack(experiment_data, r2_sensory, np.zeros_like(r2_sensory), r2_motor, 0.5, 1.0)
-    SaveProjectionStack(zstack)
+    zstack = MakeMaskStack(experiment_data, (unit_cluster_ids == clusterNumber).astype(np.float32),
+                           np.zeros(unit_cluster_ids.size), np.zeros(unit_cluster_ids.size), 0.5, 1.0)
+    # recode and reformat zstack for nrrd saving
+    nrrdStack = np.zeros((zstack.shape[1], zstack.shape[2], zstack.shape[0]), dtype=np.uint8, order='F')
+    for i in range(zstack.shape[0]):
+        nrrdStack[:, :, i] = (zstack[i, :, :, 0]*255).astype(np.uint8).T
+    header = MakeNrrdHeader(nrrdStack, 500/512/exp_zoom_factor)
+    assert np.isfortran(nrrdStack)
+    out_name = GetExperimentBaseName(experiment_data) + '_C' + str(clusterNumber) + '.nrrd'
+    nrrd.write(out_name, nrrdStack, header)
 
 
 def expVigor(expData):
