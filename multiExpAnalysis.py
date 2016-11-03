@@ -356,7 +356,7 @@ if __name__ == "__main__":
 
     # plot regressor correlation matrix - all units no clustering
     fig, ax = pl.subplots()
-    sns.heatmap(reg_corr_mat[np.argsort(ab_thresh)[::-1], :], vmin=-1, vmax=1, center=0, yticklabels=50000)
+    sns.heatmap(reg_corr_mat[np.argsort(ab_thresh)[::-1], :], vmin=-1, vmax=1, center=0, yticklabels=75000)
     ax.set_title('Regressor correlations, thresholded at 0.5')
 
     # remove all rows that don't have at least one above-threshold correlation
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     km.fit(reg_corr_mat)
     # plot sorted by cluster identity
     fig, ax = pl.subplots()
-    sns.heatmap(reg_corr_mat[np.argsort(km.labels_), :], vmin=-1, vmax=1, center=0, yticklabels=2500)
+    sns.heatmap(reg_corr_mat[np.argsort(km.labels_), :], vmin=-1, vmax=1, center=0, yticklabels=5000)
     # plot cluster boundaries
     covered = 0
     for i in range(km.n_clusters):
