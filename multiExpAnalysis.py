@@ -324,15 +324,16 @@ if __name__ == "__main__":
     c = np.sort(c)[::-1]
 
     with sns.axes_style('whitegrid'):
-        fig, (ax_on, ax_off) = pl.subplots(ncols=2)
+        fig, ax_on = pl.subplots()
+        fig, ax_off = pl.subplots()
         for i in range(n_regs):
             lab = 'Regressor ' + str(i)
             if c[i] > 0:
                 ax_on.plot(time, reg_trans[:, i], label=lab)
             else:
                 ax_off.plot(time, reg_trans[:, i], label=lab)
-        ax_on.legend(loc=2)
-        ax_off.legend(loc=2)
+        # ax_on.legend(loc=2)
+        # ax_off.legend(loc=2)
         ax_on.set_title('ON type regressors')
         ax_on.set_xlabel('Time [s]')
         ax_on.set_ylabel('dF/ F0')
