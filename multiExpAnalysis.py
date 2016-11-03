@@ -414,7 +414,7 @@ if __name__ == "__main__":
         Transforms the vector v into a vector that is orthogonal to each vector
         in args and has unit length
         """
-        start = v
+        start = v.copy()
         for u in args:
             start -= project(u, v)
         return start / np.linalg.norm(start)
