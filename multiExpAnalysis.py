@@ -479,8 +479,8 @@ if __name__ == "__main__":
     r2_sensory_motor_shuffle = np.array(r2_sensory_motor_shuffle)
 
     # compute confidence band based on shuffle
-    ci = 99
-    bedges = np.linspace(0, 1, 51)
+    ci = 99.9
+    bedges = np.linspace(0, 1, 41)
     bc = bedges[:-1] + np.diff(bedges)/2
     conf = np.zeros(bc.size)
     for i in range(bedges.size - 1):
@@ -505,8 +505,8 @@ if __name__ == "__main__":
         ax.scatter(r2_sensory_fit, r2_sensory_motor_fit, alpha=0.4, s=3)
         ax.plot([0, 1], [0, 1], 'k--')
         # plot confidence band
-        ax.fill_between(bc, bc, conf, color='m', alpha=0.5)
-        ax.plot(bc, conf, 'm')
+        ax.fill_between(bc, bc, conf, color='orange', alpha=0.3)
+        ax.plot(bc, conf, 'orange')
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_xlabel('$R^2$ Sensory regression')
