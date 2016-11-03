@@ -351,7 +351,7 @@ if __name__ == "__main__":
     no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
     reg_corr_mat = reg_corr_mat[no_nan, :]
 
-    ab_thresh = np.sum(np.abs(reg_corr_mat > 0), 1) > 0
+    ab_thresh = np.sum(np.abs(reg_corr_mat) > 0, 1) > 0
 
     # plot regressor correlation matrix - all units no clustering
     fig, ax = pl.subplots()
