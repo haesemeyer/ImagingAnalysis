@@ -397,6 +397,9 @@ if __name__ == "__main__":
     with sns.axes_style('whitegrid'):
         fig, ax = pl.subplots()
         sns.barplot(data=cluster_contrib, ax=ax)
+        ax.set_xlabel('Cluster #')
+        ax.set_ylabel('Cluster fraction from discovery units')
+        ax.set_ylim(0, 1)
 
     # run gram-schmitt process
 
