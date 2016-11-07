@@ -535,6 +535,18 @@ if __name__ == "__main__":
         ax.set_xlabel('$R^2$ of motor correlation')
         ax.set_ylabel('Count')
 
+    with sns.axes_style('whitegrid'):
+        fig, ax = pl.subplots()
+        for i, ts in enumerate(t_shifts):
+            # if ts == 0:
+            #    continue
+            ax.hist(motor_shift_r2[i, :]-motor_shift_r2[0, :], bins=np.linspace(-1, 1, 100), histtype='step',
+                    lw=2, label='Shift of ' + str(ts/5) + ' s')
+        ax.set_yscale('log')
+        ax.legend()
+        ax.set_xlabel('Change in $R^2$ of motor correlation')
+        ax.set_ylabel('Count')
+
     #REMOVE THE FOLLOWING LATER
     eid = exp_id[no_nan_aa]
     eid2 = eid[no_nan][ab_thresh]
