@@ -1,5 +1,5 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
-from mh_2P import MakeNrrdHeader
+from mh_2P import MakeNrrdHeader, TailDataDict
 import numpy as np
 import nimfa
 from scipy.signal import savgol_filter
@@ -9,11 +9,39 @@ import seaborn as sns
 
 import pickle
 import nrrd
+import sys
+
+sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
+from mhba_basic import Crosscorrelation
+
 
 def dff(fluomat):
     f0 = np.median(fluomat[:, :144], 1, keepdims=True)
     f0[f0 == 0] = 0.1
     return(fluomat-f0)/f0
+
+
+def dist2next1(v):
+    """
+    Given v returns a vector of the same size
+    in which each 1 in v has been replaced by
+    the smallest element-wise distance to the
+    next neighboring 1
+    """
+    if type(v) is list:
+        v = np.array(v)
+    out = np.zeros(v.size, dtype=np.float32)
+    if np.sum(v) == 0:
+        return out
+    # get indices of each 1 in the array
+    ix1 = np.arange(v.size)[v > 0]
+    # for each one compute distances to neighboring 1s
+    d1 = np.r_[np.inf, np.diff(ix1), np.inf]
+    min_d1 = np.empty(ix1.size, dtype=np.float32)
+    for i in range(min_d1.size):
+        min_d1[i] = np.min(d1[i:i+2])
+    out[v > 0] = min_d1
+    return out
 
 
 def NonNegMatFact(rawData, frameRate, nComponents, beta=5e-4):
@@ -514,7 +542,7 @@ if __name__ == "__main__":
         ax.set_title('Boost of fit by including motor regressor')
 
     # at various timeshifts of the motor regressor compute pure motor r2
-    t_shifts = [0, 1, 2, 5, 10, 20]
+    t_shifts = [0, 2, 5, 10, 15, 20]
     motor_shift_r2 = np.zeros((len(t_shifts), all_motor.shape[0]))
     for i, ts in enumerate(t_shifts):
         shifted = np.roll(all_motor, ts, 1)
@@ -547,12 +575,75 @@ if __name__ == "__main__":
         ax.set_xlabel('Change in $R^2$ of motor correlation')
         ax.set_ylabel('Count')
 
+    # compute movement triggered averages of motor correlated units as cross-correlations - both for all bouts
+    # as well as by only taking bouts into account that are isolated, i.e. for which the frame distance to the next
+    # bout is at least 5 frames (1s)
+    def exp_bstarts(exp):
+        tdd = TailDataDict()
+        traces = dict()
+        bstarts = []
+        # for binning, we want to have one more subdivision of the times and include the endpoint - later each time-bin
+        # will correspond to one timepoint in interp_times above
+        i_t = np.linspace(0, exp.Vigor.shape[1] / 5, exp.Vigor.shape[1] + 1, endpoint=True)
+        try:
+            for gi in exp.graph_info:
+                if gi[0] not in traces:
+                    tdata = tdd[gi[0]]
+                    conv_bstarts = tdata.starting
+                    times = tdata.frameTime
+                    digitized = np.digitize(times, i_t)
+                    t = np.array([conv_bstarts[digitized == i].sum() for i in range(1, i_t.size)])
+                    traces[gi[0]] = t
+                bstarts.append(traces[gi[0]])
+            raw_starts = np.vstack(bstarts)
+        except KeyError:
+            # this is necessary since some of the older experiments have been moved!
+            return np.zeros_like(exp.Vigor)
+        return raw_starts
+    # for each unit extract the original bout-trace binned to our 5Hz timebase
+    raw_bstarts = np.vstack([exp_bstarts(e) for e in exp_data])
+    raw_bstarts = raw_bstarts[no_nan_aa, :]
+    max_lag = 25
+    cc_all_starts = []
+    cc_singular = []
+    ac_all_starts = []
+    ac_singular = []
+    # identify the cluster number of the motor cluster
+    mreg_corr_sums = [np.sum(reg_corr_mat[km.labels_ == l, -1]) for l in np.unique(km.labels_)]
+    mc_number = np.argmax(mreg_corr_sums)
+    for i in range(all_activity.shape[0]):
+        if membership[no_nan_aa][i] == mc_number and np.sum(raw_bstarts[i, :]) > 0:
+            cc_all_starts.append(Crosscorrelation(all_activity[i, :], raw_bstarts[i, :], max_lag))
+            ac_all_starts.append(Crosscorrelation(raw_bstarts[i, :], raw_bstarts[i, :], max_lag))
+            sing_starts = raw_bstarts[i, :].copy()
+            sing_starts[np.logical_not(np.logical_and(dist2next1(sing_starts) > 10, sing_starts < 2))] = 0
+            if sing_starts.sum() == 0:
+                continue
+            cc_singular.append(Crosscorrelation(all_activity[i, :], sing_starts, max_lag))
+            ac_singular.append(Crosscorrelation(sing_starts, sing_starts, max_lag))
+    # plot cross and auto-correlations
+    with sns.axes_style('whitegrid'):
+        fig, (ax_ac, ax_cc) = pl.subplots(ncols=2)
+        t = np.arange(-1*max_lag, max_lag+1) / 5
+        sns.tsplot(data=ac_all_starts, time=t, ci=99.9, ax=ax_ac, color='b')
+        sns.tsplot(data=ac_singular, time=t, ci=99.9, ax=ax_ac, color='r')
+        ax_ac.set_xlabel('Time lag around bout [s]')
+        ax_ac.set_ylabel('Auto-correlation')
+        ax_ac.set_title('Bout start auto-correlation')
+        sns.tsplot(data=cc_all_starts, time=t, ci=99.9, ax=ax_cc, color='b')
+        sns.tsplot(data=cc_singular, time=t, ci=99.9, ax=ax_cc, color='r')
+        ax_cc.set_xlabel('Time lag around bout [s]')
+        ax_cc.set_ylabel('Cross-correlation')
+        ax_cc.set_title('Bout start activity cross-correlation')
+        fig.tight_layout()
+
+
     #REMOVE THE FOLLOWING LATER
     eid = exp_id[no_nan_aa]
     eid2 = eid[no_nan][ab_thresh]
-    fb = eid2 < 3
-    mhb = np.logical_and(eid2 > 2, eid2 < 8)
-    trig = eid2 > 7
+    fb = eid2 < 11
+    mhb = np.logical_and(eid2 > 10, eid2 < 19)
+    trig = eid2 > 18
     region_mat = np.zeros((10, 3))
     for i in range(10):
         region_mat[i, 0] = np.sum(fb[km.labels_ == i])
