@@ -217,9 +217,19 @@ def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clus
         experiment_data: The experiment for which to save the stack
         exp_zoom_factor: Zoom factor used during acquisition in order to save correct pixel sizes in nrrd file
         unit_cluster_ids: For each unit in experiment data its cluster id
-        clusterNumber: The cluster number for which to create stack. If a list one stack per list will be saved
+        clusterNumber: The cluster number(s) for which to create stack. If a list all ROI's that belong to any of the
+        list's clusters will be marked
     """
-    zstack = MakeMaskStack(experiment_data, (unit_cluster_ids == clusterNumber).astype(np.float32),
+    selector = np.zeros(unit_cluster_ids.size)
+    id_string = ""
+    try:
+        for cn in clusterNumber:
+            selector = np.logical_or(selector, unit_cluster_ids == cn)
+            id_string = id_string + "_" + str(cn)
+    except TypeError:
+        selector = unit_cluster_ids == clusterNumber
+        id_string = str(clusterNumber)
+    zstack = MakeMaskStack(experiment_data, selector.astype(np.float32),
                            np.zeros(unit_cluster_ids.size), np.zeros(unit_cluster_ids.size), 0.5, 1.0)
     # recode and reformat zstack for nrrd saving
     nrrdStack = np.zeros((zstack.shape[2], zstack.shape[1], zstack.shape[0]), dtype=np.uint8, order='F')
@@ -227,7 +237,7 @@ def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clus
         nrrdStack[:, :, i] = (zstack[i, :, :, 0]*255).astype(np.uint8).T
     header = MakeNrrdHeader(nrrdStack, 500/512/exp_zoom_factor)
     assert np.isfortran(nrrdStack)
-    out_name = GetExperimentBaseName(experiment_data) + '_C' + str(clusterNumber) + '.nrrd'
+    out_name = GetExperimentBaseName(experiment_data) + '_C' + id_string + '.nrrd'
     nrrd.write(out_name, nrrdStack, header)
 
 
