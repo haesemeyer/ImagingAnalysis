@@ -299,9 +299,11 @@ if __name__ == "__main__":
     # compute correlation matrix of all time-series data
     corr_mat = np.corrcoef(all_activity[is_pot_stim, :])
     # plot correlation heatmap sorted by number of correlated companions
-    fig, ax = pl.subplots()
-    sns.heatmap(corr_mat[:250, :250], xticklabels=50, yticklabels=50, ax=ax)
-    pl.title('Cell to cell signal correlations examples')
+    # fig, ax = pl.subplots()
+    # sns.heatmap(corr_mat[:250, :250], xticklabels=50, yticklabels=50, ax=ax)
+    # pl.title('Cell to cell signal correlations examples')
+
+    filter_r2_thresh = 0.4
 
     # generate plot of number of cells to analyze for different "other cell" and "n experiment" criteria
     n_exp_to_test = [0, 1, 2, 3, 4, 5]
@@ -309,9 +311,9 @@ if __name__ == "__main__":
     exp_above = np.zeros((len(n_exp_to_test), corr_mat.shape[1]))
     cells_above = np.zeros((len(n_cells_to_test), corr_mat.shape[1]))
     for i, net in enumerate(n_exp_to_test):
-        exp_above[i, :] = n_exp_r2_above_thresh(corr_mat, 0.5, exp_id[is_pot_stim]) >= net
+        exp_above[i, :] = n_exp_r2_above_thresh(corr_mat, filter_r2_thresh, exp_id[is_pot_stim]) >= net
     for i, nct in enumerate(n_cells_to_test):
-        cells_above[i, :] = n_r2_above_thresh(corr_mat, 0.5) >= nct
+        cells_above[i, :] = n_r2_above_thresh(corr_mat, filter_r2_thresh) >= nct
 
     with sns.axes_style('whitegrid'):
         fig, ax = pl.subplots()
@@ -320,7 +322,7 @@ if __name__ == "__main__":
             for j, nct in enumerate(n_cells_to_test):
                 n_remain.append(np.sum(np.logical_and(exp_above[i, :], cells_above[j, :])) / corr_mat.shape[0])
             ax.plot(n_cells_to_test, n_remain, 'o', label="At least "+str(net)+" other fish")
-        ax.set_xlabel('Number of other cells with $R^2$ > 0.5')
+        ax.set_xlabel('Number of other cells with $R^2$ > ' + str(filter_r2_thresh))
         ax.set_ylabel('Fraction of stimulus cells to analyze')
         ax.set_xlim(-0.2)
         ax.set_yscale('log')
@@ -328,8 +330,8 @@ if __name__ == "__main__":
 
     # get all cells that have at least 20 other cells with a timeseries R2>0.5 and are spread
     # across at least 3 experiments
-    exp_g_1 = n_exp_r2_above_thresh(corr_mat, 0.5, exp_id[is_pot_stim]) > 2
-    c_g_9 = n_r2_above_thresh(corr_mat, 0.5) > 19
+    exp_g_1 = n_exp_r2_above_thresh(corr_mat, filter_r2_thresh, exp_id[is_pot_stim]) > 2
+    c_g_9 = n_r2_above_thresh(corr_mat, filter_r2_thresh) > 19
     to_analyze = np.logical_and(exp_g_1, c_g_9)
     analysis_data = all_activity[is_pot_stim, :][to_analyze, :]
     # marks, which of all units where used to derive regressors
