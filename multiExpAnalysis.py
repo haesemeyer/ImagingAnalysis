@@ -55,7 +55,7 @@ def NonNegMatFact(rawData, frameRate, nComponents, beta=5e-4):
     fil_data -= np.min(fil_data, 1, keepdims=True)  # we need to ensure that no negative values present so true min used
     max99 = np.percentile(fil_data, 99, 1, keepdims=True)
     fil_data /= max99
-    snmf = nimfa.Nmf(fil_data, seed="random_vcol", rank=nComponents, max_iter=100, n_run=30,
+    snmf = nimfa.Nmf(fil_data, seed="nndsvd", rank=nComponents, max_iter=200, n_run=1,
                      update='divergence', objective='div')
     return snmf, snmf(), fil_data
 
