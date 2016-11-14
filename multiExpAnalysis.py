@@ -10,6 +10,8 @@ import seaborn as sns
 import pickle
 import nrrd
 import sys
+import os
+import subprocess as sp
 
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 from mhba_basic import Crosscorrelation
@@ -239,6 +241,20 @@ def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clus
     assert np.isfortran(nrrdStack)
     out_name = GetExperimentBaseName(experiment_data) + '_C' + id_string + '.nrrd'
     nrrd.write(out_name, nrrdStack, header)
+    return out_name
+
+
+def ReformatROIStack(stackFilename, referenceFolder="E:/Dropbox/ReferenceBrainCreation/"):
+    nameOnly = os.path.basename(stackFilename)
+    cluster_id_start = nameOnly.find("_C")
+    ext_start = nameOnly.lower().find(".nrrd")
+    transform_name = nameOnly[:cluster_id_start]
+    transform_file = referenceFolder + transform_name + '/' + transform_name + '_ffd5.xform'
+    assert os.path.exists(transform_file)
+    referenceBrain = referenceFolder + 'H2BGc6s_Reference_8.nrrd'
+    outfile = referenceFolder + nameOnly[:ext_start] + '_reg.nrrd'
+    command = 'reformatx --outfile '+outfile+' --floating '+stackFilename+' '+referenceBrain+' '+transform_file
+    sp.run(command)
 
 
 def expVigor(expData):
