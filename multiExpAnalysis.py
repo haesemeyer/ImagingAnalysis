@@ -357,7 +357,7 @@ if __name__ == "__main__":
     avg_analysis_data += analysis_data[:, 825*2:]
     norm_data = avg_analysis_data/np.percentile(avg_analysis_data, 20, 1, keepdims=True)  # F/F0
     # Note: currently we anyway normalize in NonNegMatFact so normalization above kinda useless
-    n_regs = 10  # extract 5 components for our regressors
+    n_regs = 8  # 10  # extract 5 components for our regressors
     nnmf, fit, fildata = NonNegMatFact(norm_data, 5, n_regs)
     W = np.array(nnmf.W)  # cells / components weight matrix
     H = np.array(nnmf.H)
