@@ -282,19 +282,19 @@ if __name__ == "__main__":
         m_corr = data.motorCorrelation(0)[0].flatten()
         stim_fluct = data.computeStimulusEffect(0)[0].flatten()
         exp_id = np.r_[exp_id, np.full(m_corr.size, i, np.int32)]
-        # ips = stim_fluct > (m_sh_sid + 2 * std_sh_sid)
-        # ips = np.logical_and(ips, stim_fluct >= 1)
         ips = stim_fluct >= 1
         ips = np.logical_and(ips, m_corr < 0.4)
         is_pot_stim = np.r_[is_pot_stim, ips]
         if i == 0:
-            all_activity = data.RawData
+            # NOTE: RawData field is 64 bit float - convert to 32 when storing in all_activity
+            all_activity = data.RawData.astype(np.float32)
             all_motor = data.Vigor
         else:
-            all_activity = np.r_[all_activity, data.RawData]
+            all_activity = np.r_[all_activity, data.RawData.astype(np.float32)]
             all_motor = np.r_[all_motor, data.Vigor]
-        p = data.computeFourierMetrics()[4]
-        stim_phase = np.r_[stim_phase, p]
+        # after this point, the raw-data and vigor fields of experiment data are unecessary
+        data.RawData = None
+        data.Vigor = None
 
     # compute correlation matrix of all time-series data
     corr_mat = np.corrcoef(all_activity[is_pot_stim, :])
@@ -398,7 +398,7 @@ if __name__ == "__main__":
         ax_off.set_ylabel('dF/ F0')
 
     # create matrix, that for each unit contains its correlation to each regressor as well as to the plane's motor reg
-    reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1))
+    reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1), dtype=np.float32)
     for i in range(all_activity.shape[0]):
         for j in range(n_regs):
             reg_corr_mat[i, j] = np.corrcoef(all_activity[i, :], reg_trans[:, j])[0, 1]
@@ -416,7 +416,8 @@ if __name__ == "__main__":
     ax.set_title('Regressor correlations, thresholded at 0.5')
 
     # remove all rows that don't have at least one above-threshold correlation
-    reg_corr_mat = reg_corr_mat[ab_thresh, :]
+    # NOTE: The copy statement below is required to prevent a stale copy of the full-sized array to remain in memory
+    reg_corr_mat = reg_corr_mat[ab_thresh, :].copy()
 
     from sklearn.cluster import KMeans
     km = KMeans(n_clusters=10)
@@ -443,7 +444,7 @@ if __name__ == "__main__":
     membership[no_nan_aa] = temp_no_nan_aa
     assert membership.size == no_nan_aa.size
     assert membership[no_nan_aa].size == all_activity.shape[0]
-    assert membership.size == sum([e.RawData.shape[0] for e in exp_data])
+    assert membership.size == sum([len(e.graph_info) for e in exp_data])
 
     # determine which fraction of each cluster is made up of the units initially picked for regressor estimations
     dum = discovery_unit_marker[no_nan][ab_thresh]
@@ -612,7 +613,7 @@ if __name__ == "__main__":
         bstarts = []
         # for binning, we want to have one more subdivision of the times and include the endpoint - later each time-bin
         # will correspond to one timepoint in interp_times above
-        i_t = np.linspace(0, exp.Vigor.shape[1] / 5, exp.Vigor.shape[1] + 1, endpoint=True)
+        i_t = np.linspace(0, all_motor.shape[1] / 5, all_motor.shape[1] + 1, endpoint=True)
         try:
             for gi in exp.graph_info:
                 if gi[0] not in traces:
@@ -626,8 +627,8 @@ if __name__ == "__main__":
             raw_starts = np.vstack(bstarts)
         except KeyError:
             # this is necessary since some of the older experiments have been moved!
-            return np.zeros_like(exp.Vigor)
-        return raw_starts
+            return np.zeros((len(exp.graph_info), all_motor.shape[1]), dtype=np.float32)
+        return raw_starts.astype(np.float32)
     # for each unit extract the original bout-trace binned to our 5Hz timebase
     raw_bstarts = np.vstack([exp_bstarts(e) for e in exp_data])
     raw_bstarts = raw_bstarts[no_nan_aa, :]
