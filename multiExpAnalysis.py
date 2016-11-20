@@ -1,5 +1,5 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
-from mh_2P import MakeNrrdHeader, TailDataDict
+from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr
 import numpy as np
 import nimfa
 from scipy.signal import savgol_filter
@@ -75,7 +75,12 @@ def n_r2_above_thresh(corr_mat, r2_thresh):
         The number of non-self traces that correlate above the given threshold
 
     """
-    return np.sum(corr_mat**2 > r2_thresh, 1) - 1
+    if corr_mat.ndim == 2:
+        # matrix input
+        return np.sum(corr_mat**2 > r2_thresh, 1) - 1
+    else:
+        # 1D vector
+        return np.sum(corr_mat**2 > r2_thresh) - 1
 
 
 def n_exp_r2_above_thresh(corr_mat, r2_thresh, exp_ids):
@@ -92,7 +97,12 @@ def n_exp_r2_above_thresh(corr_mat, r2_thresh, exp_ids):
         The number of non-self experiments that have a correlating trace above the threshold
     """
     corr_above = corr_mat**2 > r2_thresh
-    return np.array([np.unique(exp_ids[above]).size-1 for above in corr_above])
+    if corr_mat.ndim == 2:
+        # matrix input
+        return np.array([np.unique(exp_ids[above]).size-1 for above in corr_above])
+    else:
+        # 1D vector
+        return np.unique(exp_ids[corr_above]).size-1
 
 
 def MakeCorrelationGraphStack(experiment_data, corr_red, corr_green, corr_blue, cutOff=0.5):
