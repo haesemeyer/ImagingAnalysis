@@ -1734,3 +1734,24 @@ def MakeNrrdHeader(stack, xy_size, z_size=2.5, unit='"microns"'):
     header['space units'] = [unit] * 3
     header['type'] = 'unsigned char'
     return header
+
+
+def vec_mat_corr(v, m):
+    """
+    Computes the correlation between a vector v and each row
+    in the matrix m
+    Args:
+        v: The vector to correlate to each row in m of size n
+        m: A k*n matrix
+
+    Returns:
+        The correlation coefficients of v to each row in m
+    """
+    if v.ndim > 1:
+        vsub = v.flatten() - np.mean(v)
+    else:
+        vsub = v - np.mean(v)
+    msub = m - np.mean(m, 1, keepdims=True)
+    vnorm = np.linalg.norm(vsub)
+    mnorm = np.linalg.norm(msub, axis=1)
+    return np.dot(vsub, msub.T)/(vnorm*mnorm)
