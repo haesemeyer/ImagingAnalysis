@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as pl
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
+from time import perf_counter
 
 import pickle
 import nrrd
@@ -262,10 +263,16 @@ def expVigor(expData):
         vigs.append(expData.Vigor[i, :])
     return np.vstack(vigs)
 
+
+def printElapsed():
+    elapsed = perf_counter() - t_start
+    print(str(elapsed) + " s elapsed since start.", flush=True)
+
 if __name__ == "__main__":
-    print("Load data files")
+    print("Load data files", flush=True)
     exp_data = []
     dfnames = UiGetFile([('Experiment data', '.pickle')], True)
+    t_start = perf_counter()
     for name in dfnames:
         f = open(name, 'rb')
         d = pickle.load(f)
@@ -293,6 +300,8 @@ if __name__ == "__main__":
         data.RawData = None
         data.Vigor = None
 
+    print("Data loaded and aggregated", flush=True)
+    printElapsed()
     # for each cell that passes is_pot_stim holds the count of the number of other cells and other experiments that
     # are above the correlation threshold
     n_cells_above = np.zeros(is_pot_stim.sum(), dtype=np.int32)
@@ -351,6 +360,8 @@ if __name__ == "__main__":
     all_activity = all_activity[no_nan_aa, :]
     all_motor = all_motor[no_nan_aa, :]
     discovery_unit_marker = discovery_unit_marker[no_nan_aa]
+    print("Data filtering complete", flush=True)
+    printElapsed()
 
     # analyze per-experiment swim vigors
     # all_expVigors = np.vstack([np.mean(expVigor(data), 0) for data in exp_data])
@@ -421,6 +432,8 @@ if __name__ == "__main__":
         ax_off.set_title('OFF type regressors')
         ax_off.set_xlabel('Time [s]')
         ax_off.set_ylabel('dF/ F0')
+    print("Stimulus regressor derivation complete", flush=True)
+    printElapsed()
 
     # create matrix, that for each unit contains its correlation to each regressor as well as to the plane's motor reg
     reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1), dtype=np.float32)
@@ -480,6 +493,8 @@ if __name__ == "__main__":
         ax.set_xlabel('Cluster #')
         ax.set_ylabel('Cluster fraction from discovery units')
         ax.set_ylim(0, 1)
+    print("Clustering on all cells complete", flush=True)
+    printElapsed()
 
     # run gram-schmitt process
 
@@ -586,6 +601,8 @@ if __name__ == "__main__":
         ax.set_xlabel('$R^2$ Sensory regression')
         ax.set_ylabel('$R^2$ Sensory + Motor regression')
         ax.set_title('Boost of fit by including motor regressor')
+    print("Sensory and sensory plus motor fit completed", flush=True)
+    printElapsed()
 
     # # at various timeshifts of the motor regressor compute pure motor r2
     # t_shifts = [0, 2, 5, 10, 15, 20]
@@ -682,9 +699,10 @@ if __name__ == "__main__":
         ax_cc.set_ylabel('Cross-correlation')
         ax_cc.set_title('Bout start activity cross-correlation')
         fig.tight_layout()
+    print("Computation of activit-bout cross-correlations complete", flush=True)
+    printElapsed()
 
-
-    #REMOVE THE FOLLOWING LATER
+    # REMOVE THE FOLLOWING LATER
     eid = exp_id[no_nan_aa]
     eid2 = eid[no_nan][ab_thresh]
     fb = eid2 < 11
