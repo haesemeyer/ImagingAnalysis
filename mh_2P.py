@@ -1736,22 +1736,34 @@ def MakeNrrdHeader(stack, xy_size, z_size=2.5, unit='"microns"'):
     return header
 
 
-def vec_mat_corr(v, m):
+def vec_mat_corr(v, m, mean_subtract=True, vnorm=None, mnorm=None):
     """
     Computes the correlation between a vector v and each row
     in the matrix m
     Args:
         v: The vector to correlate to each row in m of size n
         m: A k*n matrix
+        mean_subtract: If False assumes that v and m are mean and row-mean subtracted respectively
+        vnorm: If not None should be the norm of v
+        mnorm: If not None, should be a vector of row-wise vector norms of m
 
     Returns:
         The correlation coefficients of v to each row in m
     """
-    if v.ndim > 1:
-        vsub = v.flatten() - np.mean(v)
+    if mean_subtract:
+        if v.ndim > 1:
+            vsub = v.flatten() - np.mean(v)
+        else:
+            vsub = v - np.mean(v)
+        msub = m - np.mean(m, 1, keepdims=True)
     else:
-        vsub = v - np.mean(v)
-    msub = m - np.mean(m, 1, keepdims=True)
-    vnorm = np.linalg.norm(vsub)
-    mnorm = np.linalg.norm(msub, axis=1)
+        if v.ndim > 1:
+            vsub = v.flatten()
+        else:
+            vsub = v
+        msub = m
+    if vnorm is None:
+        vnorm = np.linalg.norm(vsub)
+    if mnorm is None:
+        mnorm = np.linalg.norm(msub, axis=1)
     return np.dot(vsub, msub.T)/(vnorm*mnorm)
