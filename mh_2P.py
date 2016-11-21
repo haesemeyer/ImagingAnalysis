@@ -898,8 +898,8 @@ class HeatPulseExperiment(RepeatExperiment):
 class PixelGraph:
 
     def __init__(self,id):
-        self.V = []#list of vertices
-        self.ID = id#id of this graph for easy component reference
+        self.V = []  # list of vertices
+        self.ID = id  # id of this graph for easy component reference
 
     @property
     def NPixels(self):
@@ -910,15 +910,15 @@ class PixelGraph:
 # compiled acceleration
 
 
-@jit(numba.float64[:](numba.float64[:],numba.int32))
-def Vigor(cumAngle,winlen=10):
+@jit(numba.float64[:](numba.float64[:], numba.int32))
+def Vigor(cumAngle, winlen=10):
     """
     Computes the swim vigor based on a cumulative angle trace
     as the windowed standard deviation of the cumAngles
     """
     s = cumAngle.size
     vig = zeros(s)
-    for i in range(winlen,s):
+    for i in range(winlen, s):
         vig[i] = std(cumAngle[i-winlen+1:i+1])
     return vig
 
@@ -977,7 +977,6 @@ class TailData:
         self.starting = np.zeros_like(self.frameTime)
         if self.bouts is not None:
             self.starting[self.bouts[:, 0].astype(int)] = 1
-
 
     def RemoveTrackErrors(self):
         """
@@ -1123,9 +1122,7 @@ def UiGetFile(filetypes=[('Tiff stack', '.tif;.tiff')], multiple=False):
     """
     Shows a file selection dialog and returns the path to the selected file(s)
     """
-    options = {}
-    options['filetypes'] = filetypes
-    options['multiple'] = multiple
+    options = {'filetypes': filetypes, 'multiple': multiple}
     Tkinter.Tk().withdraw()  # Close the root window
     return tkFileDialog.askopenfilename(**options)
 # UiGetFile
@@ -1163,11 +1160,12 @@ def FilterStack(stack):
             for jit_x in range(-1,2):
                 for jit_y in range(-1,2):
                     if jit_x == 0 and jit_y == 0:
-                        trace = trace + 0.5 * stack[:,x,y]
+                        trace += 0.5 * stack[:, x, y]
                     else:
-                        trace = trace + 1/16 * stack[:,x+jit_x,y+jit_y]
+                        trace += 1/16 * stack[:, x+jit_x, y+jit_y]
             stack[:, x, y] = trace
     return stack  # should be in place anyways
+
 
 def FilterStackGaussian(stack, sigma=1):
     """
@@ -1178,15 +1176,17 @@ def FilterStackGaussian(stack, sigma=1):
     for t in range(stack.shape[0]):
         out[t, :, :] = gaussian_filter(stack[t, :, :].astype(float), sigma, multichannel=False)
     return out
-    
+
+
 def DeltaFOverF(stack):
     """
     Transforms stack into delta-f over F metric
     """
     F = np.mean(stack, 0)[None, :, :]
-    F.repeat(stack.shape[0],0)
+    F.repeat(stack.shape[0], 0)
     return (stack-F)/F
-    
+
+
 def Per_PixelFourier(stack, tstart=None, tend=None):
     """
     For reach pixel performs a fourier transform of the time-series (axis 0)
@@ -1227,6 +1227,7 @@ def ZScore_Stack(stack):
     # them as all zero
     std[avg == 0] = 1
     return (stack-avg.repeat(stack.shape[0], 0))/std.repeat(stack.shape[0], 0)
+
 
 def Threshold_Zsc(stack, nstd, plane):
     """
