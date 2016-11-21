@@ -523,40 +523,34 @@ if __name__ == "__main__":
     # perform linear regression using the stimulus regressors
     from sklearn.linear_model import LinearRegression
     lr = LinearRegression()
-    lr.fit(orthonormals, all_activity.T)
-    # compute residuals and mean-distance - re-transpose to original shape
-    residuals = (all_activity.T - (np.dot(orthonormals, lr.coef_.T) + lr.intercept_)).T
-    mean_dist = all_activity - np.mean(all_activity, 1, keepdims=True)
-    # compute R2 values
-    r2_sensory_fit = 1 - np.sum(residuals**2, 1) / np.sum(mean_dist**2, 1)
-    del residuals
-    del mean_dist
+    r2_sensory_fit = np.empty(all_activity.shape[0], dtype=np.float32)
+    for i in range(all_activity.shape[0]):
+        lr.fit(orthonormals, all_activity[i, :])
+        r2_sensory_fit[i] = lr.score(orthonormals, all_activity[i, :])
+
     # recompute regressions unit-by-unit (should be done plane-by-plane for efficiency!!!) with motor regressors
-    # NOTE: As null distribution maybe a version with shuffled (wrong-plane) motor regressors could be computed!
-    r2_sensory_motor_fit = []
+    # As null distribution compute a version with shuffled (wrong-plane) motor regressors
+    r2_sensory_motor_fit = np.zeros(all_activity.shape[0], dtype=np.float32)
     for i in range(all_activity.shape[0]):
         mot_reg = gram_schmidt(all_motor[i, :], *all_u)
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
-            r2_sensory_motor_fit.append(0)
+            continue
         else:
             lr.fit(regs, all_activity[i, :])
-            r2_sensory_motor_fit.append(lr.score(regs, all_activity[i, :]))
-    r2_sensory_motor_fit = np.array(r2_sensory_motor_fit)
+            r2_sensory_motor_fit[i] = lr.score(regs, all_activity[i, :])
 
-    r2_sensory_motor_shuffle = []
+    r2_sensory_motor_shuffle = np.zeros(all_activity.shape[0], dtype=np.float32)
     for i in range(all_activity.shape[0]):
         shift = np.random.randint(50000, 100000)
         pick = (i + shift) % all_motor.shape[0]
         mot_reg = gram_schmidt(all_motor[pick, :], *all_u)
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
-            r2_sensory_motor_shuffle.append(0)
+            continue
         else:
             lr.fit(regs, all_activity[i, :])
-            r2_sensory_motor_shuffle.append(lr.score(regs, all_activity[i, :]))
-
-    r2_sensory_motor_shuffle = np.array(r2_sensory_motor_shuffle)
+            r2_sensory_motor_shuffle[i] = lr.score(regs, all_activity[i, :])
 
     # compute confidence band based on shuffle
     ci = 99.9
