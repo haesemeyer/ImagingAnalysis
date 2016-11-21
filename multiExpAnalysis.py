@@ -291,8 +291,8 @@ if __name__ == "__main__":
     all_activity = np.array([])
     all_motor = np.array([])
     for i, data in enumerate(exp_data):
-        m_corr = data.motorCorrelation(0)[0].flatten()
-        stim_fluct = data.computeStimulusEffect(0)[0].flatten()
+        m_corr = data.motorCorrelation(0)[0].ravel()
+        stim_fluct = data.computeStimulusEffect(0)[0].ravel()
         exp_id = np.r_[exp_id, np.full(m_corr.size, i, np.int32)]
         ips = stim_fluct >= 1
         ips = np.logical_and(ips, m_corr < 0.4)
