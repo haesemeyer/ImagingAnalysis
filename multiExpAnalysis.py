@@ -1,10 +1,9 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
 from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr
 import numpy as np
-import nimfa
-from scipy.signal import savgol_filter
 
 import matplotlib.pyplot as pl
+from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
 import pickle
@@ -12,6 +11,8 @@ import nrrd
 import sys
 import os
 import subprocess as sp
+from sklearn.cluster import KMeans, SpectralClustering
+from sklearn.manifold import SpectralEmbedding
 
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 from mhba_basic import Crosscorrelation
@@ -44,22 +45,6 @@ def dist2next1(v):
         min_d1[i] = np.min(d1[i:i+2])
     out[v > 0] = min_d1
     return out
-
-
-def NonNegMatFact(rawData, frameRate, nComponents, beta=5e-4):
-    # filter data with savitzky golay filter - polynomial order 3
-    # win_len = int(2 * frameRate)
-    # if win_len % 2 == 0:
-    #     win_len += 1
-    # fil_data = savgol_filter(rawData, win_len, 3, axis=1)
-    fil_data = rawData.copy()
-    # normalize data (to prevent outlier effect normalize by 95th percentile not max)
-    fil_data -= np.min(fil_data, 1, keepdims=True)  # we need to ensure that no negative values present so true min used
-    max99 = np.percentile(fil_data, 99, 1, keepdims=True)
-    fil_data /= max99
-    snmf = nimfa.Nmf(fil_data, seed="nndsvd", rank=nComponents, max_iter=200, n_run=1,
-                     update='divergence', objective='div')
-    return snmf, snmf(), fil_data
 
 
 def n_r2_above_thresh(corr_mat, r2_thresh):
@@ -376,39 +361,58 @@ if __name__ == "__main__":
     avg_analysis_data += analysis_data[:, :825]
     avg_analysis_data += analysis_data[:, 825:825*2]
     avg_analysis_data += analysis_data[:, 825*2:]
-    norm_data = avg_analysis_data/np.percentile(avg_analysis_data, 20, 1, keepdims=True)  # F/F0
-    # Note: currently we anyway normalize in NonNegMatFact so normalization above kinda useless
-    n_regs = 8  # 10  # extract 5 components for our regressors
-    nnmf, fit, fildata = NonNegMatFact(norm_data, 5, n_regs)
-    W = np.array(nnmf.W)  # cells / components weight matrix
-    H = np.array(nnmf.H)
-    # plot connectivity matrix - which timepoints are encoded similarly
-    fix, ax = pl.subplots()
-    sns.heatmap(nnmf.connectivity(), xticklabels=50, yticklabels=50, cmap='bone_r', ax=ax)
-    ax.set_title('Time connectivity')
+    # use spectral clustering to identify our regressors. Use thresholded correlations as the affinity
+    aad_corrs = np.corrcoef(avg_analysis_data)
+    aad_corrs[aad_corrs < 0.2] = 0
+    n_regs = 8  # extract 8 clusters as regressors
+    spec_embed = SpectralEmbedding(n_components=3, affinity='precomputed')
+    spec_clust = SpectralClustering(n_clusters=n_regs, affinity='precomputed')
+    spec_embed_coords = spec_embed.fit_transform(aad_corrs)
+    spec_clust_ids = spec_clust.fit_predict(aad_corrs)
 
     # extract our stimulus regressors by aggresively thresholding at the 95th percentile for weights
     # also plot the corresponding cluster means
     reg_orig = np.empty((analysis_data.shape[1], n_regs))
     time = np.arange(reg_orig.shape[0]) / 5
     for i in range(n_regs):
-        cut = np.percentile(W[:, i], 95)
-        reg_orig[:, i] = np.mean(dff(analysis_data[W[:, i] >= cut, :]), 0)
+        reg_orig[:, i] = np.mean(dff(analysis_data[spec_clust_ids == i, :]), 0)
     # copy regressors and sort by correlation to data.stimOn - since we expect this to be most prevalent group
     reg_trans = reg_orig.copy()
     c = np.array([np.corrcoef(reg_orig[:, i], data.stimOn)[0, 1] for i in range(n_regs)])
+
+    # make 3D plot of clusters in embedded space
+    n_on = np.sum(c > 0)
+    n_off = n_regs - n_on
+    cols_on = sns.palettes.color_palette('bright', n_on)
+    cols_off = sns.palettes.color_palette('deep', n_off)
+    count_on = 0
+    count_off = 0
+    with sns.axes_style('white'):
+        fig = pl.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        for i in range(n_regs):
+            if c[i] > 0:
+                ax.scatter(spec_embed_coords[spec_clust_ids == i, 0], spec_embed_coords[spec_clust_ids == i, 1],
+                           spec_embed_coords[spec_clust_ids == i, 2], s=5, c=cols_on[count_on])
+                count_on += 1
+            else:
+                ax.scatter(spec_embed_coords[spec_clust_ids == i, 0], spec_embed_coords[spec_clust_ids == i, 1],
+                           spec_embed_coords[spec_clust_ids == i, 2], s=5, c=cols_off[count_off])
+                count_off += 1
+
     reg_trans = reg_trans[:, np.argsort(c)[::-1]]
     c = np.sort(c)[::-1]
 
+    # plot our on and off type clusters in two different plots
     with sns.axes_style('whitegrid'):
         fig, ax_on = pl.subplots()
         fig, ax_off = pl.subplots()
         for i in range(n_regs):
             lab = 'Regressor ' + str(i)
             if c[i] > 0:
-                ax_on.plot(time, reg_trans[:, i], label=lab)
+                ax_on.plot(time, reg_trans[:, i], label=lab, c=cols_on[i])
             else:
-                ax_off.plot(time, reg_trans[:, i], label=lab)
+                ax_off.plot(time, reg_trans[:, i], label=lab, c=cols_off[i-n_on])
         # ax_on.legend(loc=2)
         # ax_off.legend(loc=2)
         ax_on.set_title('ON type regressors')
@@ -439,8 +443,6 @@ if __name__ == "__main__":
     # remove all rows that don't have at least one above-threshold correlation
     # NOTE: The copy statement below is required to prevent a stale copy of the full-sized array to remain in memory
     reg_corr_mat = reg_corr_mat[ab_thresh, :].copy()
-
-    from sklearn.cluster import KMeans
     km = KMeans(n_clusters=10)
     km.fit(reg_corr_mat)
     # plot sorted by cluster identity
@@ -692,8 +694,8 @@ if __name__ == "__main__":
     eid = exp_id[no_nan_aa]
     eid2 = eid[no_nan][ab_thresh]
     fb = eid2 < 11
-    mhb = np.logical_and(eid2 > 10, eid2 < 19)
-    trig = eid2 > 18
+    mhb = np.logical_and(eid2 > 10, eid2 < 26)
+    trig = eid2 > 25
     region_mat = np.zeros((10, 3))
     for i in range(10):
         region_mat[i, 0] = np.sum(fb[km.labels_ == i])
