@@ -288,6 +288,8 @@ if __name__ == "__main__":
     is_pot_stim = np.array([], dtype=np.bool)  # for each unit whether it is potentially a stimulus driven unit
     exp_id = np.array([])  # for each unit the experiment which it came from
     stim_phase = np.array([])  # for each unit the phase at stimulus frequency during the sine-presentation
+    all_activity = np.array([])
+    all_motor = np.array([])
     for i, data in enumerate(exp_data):
         m_corr = data.motorCorrelation(0)[0].flatten()
         stim_fluct = data.computeStimulusEffect(0)[0].flatten()
@@ -306,31 +308,42 @@ if __name__ == "__main__":
         data.RawData = None
         data.Vigor = None
 
-    # compute correlation matrix of all time-series data
-    corr_mat = np.corrcoef(all_activity[is_pot_stim, :])
-    # plot correlation heatmap sorted by number of correlated companions
-    # fig, ax = pl.subplots()
-    # sns.heatmap(corr_mat[:250, :250], xticklabels=50, yticklabels=50, ax=ax)
-    # pl.title('Cell to cell signal correlations examples')
+    # for each cell that passes is_pot_stim holds the count of the number of other cells and other experiments that
+    # are above the correlation threshold
+    n_cells_above = np.zeros(is_pot_stim.sum(), dtype=np.int32)
+    n_exp_above = np.zeros(is_pot_stim.sum(), dtype=np.int32)
 
     filter_r2_thresh = 0.4
+
+    # make a temporary copy of all stimulus relevant units
+    stim_act = all_activity[is_pot_stim, :]
+    rowmean = np.mean(stim_act, 1, keepdims=True)
+    stim_act -= rowmean
+    norms = np.linalg.norm(stim_act, axis=1)
+
+    for i, row in enumerate(all_activity[is_pot_stim, :]):
+        corrs = vec_mat_corr(row, stim_act, False, vnorm=norms[i], mnorm=norms)
+        n_cells_above[i] = n_r2_above_thresh(corrs, filter_r2_thresh)
+        n_exp_above[i] = n_exp_r2_above_thresh(corrs, filter_r2_thresh, exp_id[is_pot_stim])
+
+    del stim_act
 
     # generate plot of number of cells to analyze for different "other cell" and "n experiment" criteria
     n_exp_to_test = [0, 1, 2, 3, 4, 5]
     n_cells_to_test = list(range(30))
-    exp_above = np.zeros((len(n_exp_to_test), corr_mat.shape[1]))
-    cells_above = np.zeros((len(n_cells_to_test), corr_mat.shape[1]))
+    exp_above = np.zeros((len(n_exp_to_test), n_cells_above.size))
+    cells_above = np.zeros((len(n_cells_to_test), n_cells_above.size))
     for i, net in enumerate(n_exp_to_test):
-        exp_above[i, :] = n_exp_r2_above_thresh(corr_mat, filter_r2_thresh, exp_id[is_pot_stim]) >= net
+        exp_above[i, :] = n_exp_above >= net
     for i, nct in enumerate(n_cells_to_test):
-        cells_above[i, :] = n_r2_above_thresh(corr_mat, filter_r2_thresh) >= nct
+        cells_above[i, :] = n_cells_above >= nct
 
     with sns.axes_style('whitegrid'):
         fig, ax = pl.subplots()
         for i, net in enumerate(n_exp_to_test):
             n_remain = []
             for j, nct in enumerate(n_cells_to_test):
-                n_remain.append(np.sum(np.logical_and(exp_above[i, :], cells_above[j, :])) / corr_mat.shape[0])
+                n_remain.append(np.sum(np.logical_and(exp_above[i, :], cells_above[j, :])) / n_cells_above.size)
             ax.plot(n_cells_to_test, n_remain, 'o', label="At least "+str(net)+" other fish")
         ax.set_xlabel('Number of other cells with $R^2$ > ' + str(filter_r2_thresh))
         ax.set_ylabel('Fraction of stimulus cells to analyze')
@@ -340,15 +353,13 @@ if __name__ == "__main__":
 
     # get all cells that have at least 20 other cells with a timeseries R2>0.5 and are spread
     # across at least 3 experiments
-    exp_g_1 = n_exp_r2_above_thresh(corr_mat, filter_r2_thresh, exp_id[is_pot_stim]) > 2
-    c_g_9 = n_r2_above_thresh(corr_mat, filter_r2_thresh) > 19
+    exp_g_1 = n_exp_above > 2
+    c_g_9 = n_cells_above > 19
     to_analyze = np.logical_and(exp_g_1, c_g_9)
     analysis_data = all_activity[is_pot_stim, :][to_analyze, :]
     # marks, which of all units where used to derive regressors
     discovery_unit_marker = np.zeros(all_activity.shape[0], dtype=bool)
     discovery_unit_marker[is_pot_stim] = to_analyze
-
-    del corr_mat
 
     # remove NaN containing traces from activity and motor matrix
     no_nan_aa = np.sum(np.isnan(all_activity), 1) == 0
