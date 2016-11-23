@@ -604,40 +604,6 @@ if __name__ == "__main__":
     print("Sensory and sensory plus motor fit completed", flush=True)
     printElapsed()
 
-    # # at various timeshifts of the motor regressor compute pure motor r2
-    # t_shifts = [0, 2, 5, 10, 15, 20]
-    # motor_shift_r2 = np.zeros((len(t_shifts), all_motor.shape[0]))
-    # for i, ts in enumerate(t_shifts):
-    #     shifted = np.roll(all_motor, ts, 1)
-    #     for j in range(all_motor.shape[0]):
-    #         c = np.corrcoef(all_activity[j, :], shifted[j, :])[0, 1]**2
-    #         if not np.isnan(c):
-    #             motor_shift_r2[i, j] = c
-    #
-    # r2_bins = np.linspace(0, 1, 20)
-    # r2bc = r2_bins[:-1] + np.diff(r2_bins)/2
-    # motor_shift_h = np.vstack([np.histogram(row, r2_bins)[0] for row in motor_shift_r2])
-    # with sns.axes_style('whitegrid'):
-    #     fig, ax = pl.subplots()
-    #     for i, ts in enumerate(t_shifts):
-    #         ax.plot(r2bc, motor_shift_h[i, :], label='Shift of ' + str(ts/5) + ' s')
-    #     ax.set_yscale('log')
-    #     ax.legend()
-    #     ax.set_xlabel('$R^2$ of motor correlation')
-    #     ax.set_ylabel('Count')
-    #
-    # with sns.axes_style('whitegrid'):
-    #     fig, ax = pl.subplots()
-    #     for i, ts in enumerate(t_shifts):
-    #         # if ts == 0:
-    #         #    continue
-    #         ax.hist(motor_shift_r2[i, :]-motor_shift_r2[0, :], bins=np.linspace(-1, 1, 100), histtype='step',
-    #                 lw=2, label='Shift of ' + str(ts/5) + ' s')
-    #     ax.set_yscale('log')
-    #     ax.legend()
-    #     ax.set_xlabel('Change in $R^2$ of motor correlation')
-    #     ax.set_ylabel('Count')
-
     # compute movement triggered averages of motor correlated units as cross-correlations - both for all bouts
     # as well as by only taking bouts into account that are isolated, i.e. for which the frame distance to the next
     # bout is at least 5 frames (1s)
