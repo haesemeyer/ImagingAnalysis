@@ -498,16 +498,6 @@ if __name__ == "__main__":
 
     orthonormals = reg_trans.copy()
 
-    with sns.axes_style('whitegrid'):
-        fig, ax = pl.subplots()
-        for i in range(n_regs):
-            lab = 'Regressor ' + str(i)
-            ax.plot(time, orthonormals[:, i], label=lab)
-        ax.legend(loc=2)
-        ax.set_title('Stimulus based orthogonal regressors')
-        ax.set_xlabel('Time [s]')
-        ax.set_ylabel('dF/ F0')
-
     # perform linear regression using the stimulus regressors
     from sklearn.linear_model import LinearRegression
     lr = LinearRegression()
