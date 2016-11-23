@@ -496,16 +496,7 @@ if __name__ == "__main__":
     print("Clustering on all cells complete", flush=True)
     printElapsed()
 
-    all_u = []
-    orthonormals = np.empty_like(reg_trans)
-    for i in range(n_regs):
-        v = reg_trans[:, i].copy()
-        if i == 0:
-            orthonormals[:, 0] = v / np.linalg.norm(v)
-            all_u.append(orthonormals[:, 0])
-        else:
-            orthonormals[:, i] = gram_schmidt(v, *all_u)
-            all_u.append(orthonormals[:, i])
+    orthonormals = reg_trans.copy()
 
     with sns.axes_style('whitegrid'):
         fig, ax = pl.subplots()
@@ -529,7 +520,7 @@ if __name__ == "__main__":
     # As null distribution compute a version with shuffled (wrong-plane) motor regressors
     r2_sensory_motor_fit = np.zeros(all_activity.shape[0], dtype=np.float32)
     for i in range(all_activity.shape[0]):
-        mot_reg = gram_schmidt(all_motor[i, :], *all_u)
+        mot_reg = all_motor[i, :]
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
             continue
@@ -541,7 +532,7 @@ if __name__ == "__main__":
     for i in range(all_activity.shape[0]):
         shift = np.random.randint(50000, 100000)
         pick = (i + shift) % all_motor.shape[0]
-        mot_reg = gram_schmidt(all_motor[pick, :], *all_u)
+        mot_reg = all_motor[pick, :]
         regs = np.c_[orthonormals, mot_reg]
         if np.any(np.isnan(regs)):
             continue
