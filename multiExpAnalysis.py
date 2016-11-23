@@ -496,24 +496,6 @@ if __name__ == "__main__":
     print("Clustering on all cells complete", flush=True)
     printElapsed()
 
-    # run gram-schmitt process
-
-    def project(u, v):
-        """
-        Projects the vector v orthogonally onto the line spanned by u
-        """
-        return np.dot(v, u)/np.dot(u, u)*u
-
-    def gram_schmidt(v, *args):
-        """
-        Transforms the vector v into a vector that is orthogonal to each vector
-        in args and has unit length
-        """
-        start = v.copy()
-        for u in args:
-            start -= project(u, v)
-        return start / np.linalg.norm(start)
-
     all_u = []
     orthonormals = np.empty_like(reg_trans)
     for i in range(n_regs):

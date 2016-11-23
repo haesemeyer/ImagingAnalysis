@@ -1768,3 +1768,21 @@ def vec_mat_corr(v, m, mean_subtract=True, vnorm=None, mnorm=None):
     if mnorm is None:
         mnorm = np.linalg.norm(msub, axis=1)
     return np.dot(vsub, msub.T)/(vnorm*mnorm)
+
+
+def project(u, v):
+    """
+    Projects the vector v orthogonally onto the line spanned by u
+    """
+    return np.dot(v, u) / np.dot(u, u) * u
+
+
+def gram_schmidt(v, *args):
+    """
+    Transforms the vector v into a vector that is orthogonal to each vector
+    in args and has unit length
+    """
+    start = v.copy()
+    for u in args:
+        start -= project(u, v)
+    return start / np.linalg.norm(start)
