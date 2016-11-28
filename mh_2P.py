@@ -948,7 +948,6 @@ class TailData:
         self.vigor = Vigor(self.cumAngles, 6)  # just below the number of our minimum bout frames (8)
         # compute vigor bout threshold
         t = np.mean(self.vigor[self.vigor < 25]) + 2*np.std(self.vigor[self.vigor < 25])
-        print("Vigor threshold = ", t)
         self.bouts = mb.DetectTailBouts(self.cumAngles, threshold=t, frameRate=frameRate, vigor=self.vigor)
         if self.bouts is not None and self.bouts.size == 0:
             self.bouts = None
