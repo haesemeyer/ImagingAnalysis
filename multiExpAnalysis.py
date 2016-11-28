@@ -253,6 +253,26 @@ def ReformatROIStack(stackFilename, referenceFolder="E:/Dropbox/ReferenceBrainCr
     sp.run(command)
 
 
+def MakeMeanNrrd():
+    sourceFiles = UiGetFile([('Nrrd files', '.nrrd')], True)
+    header = None
+    mean_stack = None
+    for f in sourceFiles:
+        if header is None:
+            data, header = nrrd.read(f)
+            data[data > 0] = 1
+            mean_stack = data.copy().astype(np.float32)
+        else:
+            data = nrrd.read(f)[0]
+            data[data > 0] = 1
+            mean_stack += data
+    mean_stack /= len(sourceFiles)
+    mean_stack *= 255
+    mean_stack[mean_stack > 255] = 255
+    directory = os.path.dirname(sourceFiles[0]) + '/'
+    nrrd.write(directory+"mean_stack.nrrd", mean_stack.astype(np.uint8), header)
+
+
 def expVigor(expData):
     done = dict()
     vigs = []
