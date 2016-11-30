@@ -70,10 +70,11 @@ if __name__ == "__main__":
         sp.run(reg_command)
         warp_command = assemble_commands(warp_commands_base + [crop_command, make_output_command(wn),
                                                                make_initial_command(an), ref_brain_path, fn])
-        sp.run(warp_command)
         print("", flush=True)
         print(warp_command, flush=True)
         print("", flush=True)
+        sp.run(warp_command)
+
         reform_command = assemble_commands(reformat_commands_base + ["--outfile " + on,
                                                                      make_floating_command(fn), ref_brain_path, wn])
         print("", flush=True)
