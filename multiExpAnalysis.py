@@ -466,7 +466,7 @@ if __name__ == "__main__":
     no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
     reg_corr_mat = reg_corr_mat[no_nan, :]
 
-    ab_thresh = np.sum(np.abs(reg_corr_mat) > 0, 1) > 0
+    ab_thresh = np.sum(reg_corr_mat > 0, 1) > 0
 
     # plot regressor correlation matrix - all units no clustering
     fig, ax = pl.subplots()
@@ -476,8 +476,14 @@ if __name__ == "__main__":
     # remove all rows that don't have at least one above-threshold correlation
     # NOTE: The copy statement below is required to prevent a stale copy of the full-sized array to remain in memory
     reg_corr_mat = reg_corr_mat[ab_thresh, :].copy()
-    km = KMeans(n_clusters=10)
-    km.fit(reg_corr_mat)
+
+    class max_cluster:
+        def __init__(self, max_index):
+            self.labels_ = max_index
+            self.n_clusters = np.unique(self.labels_).size
+
+    km = max_cluster(np.argmax(reg_corr_mat, 1))
+    # km.fit(reg_corr_mat)
     # plot sorted by cluster identity
     fig, ax = pl.subplots()
     sns.heatmap(reg_corr_mat[np.argsort(km.labels_), :], vmin=-1, vmax=1, center=0, yticklabels=5000)
@@ -648,22 +654,32 @@ if __name__ == "__main__":
         ax_cc.set_ylabel('Cross-correlation')
         ax_cc.set_title('Bout start activity cross-correlation')
         fig.tight_layout()
-    print("Computation of activit-bout cross-correlations complete", flush=True)
+    print("Computation of activity-bout cross-correlations complete", flush=True)
     printElapsed()
+
+    # Plot per-fish cluster contributions
+    m = int(np.ceil(np.sqrt(km.n_clusters)))
+    fig, axes = pl.subplots(m, m)
+    axes = axes.ravel()
+    for i in range(km.n_clusters):
+        x = np.arange(len(exp_data))
+        y = np.array([np.sum(exp_id[membership == i] == n) for n in x])
+        sns.barplot(x, y, ax=axes[i])
+        axes[i].set_title("Cluster " + str(i))
 
     # REMOVE THE FOLLOWING LATER
     eid = exp_id[no_nan_aa]
     eid2 = eid[no_nan][ab_thresh]
-    fb = eid2 < 11
-    mhb = np.logical_and(eid2 > 10, eid2 < 26)
+    fb = eid2 < 14
+    mhb = np.logical_and(eid2 > 13, eid2 < 26)
     trig = eid2 > 25
-    region_mat = np.zeros((10, 3))
-    for i in range(10):
+    region_mat = np.zeros((km.n_clusters, 3))
+    for i in range(km.n_clusters):
         region_mat[i, 0] = np.sum(fb[km.labels_ == i])
         region_mat[i, 1] = np.sum(mhb[km.labels_ == i])
         region_mat[i, 2] = np.sum(trig[km.labels_ == i])
     rm_norm = region_mat / np.sum(region_mat, 0, keepdims=True)
-    rm_norm = rm_norm / np.sum(rm_norm, 1, keepdims=True)
+    rm_norm /= np.sum(rm_norm, 1, keepdims=True)
     pl.figure()
     sns.heatmap(rm_norm, cmap='bone_r', xticklabels=['FB', 'MB-HB', 'TG'])
     pl.title('Contribution of "Brain regions" to clusters')
