@@ -309,7 +309,8 @@ def stack_coordinate_centroid(gi):
     x2 = gi[0].find('_0.')
     verts = gi[1]
     zcoord = float(gi[0][x1:x2]) * 2.5
-    return np.array([np.mean([v[1] for v in verts])*scale(), np.mean([v[0] for v in verts])*scale(), zcoord])
+    sc = scale()
+    return np.array([np.mean([v[1] for v in verts]) * sc, np.mean([v[0] for v in verts]) * sc, zcoord])
 
 
 def save_nuclear_coordinates(experiment):
@@ -319,7 +320,11 @@ def save_nuclear_coordinates(experiment):
         The path and filename where coordinates were saved
     """
     out_name = GetExperimentBaseName(experiment) + "_nucCentroids" + '.txt'
-    all_centroids = np.vstack([stack_coordinate_centroid(gi) for gi in experiment.graph_info])
+    try:
+        all_centroids = np.vstack([stack_coordinate_centroid(gi) for gi in experiment.graph_info])
+    except ValueError:
+        print("Did not recognize experimental region coordinates are invalid")
+        all_centroids = np.zeros((len(experiment.graph_info), 3))
     np.savetxt(out_name, all_centroids, fmt='%.1f')
     return out_name
 
@@ -340,7 +345,10 @@ def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox
     ext_start = nameOnly.lower().find(".txt")
     transform_name = nameOnly[:suffix_start]
     transform_file = referenceFolder + transform_name + '/' + transform_name + '_ffd5.xform'
-    assert os.path.exists(transform_file)
+    if not os.path.exists(transform_file):
+        print("Could not determine transform file returning all nan")
+        outshape = np.genfromtxt(centroidFilename).shape
+        return np.full(outshape, np.nan)
     outfile = referenceFolder + nameOnly[:ext_start] + '_transform.txt'
     command = 'cat ' + centroidFilename + ' | ' + 'streamxform --separator "," -- --inverse ' + transform_file + ' > ' + outfile
     sp.run(command, shell=True)  # shell=True is required for the piping to work!!
