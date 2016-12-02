@@ -360,6 +360,48 @@ def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox
     return transformed
 
 
+def all_pw_dist(coords: np.ndarray) -> np.ndarray:
+    """
+    Compute all pairwise distances with self-distances set to nan
+    Args:
+        coords: Array of coordinates for which to compute pairwise distances
+
+    Returns:
+        Matrix of size coords.shape[0]xcoords.shape[0] with all pairwise distances
+    """
+    distmat = np.zeros((coords.shape[0], coords.shape[0]))
+    for i in range(distmat.shape[0]):
+        d = np.sum((coords[i, :][None, :] - coords)**2, 1)
+        assert np.isnan(d[i]) or d[i] == 0
+        d[i] = np.nan
+        distmat[i, :] = np.sqrt(d)
+    return distmat
+
+
+def min_dist(points: np.ndarray, partners: np.ndarray, allow_0 = False) -> np.ndarray:
+    """
+    Computes for each point the distance to the closest partner
+    Args:
+        points: The points (nx3 array) for which to compute the minimal partner distance
+        partners: The partners to which distances will be computed for each point
+        allow_0: If true, a 0 distance won't be converted to NaN
+
+    Returns:
+        n long vector with the distance to the closest partner for each point
+    """
+    mds = np.zeros(points.shape[0])
+    for i, p in enumerate(points):
+        d = np.sqrt(np.sum((p[None, :] - partners)**2, 1))
+        try:
+            if allow_0:
+                mds[i] = np.nanmin(d)
+            else:
+                mds[i] = np.min(d[d > 0])
+        except ValueError:
+            mds[i] = np.nan
+    return mds
+
+
 ani = None
 ani_stack = []
 ani_im = []
