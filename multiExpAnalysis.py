@@ -288,6 +288,117 @@ def printElapsed():
     elapsed = perf_counter() - t_start
     print(str(elapsed) + " s elapsed since start.", flush=True)
 
+
+def stack_coordinate_centroid(gi):
+    """
+    Returns an (x,y,z) centroid of a graph in (um) coordinates (registration space)
+    Args:
+        gi: The graph information for a particular nucleus
+
+    Returns:
+        A 3 element numpy array with the x y and z coordinate of the nucleus center in microns
+    """
+    def scale():
+        if "FB" in gi[0]:
+            return 500/512/2
+        elif "MidHB" in gi[0]:
+            return 500/512
+        else:
+            raise ValueError("Could not determine zoom for stack")
+    x1 = gi[0].find('_Z_') + 3
+    x2 = gi[0].find('_0.')
+    verts = gi[1]
+    zcoord = float(gi[0][x1:x2]) * 2.5
+    return np.array([np.mean([v[1] for v in verts])*scale(), np.mean([v[0] for v in verts])*scale(), zcoord])
+
+
+def save_nuclear_coordinates(experiment):
+    """
+    Saves all nuclear centroids for a given experiment
+    Returns:
+        The path and filename where coordinates were saved
+    """
+    out_name = GetExperimentBaseName(experiment) + "_nucCentroids" + '.txt'
+    all_centroids = np.vstack([stack_coordinate_centroid(gi) for gi in experiment.graph_info])
+    np.savetxt(out_name, all_centroids, fmt='%.1f')
+    return out_name
+
+
+def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox/ReferenceBrainCreation/"):
+    """
+    Transform centroid coordinates from the specified file into the reference brain space and return
+    an array of those coordinates
+    Args:
+        centroidFilename: The file to convert. NOTE: The filename determines which transformation to apply!
+        referenceFolder: The folder of the reference brain trasnformations
+
+    Returns:
+        A matrix of the transformed points
+    """
+    nameOnly = os.path.basename(centroidFilename)
+    suffix_start = nameOnly.find("_nucCentroids")
+    ext_start = nameOnly.lower().find(".txt")
+    transform_name = nameOnly[:suffix_start]
+    transform_file = referenceFolder + transform_name + '/' + transform_name + '_ffd5.xform'
+    assert os.path.exists(transform_file)
+    outfile = referenceFolder + nameOnly[:ext_start] + '_transform.txt'
+    command = 'cat ' + centroidFilename + ' | ' + 'streamxform --separator "," -- --inverse ' + transform_file + ' > ' + outfile
+    sp.run(command, shell=True)  # shell=True is required for the piping to work!!
+    transformed = np.genfromtxt(outfile, delimiter=',')[:, :3]
+    # whenever there is FAILED in the file there will be a nan value in that column
+    # nan-out every row that has at least one NaN
+    has_nan = np.sum(np.isnan(transformed), 1) > 0
+    transformed[has_nan, :] = np.nan
+    return transformed
+
+
+ani = None
+ani_stack = []
+ani_im = []
+ani_show_ix = 0
+ani_fig = None
+
+
+def updatefig(*args):
+    global ani_stack, ani_show_ix, ani_im
+    ani_show_ix = (ani_show_ix + 1) % (ani_stack.shape[0] - 1)
+    ani_im.set_array(ani_stack[ani_show_ix, :, :])
+    return ani_im,
+
+
+def animate_ROI(roi_index):
+    pl.ioff()
+    from scipy.signal import lfilter
+    import matplotlib.animation as animation
+    global ani_stack, ani_im, ani_show_ix, ani_fig, ani
+    exp_index = exp_id[roi_index].astype(int)
+    all_idx = np.arange(exp_id.size).astype(int)
+    in_exp_idx = all_idx[roi_index] - np.min(all_idx[exp_id == exp_index])
+    source = exp_data[exp_index].graph_info[in_exp_idx][0]
+    ani_stack = np.load(source[:-4] + "_stack.npy").astype(np.float32)
+    verts = exp_data[exp_index].graph_info[in_exp_idx][1]
+    minx = min([v[0] for v in verts]) - 50
+    maxx = max([v[0] for v in verts]) + 50
+    miny = min([v[1] for v in verts]) - 50
+    maxy = max([v[1] for v in verts]) + 50
+    if minx < 0:
+        minx = 0
+    if miny < 0:
+        miny = 0
+    if maxx > ani_stack.shape[1]:
+        maxx = ani_stack.shape[1]
+    if maxy > ani_stack.shape[2]:
+        maxy = ani_stack.shape[2]
+    ani_stack = ani_stack[:, minx:maxx, miny:maxy].copy()
+    ani_stack = lfilter(np.ones(10)/10, 1, ani_stack, 0)
+    ani_show_ix = 0
+    ani_fig = pl.figure()
+    ani_im = pl.imshow(ani_stack[0, :, :], cmap=pl.get_cmap("bone"), animated=True)
+
+    ani = animation.FuncAnimation(ani_fig, updatefig, interval=50, blit=True)
+    pl.show()
+
+
 if __name__ == "__main__":
     print("Load data files", flush=True)
     exp_data = []
