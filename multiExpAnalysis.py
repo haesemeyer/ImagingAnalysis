@@ -359,6 +359,12 @@ def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox
     transformed[has_nan, :] = np.nan
     return transformed
 
+def rem_nan_1d(x: np.ndarray) -> np.ndarray:
+    """
+    Remove all NaN values from given vector
+    """
+    return x.copy()[np.logical_not(np.isnan(x))]
+
 
 def all_pw_dist(coords: np.ndarray) -> np.ndarray:
     """
@@ -378,27 +384,44 @@ def all_pw_dist(coords: np.ndarray) -> np.ndarray:
     return distmat
 
 
-def min_dist(points: np.ndarray, partners: np.ndarray, allow_0 = False) -> np.ndarray:
+def min_dist(points: np.ndarray, partners: np.ndarray, allow_0=False, avgSmallest=1) -> np.ndarray:
     """
     Computes for each point the distance to the closest partner
     Args:
         points: The points (nx3 array) for which to compute the minimal partner distance
         partners: The partners to which distances will be computed for each point
         allow_0: If true, a 0 distance won't be converted to NaN
+        avgSmallest: If larger than 1 instead of computing the minimal distance compute avg. across n smallest
 
     Returns:
         n long vector with the distance to the closest partner for each point
     """
+    if avgSmallest < 1:
+        ValueError("avgSmallest can't be smaller 1")
     mds = np.zeros(points.shape[0])
     for i, p in enumerate(points):
         d = np.sqrt(np.sum((p[None, :] - partners)**2, 1))
-        try:
+        if avgSmallest == 1:
+            try:
+                if allow_0:
+                    mds[i] = np.nanmin(d)
+                else:
+                    mds[i] = np.min(d[d > 0])
+            except ValueError:
+                mds[i] = np.nan
+        else:
+            # need to remove nan values, sort and then pick n smallest
             if allow_0:
-                mds[i] = np.nanmin(d)
+                d = rem_nan_1d(d)
             else:
-                mds[i] = np.min(d[d > 0])
-        except ValueError:
-            mds[i] = np.nan
+                d = d[d > 0]
+            if d.size == 0:
+                mds[i] = np.nan
+            elif d.size <= avgSmallest:
+                mds[i] = np.mean(d)
+            else:
+                d = np.sort(d)
+                mds[i] = np.mean(d[:avgSmallest])
     return mds
 
 
