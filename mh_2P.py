@@ -1117,6 +1117,67 @@ class TailDataDict:
 # TailDataDict
 
 
+class KDNode:
+    """
+    Node of a k-d tree
+    """
+    def __init__(self, location, axis, parent=None, left=None, right=None):
+        """
+        Creates a new KDNode
+        Args:
+            location: The point location of this node
+            axis: The coordinate axis along which the split occurs (p[axis]<location[axis]->left, otherwise right)
+            parent: The node's parent
+        """
+        self.l = left
+        self.r = right
+        self.p = parent
+        self.location = location
+        self.axis = axis
+
+
+class KDTree:
+    """
+    Implements a k-d tree
+    """
+    def __init__(self, points: np.ndarray, copy_points=True):
+        """
+        Creates a new k-d tree
+        Args:
+            points: The points to bulk-insert into the tree
+            copy_points: If true points will be copied before insertion, otherwise points may be changed
+        """
+        self.size = points.shape[0]
+        if copy_points:
+            pts = points.copy()
+        else:
+            pts = points
+        self.k = points.shape[1]
+        self.root = self._bulk_insert(pts)
+
+    def _bulk_insert(self, points: np.ndarray, parent=None, depth=0) -> KDNode:
+        """
+        Creates new rooted k-d tree by recursively inserting the points
+        Args:
+            points: The points to insert
+            depth: The depth of the insertion (to determine sorting axis)
+            parent: This subtree's parent
+
+        Returns:
+            A node with left and right subtrees containing the points
+        """
+        if points.size == 0:
+            return None
+        axis = depth % self.k
+        median = points.shape[0] // 2
+        # sort points along axis to find median point
+        points = points[np.argsort(points[:, axis]), :]
+        N = KDNode(points[median, :].copy(), axis, parent)
+        N.l = self._bulk_insert(points[:median, :], N, depth+1)
+        N.r = self._bulk_insert(points[median+1:, :], N, depth+1)
+        return N
+
+
 def UiGetFile(filetypes=[('Tiff stack', '.tif;.tiff')], multiple=False):
     """
     Shows a file selection dialog and returns the path to the selected file(s)
