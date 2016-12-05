@@ -1177,6 +1177,94 @@ class KDTree:
         N.r = self._bulk_insert(points[median+1:, :], N, depth+1)
         return N
 
+    def insert(self, point):
+        """
+        Inserts a new point into the k-d tree
+        """
+        N = KDNode(point, -1)
+        N.l = None
+        N.r = None
+        if self.root is None:
+            self.root = N
+            N.p = None
+        else:
+            r = self.root
+            depth = 0
+            while True:
+                i = depth % self.k
+                if N.location[i] < r.location[i]:
+                    if r.l is None:
+                        r.l = N
+                        N.p = r
+                        N.axis = i
+                        return
+                    r = r.l
+                else:
+                    if r.r is None:
+                        r.r = N
+                        N.p = r
+                        N.axis = i
+                        return
+                    r = r.r
+                depth += 1
+
+    def nearest_neighbor(self, point):
+        """
+        Find the nearest neighbor of point and it's distance to point
+        """
+        def nn(node: KDNode, p):
+            """
+            Recursively finds the nearest neighbor and distance of p
+            """
+            # go down from node to a leave and on the way back up search
+            # subtrees that are necessary to search
+            assert node is not None
+            if p[node.axis] < node.location[node.axis]:
+                if node.l is None:
+                    # this is a leave, note down as current best
+                    return node.location, np.sum((node.location - p)**2)
+                else:
+                    loc, best = nn(node.l, p)
+                    d_current = np.sum((node.location - p)**2)
+                    if d_current < best:
+                        best = d_current
+                        loc = node.location
+                    # check if we need to test the other (r) side of the tree
+                    if (p[node.axis]-node.location[node.axis])**2 < best and node.r is not None:
+                        loc2, best2 = nn(node.r, p)
+                        if best2 < best:
+                            best = best2
+                            loc = loc2
+                    return loc, best
+            else:
+                if node.r is None:
+                    # this is a leave, note down as current best
+                    return node.location, np.sum((node.location - p)**2)
+                else:
+                    loc, best = nn(node.r, p)
+                    d_current = np.sum((node.location - p)**2)
+                    if d_current < best:
+                        best = d_current
+                        loc = node.location
+                    # check if we need to test the other (l) side of the tree
+                    if (p[node.axis]-node.location[node.axis])**2 < best and node.l is not None:
+                        loc2, best2 = nn(node.l, p)
+                        if best2 < best:
+                            best = best2
+                            loc = loc2
+                    return loc, best
+        point, d = nn(self.root, point)
+        return point, np.sqrt(d)
+
+    def min_distances(self, points):
+        """
+        For each point in points returns the distance to its closest neighbor
+        """
+        md = np.empty(points.shape[0])
+        for i, p in enumerate(points):
+            md[i] = self.nearest_neighbor(p)[1]
+        return md
+
 
 def UiGetFile(filetypes=[('Tiff stack', '.tif;.tiff')], multiple=False):
     """
