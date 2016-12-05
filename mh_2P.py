@@ -1121,7 +1121,7 @@ class KDNode:
     """
     Node of a k-d tree
     """
-    def __init__(self, location, axis, parent=None, left=None, right=None):
+    def __init__(self, location: np.ndarray, axis, parent=None, left=None, right=None):
         """
         Creates a new KDNode
         Args:
@@ -1212,54 +1212,58 @@ class KDTree:
         """
         Find the nearest neighbor of point and it's distance to point
         """
-        def nn(node: KDNode, p):
+        def nn(node: KDNode, p: np.ndarray):
             """
             Recursively finds the nearest neighbor and distance of p
             """
-            # go down from node to a leave and on the way back up search
-            # subtrees that are necessary to search
-            assert node is not None
+            # algorithm: Go down from node until node is None. On the way back up
+            # assign nearest neighbor. Whenever the distance along the split axis
+            # for a node is smaller than the current best distance it means that
+            # there can theoretically be nodes on the other side of the split
+            # which are closer than the current best neightborh. Hence that subtree
+            # has to be searched as well
+            if node is None:
+                return None, np.inf
+
+            # calculate current node's full distance and distance along split axis
+            d_current = np.sum((node.location - p)**2)
+            d_axis = (p[node.axis]-node.location[node.axis])**2
+
             if p[node.axis] < node.location[node.axis]:
-                if node.l is None:
-                    # this is a leave, note down as current best
-                    return node.location, np.sum((node.location - p)**2)
-                else:
-                    loc, best = nn(node.l, p)
-                    d_current = np.sum((node.location - p)**2)
-                    if d_current < best:
-                        best = d_current
-                        loc = node.location
-                    # check if we need to test the other (r) side of the tree
-                    if (p[node.axis]-node.location[node.axis])**2 < best and node.r is not None:
-                        loc2, best2 = nn(node.r, p)
-                        if best2 < best:
-                            best = best2
-                            loc = loc2
-                    return loc, best
+                # search on left
+                loc, best = nn(node.l, p)
+                if d_current < best:
+                    best = d_current
+                    loc = node.location
+                # check if we need to test the other (r) side of the tree
+                if d_axis < best:
+                    loc2, best2 = nn(node.r, p)
+                    if best2 < best:
+                        best = best2
+                        loc = loc2
+                return loc, best
             else:
-                if node.r is None:
-                    # this is a leave, note down as current best
-                    return node.location, np.sum((node.location - p)**2)
-                else:
-                    loc, best = nn(node.r, p)
-                    d_current = np.sum((node.location - p)**2)
-                    if d_current < best:
-                        best = d_current
-                        loc = node.location
-                    # check if we need to test the other (l) side of the tree
-                    if (p[node.axis]-node.location[node.axis])**2 < best and node.l is not None:
-                        loc2, best2 = nn(node.l, p)
-                        if best2 < best:
-                            best = best2
-                            loc = loc2
-                    return loc, best
+                loc, best = nn(node.r, p)
+                if d_current < best:
+                    best = d_current
+                    loc = node.location
+                # check if we need to test the other (l) side of the tree
+                if d_axis < best:
+                    loc2, best2 = nn(node.l, p)
+                    if best2 < best:
+                        best = best2
+                        loc = loc2
+                return loc, best
+
         point, d = nn(self.root, point)
         return point, np.sqrt(d)
 
-    def min_distances(self, points):
+    def min_distances(self, points: np.ndarray):
         """
         For each point in points returns the distance to its closest neighbor
         """
+        if points.shape[1] != self.k:
+            raise ValueError("Dimensionality (k) of tree and points array does not match")
         md = np.empty(points.shape[0])
         for i, p in enumerate(points):
             md[i] = self.nearest_neighbor(p)[1]
