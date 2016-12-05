@@ -1208,11 +1208,18 @@ class KDTree:
                     r = r.r
                 depth += 1
 
-    def nearest_neighbor(self, point):
+    def nearest_neighbor(self, point, allow_0 = True):
         """
-        Find the nearest neighbor of point and it's distance to point
+        Find a point's nearest neighbor it's distance
+        Args:
+            point: The point for which to find the nearest neighbor
+            allow_0: If set to false, 0-distance points won't be returned and next nearest will be chosen
+
+        Returns:
+            [0]: The nearest neighbor coordinates
+            [1]: The euclidian distance to the nearest neighbor
         """
-        def nn(node: KDNode, p: np.ndarray):
+        def nn(node: KDNode, p: np.ndarray, allow_0):
             """
             Recursively finds the nearest neighbor and distance of p
             """
@@ -1227,46 +1234,54 @@ class KDTree:
 
             # calculate current node's full distance and distance along split axis
             d_current = np.sum((node.location - p)**2)
-            d_axis = (p[node.axis]-node.location[node.axis])**2
+            if not allow_0 and d_current == 0:
+                d_current = np.inf
+            d_axis = (p[node.axis]-node.location[node.axis])**2  # NOTE: Don't adjust d_axis based on allow_0
 
             if p[node.axis] < node.location[node.axis]:
                 # search on left
-                loc, best = nn(node.l, p)
+                loc, best = nn(node.l, p, allow_0)
                 if d_current < best:
                     best = d_current
                     loc = node.location
                 # check if we need to test the other (r) side of the tree
                 if d_axis < best:
-                    loc2, best2 = nn(node.r, p)
+                    loc2, best2 = nn(node.r, p, allow_0)
                     if best2 < best:
                         best = best2
                         loc = loc2
                 return loc, best
             else:
-                loc, best = nn(node.r, p)
+                loc, best = nn(node.r, p, allow_0)
                 if d_current < best:
                     best = d_current
                     loc = node.location
                 # check if we need to test the other (l) side of the tree
                 if d_axis < best:
-                    loc2, best2 = nn(node.l, p)
+                    loc2, best2 = nn(node.l, p, allow_0)
                     if best2 < best:
                         best = best2
                         loc = loc2
                 return loc, best
 
-        point, d = nn(self.root, point)
+        point, d = nn(self.root, point, allow_0)
         return point, np.sqrt(d)
 
-    def min_distances(self, points: np.ndarray):
+    def min_distances(self, points: np.ndarray, allow_0=False):
         """
         For each point in points returns the distance to its closest neighbor
+        Args:
+            points: The points for which to find the closest neighbor distance
+            allow_0: Determines whether points with the exact same location are considered neighbors or not
+
+        Returns:
+            The minimum distance for each point in points
         """
         if points.shape[1] != self.k:
             raise ValueError("Dimensionality (k) of tree and points array does not match")
         md = np.empty(points.shape[0])
         for i, p in enumerate(points):
-            md[i] = self.nearest_neighbor(p)[1]
+            md[i] = self.nearest_neighbor(p, allow_0)[1]
         return md
 
 
