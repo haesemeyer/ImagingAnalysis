@@ -1,5 +1,5 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
-from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr
+from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr, KDTree
 import numpy as np
 
 import matplotlib.pyplot as pl
@@ -398,6 +398,12 @@ def min_dist(points: np.ndarray, partners: np.ndarray, allow_0=False, avgSmalles
     """
     if avgSmallest < 1:
         ValueError("avgSmallest can't be smaller 1")
+    # for larger set of partner points if we only require the minimal distance use k-d-tree for faster computation
+    # cut-off has been determined empirically
+    if partners.shape[0] >= 20000 and avgSmallest == 1:
+        kd_tree = KDTree(partners)
+        return kd_tree.min_distances(points, allow_0)
+
     mds = np.zeros(points.shape[0])
     for i, p in enumerate(points):
         d = np.sqrt(np.sum((p[None, :] - partners)**2, 1))
