@@ -1173,6 +1173,11 @@ class KDTree:
         axis = depth % self.k
         median = points.shape[0] // 2
         # sort points along axis to find median point
+        # NOTE: In theory, np.argpartition should be faster at least for large numbers of points, since its order
+        # of growth is O(n) compared to O(n log n) of full sort. However, even for 1e6 points (which is probably
+        # the max we'll ever see) sorting is still in fact faster for building the tree. This is likely due to the
+        # fact that most calls to sort or partition (due to the tree structure) will be made for very small amounts
+        # of data, for which np.argsort is in fact faster (still slower for n=1000 but faster for n=100 (or below)
         points = points[np.argsort(points[:, axis]), :]
         N = KDNode(points[median, :].copy(), axis, parent)
         N.l = self._bulk_insert(points[:median, :], N, depth+1)
