@@ -1152,7 +1152,9 @@ class KDTree:
             pts = points.copy()
         else:
             pts = points
-        self.k = points.shape[1]
+        if pts.ndim == 1:
+            pts = pts[:, None]
+        self.k = pts.shape[1]
         self.root = self._bulk_insert(pts)
 
     def _bulk_insert(self, points: np.ndarray, parent=None, depth=0) -> KDNode:
@@ -1208,7 +1210,7 @@ class KDTree:
                     r = r.r
                 depth += 1
 
-    def nearest_neighbor(self, point, allow_0 = True):
+    def nearest_neighbor(self, point: np.ndarray, allow_0=True):
         """
         Find a point's nearest neighbor it's distance
         Args:
@@ -1264,6 +1266,9 @@ class KDTree:
                         loc = loc2
                 return loc, best
 
+        if type(point) is not np.ndarray:
+            # try to fix this mess
+            point = np.array([point])
         point, d = nn(self.root, point, allow_0)
         return point, np.sqrt(d)
 
@@ -1277,6 +1282,8 @@ class KDTree:
         Returns:
             The minimum distance for each point in points
         """
+        if points.ndim == 1:
+            points = points[:, None]
         if points.shape[1] != self.k:
             raise ValueError("Dimensionality (k) of tree and points array does not match")
         md = np.empty(points.shape[0])
