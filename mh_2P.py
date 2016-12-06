@@ -1277,6 +1277,77 @@ class KDTree:
         point, d = nn(self.root, point, allow_0)
         return point, np.sqrt(d)
 
+    def nearest_n_neighbors(self, point: np.ndarray, n, allow_0=True):
+        """
+        Find a points n nearest neighbors in a tree
+        Args:
+            point: The point for which to find the nearest neighbors
+            n: The number of neighbors to return
+            allow_0: Whether to consider a 0 distance a valid find (likely identity as opposed to neighbor)
+
+        Returns:
+            [0]: The n coordinates of the nearest neighbors
+            [1]: The euclidian distances to all neighbors
+        """
+        def insert_sorted(d, new_d, points, new_point):
+            """
+            If new_d is smaller than any element of d, inserts new_d into d such that d always remains in ascending
+            sorted order. Mirrors all operations on d with the points array.
+            """
+            if new_d >= d[-1]:
+                # no update necessary
+                return
+            for i in range(d.size):
+                if new_d < d[i]:
+                    b = d[i]
+                    d[i] = new_d
+                    new_d = b
+                    b = points[i, :].copy()
+                    points[i, :] = new_point
+                    new_point = b
+
+        def nnn(node: KDNode, p: np.ndarray, n, allow_0):
+            """
+            Recursively find the n nearest neighbors of p and their distances
+            """
+            if node is None:
+                return np.zeros((n, self.k)), np.full(n, np.inf)
+
+            # calculate current node's full distance and distance along split axis
+            d_current = np.sum((node.location - p) ** 2)
+            if not allow_0 and d_current == 0:
+                d_current = np.inf
+            d_axis = (p[node.axis] - node.location[node.axis]) ** 2
+            if p[node.axis] < node.location[node.axis]:
+                # search on left
+                loc, best = nnn(node.l, p, n, allow_0)
+                insert_sorted(best, d_current, loc, node.location)
+                # check if we need to test the other (r) side of the tree
+                if d_axis < best[-1]:
+                    loc2, best2 = nnn(node.r, p, n, allow_0)
+                    for i in range(n):
+                        insert_sorted(best, best2[i], loc, loc2[i, :])
+                return loc, best
+            else:
+                loc, best = nnn(node.r, p, n, allow_0)
+                insert_sorted(best, d_current, loc, node.location)
+                # check if we need to test the other (l) side of the tree
+                if d_axis < best[-1]:
+                    loc2, best2 = nnn(node.l, p, n, allow_0)
+                    for i in range(n):
+                        insert_sorted(best, best2[i], loc, loc2[i, :])
+                return loc, best
+
+        if type(point) is not np.ndarray:
+            # try to fix this mess
+            point = np.array([point])
+        if n < 1:
+            raise ValueError("n has to be at least 1")
+        if n > self.size:
+            raise ValueError("Can't search for more neighbors than elements in the tree")
+        point, d = nnn(self.root, point, n, allow_0)
+        return point, np.sqrt(d)
+
     def min_distances(self, points: np.ndarray, allow_0=False):
         """
         For each point in points returns the distance to its closest neighbor
@@ -1294,6 +1365,30 @@ class KDTree:
         md = np.empty(points.shape[0])
         for i, p in enumerate(points):
             md[i] = self.nearest_neighbor(p, allow_0)[1]
+        return md
+
+    def avg_min_distances(self, points: np.array, n_neighbors, allow_0=False):
+        """
+        For each point in points returns the average distance to its n closest neighbors
+        Args:
+            points: The points for which to find the distances
+            n_neighbors: The number of closest neighbors to include
+            allow_0: Determines whether points with the exact same location are considered neighbors or not
+
+        Returns:
+            The average distance for each point in points to its n closest neighbors
+        """
+        if n_neighbors < 1:
+            raise ValueError("n_neighbors hast to be at least 1")
+        if n_neighbors == 1:
+            return self.min_distances(points, allow_0)
+        if points.ndim == 1:
+            points = points[:, None]
+        if points.shape[1] != self.k:
+            raise ValueError("Dimensionality (k) of tree and points array does not match")
+        md = np.empty(points.shape[0])
+        for i, p in enumerate(points):
+            md[i] = np.mean(self.nearest_n_neighbors(p, n_neighbors, allow_0)[1])
         return md
 
 
