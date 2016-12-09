@@ -1348,6 +1348,52 @@ class KDTree:
         point, d = nnn(self.root, point, n, allow_0)
         return point, np.sqrt(d)
 
+    def count_neighbors(self, point, radius):
+        """
+        Counts the number of points in this tree that are within a hypersphere
+        Args:
+            point: The center of the sphere
+            radius: The spheres radius (maximum distance)
+
+        Returns:
+            Count of tree points within the sphere
+        """
+        def cnt(node: KDNode, p: np.ndarray, r_squared):
+            """
+            Recursively counts all neighbors around p within radius distance
+            """
+            if node is None:
+                return
+
+            nonlocal count
+
+            # calculate current node's full distance and distance along split axis
+            d_current = np.sum((node.location - p)**2)
+            # if current node is within radius around p increment count
+            if d_current < r_squared:
+                count += 1
+
+            d_axis = (p[node.axis]-node.location[node.axis])**2
+
+            if p[node.axis] < node.location[node.axis]:
+                # count on left
+                cnt(node.l, p, r_squared)
+                # check if we need to test the other (r) side of the tree
+                if d_axis <= r_squared:
+                    cnt(node.r, p, r_squared)
+                return
+            else:
+                cnt(node.r, p, r_squared)
+                # check if we need to test the other (l) side of the tree
+                if d_axis <= r_squared:
+                    cnt(node.l, p, r_squared)
+                return
+        if type(point) is not np.ndarray:
+            point = np.array([point])
+        count = 0
+        cnt(self.root, point, radius**2)
+        return count
+
     def min_distances(self, points: np.ndarray, allow_0=False):
         """
         For each point in points returns the distance to its closest neighbor
