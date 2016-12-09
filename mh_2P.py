@@ -1252,7 +1252,7 @@ class KDTree:
                     best = d_current
                     loc = node.location
                 # check if we need to test the other (r) side of the tree
-                if d_axis < best:
+                if d_axis <= best:
                     loc2, best2 = nn(node.r, p, allow_0)
                     if best2 < best:
                         best = best2
@@ -1264,7 +1264,7 @@ class KDTree:
                     best = d_current
                     loc = node.location
                 # check if we need to test the other (l) side of the tree
-                if d_axis < best:
+                if d_axis <= best:
                     loc2, best2 = nn(node.l, p, allow_0)
                     if best2 < best:
                         best = best2
@@ -1323,7 +1323,7 @@ class KDTree:
                 loc, best = nnn(node.l, p, n, allow_0)
                 insert_sorted(best, d_current, loc, node.location)
                 # check if we need to test the other (r) side of the tree
-                if d_axis < best[-1]:
+                if d_axis <= best[-1]:
                     loc2, best2 = nnn(node.r, p, n, allow_0)
                     for i in range(n):
                         insert_sorted(best, best2[i], loc, loc2[i, :])
@@ -1332,7 +1332,7 @@ class KDTree:
                 loc, best = nnn(node.r, p, n, allow_0)
                 insert_sorted(best, d_current, loc, node.location)
                 # check if we need to test the other (l) side of the tree
-                if d_axis < best[-1]:
+                if d_axis <= best[-1]:
                     loc2, best2 = nnn(node.l, p, n, allow_0)
                     for i in range(n):
                         insert_sorted(best, best2[i], loc, loc2[i, :])
