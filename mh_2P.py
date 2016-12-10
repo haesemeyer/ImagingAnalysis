@@ -1192,28 +1192,27 @@ class KDTree:
         N.l = None
         N.r = None
         if self.root is None:
+            N.axis = 0
             self.root = N
             N.p = None
         else:
-            r = self.root
-            depth = 0
+            node = self.root
             while True:
-                i = depth % self.k
-                if N.location[i] < r.location[i]:
-                    if r.l is None:
-                        r.l = N
-                        N.p = r
-                        N.axis = i
+                i = node.axis
+                if N.location[i] < node.location[i]:
+                    if node.l is None:
+                        N.axis = (i + 1) % self.k  # switch axis
+                        N.p = node
+                        node.l = N
                         return
-                    r = r.l
+                    node = node.l
                 else:
-                    if r.r is None:
-                        r.r = N
-                        N.p = r
-                        N.axis = i
+                    if node.r is None:
+                        N.axis = (i + 1) % self.k
+                        N.p = node
+                        node.r = N
                         return
-                    r = r.r
-                depth += 1
+                    node = node.r
 
     def nearest_neighbor(self, point: np.ndarray, allow_0=True):
         """
