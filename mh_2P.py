@@ -1261,20 +1261,20 @@ class KDTree:
             if node is None:
                 return None, np.inf
 
-            # calculate current node's full distance and distance along split axis
-            d_current = np.sum((node.location - p)**2)
-            if not allow_0 and d_current == 0:
-                d_current = np.inf
+            # calculate current node's distance along split axis
             d_axis = (p[node.axis]-node.location[node.axis])**2  # NOTE: Don't adjust d_axis based on allow_0
 
             if p[node.axis] < node.location[node.axis]:
                 # search on left
                 loc, best = nn(node.l, p, allow_0)
-                if d_current < best:
-                    best = d_current
-                    loc = node.location
-                # check if we need to test the other (r) side of the tree
+                # check if we need to test the other (r) side of the  and whether to update best with current node
                 if d_axis <= best:
+                    d_current = np.sum((node.location - p) ** 2)
+                    if not allow_0 and d_current == 0:
+                        pass
+                    elif d_current < best:
+                        best = d_current
+                        loc = node.location
                     loc2, best2 = nn(node.r, p, allow_0)
                     if best2 < best:
                         best = best2
@@ -1282,11 +1282,14 @@ class KDTree:
                 return loc, best
             else:
                 loc, best = nn(node.r, p, allow_0)
-                if d_current < best:
-                    best = d_current
-                    loc = node.location
                 # check if we need to test the other (l) side of the tree
                 if d_axis <= best:
+                    d_current = np.sum((node.location - p) ** 2)
+                    if not allow_0 and d_current == 0:
+                        pass
+                    elif d_current < best:
+                        best = d_current
+                        loc = node.location
                     loc2, best2 = nn(node.l, p, allow_0)
                     if best2 < best:
                         best = best2
@@ -1335,26 +1338,27 @@ class KDTree:
             if node is None:
                 return np.zeros((n, self.k)), np.full(n, np.inf)
 
-            # calculate current node's full distance and distance along split axis
-            d_current = np.sum((node.location - p) ** 2)
-            if not allow_0 and d_current == 0:
-                d_current = np.inf
             d_axis = (p[node.axis] - node.location[node.axis]) ** 2
             if p[node.axis] < node.location[node.axis]:
                 # search on left
                 loc, best = nnn(node.l, p, n, allow_0)
-                insert_sorted(best, d_current, loc, node.location)
-                # check if we need to test the other (r) side of the tree
+                # check if we need to test the other (r) side of the tree and if the current node itself is a contender
                 if d_axis <= best[-1]:
+                    # calculate current node's full distance
+                    d_current = np.sum((node.location - p) ** 2)
+                    if allow_0 or d_current != 0:
+                        insert_sorted(best, d_current, loc, node.location)
                     loc2, best2 = nnn(node.r, p, n, allow_0)
                     for i in range(n):
                         insert_sorted(best, best2[i], loc, loc2[i, :])
                 return loc, best
             else:
                 loc, best = nnn(node.r, p, n, allow_0)
-                insert_sorted(best, d_current, loc, node.location)
-                # check if we need to test the other (l) side of the tree
+                # check if we need to test the other (l) side of the tree and if the current node itself is a contender
                 if d_axis <= best[-1]:
+                    d_current = np.sum((node.location - p) ** 2)
+                    if allow_0 or d_current != 0:
+                        insert_sorted(best, d_current, loc, node.location)
                     loc2, best2 = nnn(node.l, p, n, allow_0)
                     for i in range(n):
                         insert_sorted(best, best2[i], loc, loc2[i, :])
@@ -1389,13 +1393,11 @@ class KDTree:
 
             nonlocal count
 
-            # calculate current node's full distance and distance along split axis
-            d_current = np.sum((node.location - p)**2)
-            # if current node is within radius around p increment count
-            if d_current < r_squared:
-                count += 1
-
+            # calculate current node's distance along split axis and full distance if within reach along axis
             d_axis = (p[node.axis]-node.location[node.axis])**2
+
+            if d_axis < r_squared and np.sum((node.location - p) ** 2) < r_squared:
+                count += 1
 
             if p[node.axis] < node.location[node.axis]:
                 # count on left
