@@ -1140,12 +1140,13 @@ class KDTree:
     """
     Implements a k-d tree
     """
-    def __init__(self, points: np.ndarray, copy_points=True):
+    def __init__(self, points: np.ndarray, copy_points=True, split_by_spread=False):
         """
         Creates a new k-d tree
         Args:
             points: The points to bulk-insert into the tree
             copy_points: If true points will be copied before insertion, otherwise points may be changed
+            split_by_spread: If true coordinate splits won't simply alternate but will occur along axis with largest est. spread
         """
         self.size = points.shape[0]
         if copy_points:
@@ -1155,7 +1156,25 @@ class KDTree:
         if pts.ndim == 1:
             pts = pts[:, None]
         self.k = pts.shape[1]
+        self.sbs = False
+        if self.k > 1:
+            # only consider doing spread calculations if there is more than one dimension
+            self.sbs = split_by_spread
         self.root = self._bulk_insert(pts)
+    
+    @staticmethod
+    def _largest_spread(points: np.ndarray) -> int:
+        """
+        Computes the dimension of largest spread of points
+        Args:
+            points: For which to compute spread along each dimension
+
+        Returns:
+            The dimension 0 <= d < points.shape[1] with the largest coordinate spread
+        """
+        top = np.percentile(points, 95, 0, interpolation="higher")
+        bottom = np.percentile(points, 5, 0, interpolation="lower")
+        return np.argmax(top - bottom)
 
     def _bulk_insert(self, points: np.ndarray, parent=None, depth=0) -> KDNode:
         """
@@ -1170,7 +1189,10 @@ class KDTree:
         """
         if points.size == 0:
             return None
-        axis = depth % self.k
+        if self.sbs:
+            axis = self._largest_spread(points)
+        else:
+            axis = depth % self.k
         median = points.shape[0] // 2
         # sort points along axis to find median point
         # NOTE: In theory, np.argpartition should be faster at least for large numbers of points, since its order
