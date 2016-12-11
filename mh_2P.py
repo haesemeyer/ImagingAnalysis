@@ -1189,7 +1189,8 @@ class KDTree:
         """
         if points.size == 0:
             return None
-        if self.sbs:
+        # calculate spread if requested but never for small point clouds
+        if self.sbs and points.shape[0] > 10:
             axis = self._largest_spread(points)
         else:
             axis = depth % self.k
@@ -1202,8 +1203,8 @@ class KDTree:
         # of data, for which np.argsort is in fact faster (still slower for n=1000 but faster for n=100 (or below)
         points = points[np.argsort(points[:, axis]), :]
         N = KDNode(points[median, :].copy(), axis, parent)
-        N.l = self._bulk_insert(points[:median, :], N, depth+1)
-        N.r = self._bulk_insert(points[median+1:, :], N, depth+1)
+        N.l = self._bulk_insert(points[:median, :], N, axis+1)
+        N.r = self._bulk_insert(points[median+1:, :], N, axis+1)
         return N
 
     def insert(self, point):
