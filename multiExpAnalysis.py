@@ -566,7 +566,7 @@ if __name__ == "__main__":
     discovery_unit_marker[is_pot_stim] = to_analyze
 
     # remove NaN containing traces from activity and motor matrix
-    no_nan_aa = np.sum(np.isnan(all_activity), 1) == 0
+    no_nan_aa = np.sum(np.logical_or(np.isnan(all_activity), np.isinf(all_activity)), 1) == 0
     all_activity = all_activity[no_nan_aa, :]
     all_motor = all_motor[no_nan_aa, :]
     discovery_unit_marker = discovery_unit_marker[no_nan_aa]
