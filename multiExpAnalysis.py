@@ -218,6 +218,7 @@ def MakeAndSaveROIStack(experiment_data, exp_zoom_factor, unit_cluster_ids, clus
         clusterNumber: The cluster number(s) for which to create stack. If a list all ROI's that belong to any of the
         list's clusters will be marked
     """
+    assert len(experiment_data.graph_info) == unit_cluster_ids.size
     selector = np.zeros(unit_cluster_ids.size)
     id_string = ""
     try:
@@ -253,6 +254,27 @@ def ReformatROIStack(stackFilename, referenceFolder="E:/Dropbox/ReferenceBrainCr
     sp.run(command)
 
 
+def ReformatTGROIStack(stackFilename, leftTG=True, referenceFolder="E:/Dropbox/ReferenceTrigeminalCreation/"):
+    assert "Trigem" in stackFilename
+    nameOnly = os.path.basename(stackFilename)
+    trigem_start = nameOnly.find("Trigem")
+    fnum_start = trigem_start+7
+    ext_start = nameOnly.lower().find(".nrrd")
+    transform_name = nameOnly[fnum_start:fnum_start+2]
+    if leftTG:
+        transform_name += "_into_left"
+        referenceBrain = referenceFolder + "Left_04_05_09_11.nrrd"
+    else:
+        transform_name += "_into_right"
+        referenceBrain = referenceFolder + "Right_06_07_08_10.nrrd"
+    transform_file = referenceFolder + transform_name + '/ffd5.xform'
+    assert os.path.exists(transform_file)
+    assert os.path.exists(referenceBrain)
+    outfile = referenceFolder + nameOnly[:ext_start] + '_reg.nrrd'
+    command = 'reformatx --outfile ' + outfile + ' --floating ' + stackFilename + ' ' + referenceBrain + ' ' + transform_file
+    sp.run(command)
+
+
 def MakeMeanNrrd():
     sourceFiles = UiGetFile([('Nrrd files', '.nrrd')], True)
     header = None
@@ -271,6 +293,22 @@ def MakeMeanNrrd():
     mean_stack[mean_stack > 255] = 255
     directory = os.path.dirname(sourceFiles[0]) + '/'
     nrrd.write(directory+"mean_stack.nrrd", mean_stack.astype(np.uint8), header)
+
+
+def CreateAndReformatAllClusterStacks():
+    cluster_ids = np.unique(membership[membership != -1])
+    for i, e in enumerate(exp_data):
+        if "FB" in e.graph_info[0][0]:
+            zf = 2
+        elif "MidHB" in e.graph_info[0][0]:
+            zf = 1
+        else:
+            print("Non forebrain or mid-hindbrain stacks currently not processed")
+            continue
+        sfiles = [MakeAndSaveROIStack(e, zf, membership[exp_id == i], c) for c in cluster_ids]
+        for s in sfiles:
+            ReformatROIStack(s)
+    return True
 
 
 def expVigor(expData):
