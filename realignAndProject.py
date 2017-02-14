@@ -34,12 +34,14 @@ if __name__ == "__main__":
         if not path.exists(save_dir):
             makedirs(save_dir)
             print("Created projections directory", flush=True)
+        f_aligned = f[:-4] + "_stack.npy"
+        # if this run is for reference creation, we first check whether a realigned stack already exists
+        if is_ref and path.exists(f_aligned):
+            stack = np.load(f_aligned).astype(np.float32)
         stack = OpenStack(f).astype(float)
-        # Realignment creates really bad artefacts in the 780nm RFP stacks whenever the eye is present - worse than
-        # gcamp stacks
         stack = ReAlign(stack, 4 * zoom_level)[0]
         if not is_ref:
-            np.save(f[:-4] + "_stack.npy", stack.astype(np.uint8))
+            np.save(f_aligned, stack.astype(np.uint8))
         print("Stack realigned", flush=True)
 
         if is_ref:
