@@ -1082,7 +1082,10 @@ class TailData:
 
 
 class TailDataDict:
-
+    """
+    Class for managing TailData objects across multiple experiments
+    without needing to re-read files from disk
+    """
     def __init__(self, ca_timeConstant=1.796, frameRate=100):
         self._td_dict = dict()
         self.ca_timeConstant = ca_timeConstant
@@ -1106,6 +1109,9 @@ class TailDataDict:
                 raise KeyError('Could not find taildata for file')
             self._td_dict[tf] = td
             return td
+
+    def __contains__(self, item):
+        return item in self._td_dict
 
     @staticmethod
     def tailFile(tif_name):
