@@ -1111,7 +1111,11 @@ class TailDataDict:
             return td
 
     def __contains__(self, item):
-        return item in self._td_dict
+        if len(item) > 4 and item[-4:] == 'tail':
+            tf = item
+        else:
+            tf = self.tailFile(item)
+        return tf in self._td_dict
 
     @staticmethod
     def tailFile(tif_name):
