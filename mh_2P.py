@@ -962,7 +962,7 @@ class TailData:
         # compute tail velocities based on 10-window filtered cumulative angle trace
         fca = lfilter(np.ones(10)/10, 1, self.cumAngles)
         self.velocity = np.hstack((0, np.diff(fca)))
-        self.velcty_noise = np.nanstd(self.velocity[self.velocity<4])
+        self.velcty_noise = np.nanstd(self.velocity[self.velocity < 4])
         # compute a time-trace assuming a constant frame-rate which starts at 0
         # for the likely first camera frame during the first acquisition frame
         # we infer this frame by going back avgCount frames from the first frame
