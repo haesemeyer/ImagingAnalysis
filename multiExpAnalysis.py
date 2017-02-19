@@ -709,7 +709,8 @@ if __name__ == "__main__":
             reg_corr_mat[i, j] = np.corrcoef(all_activity[i, :], reg_trans[:, j])[0, 1]
         reg_corr_mat[i, -1] = np.corrcoef(all_activity[i, :], all_motor[i, :])[0, 1]
 
-    reg_corr_mat[np.abs(reg_corr_mat) < 0.5] = 0
+    reg_corr_th = 0.6
+    reg_corr_mat[np.abs(reg_corr_mat) < reg_corr_th] = 0
     no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
     reg_corr_mat = reg_corr_mat[no_nan, :]
 
@@ -718,7 +719,7 @@ if __name__ == "__main__":
     # plot regressor correlation matrix - all units no clustering
     fig, ax = pl.subplots()
     sns.heatmap(reg_corr_mat[np.argsort(ab_thresh)[::-1], :], vmin=-1, vmax=1, center=0, yticklabels=75000)
-    ax.set_title('Regressor correlations, thresholded at 0.5')
+    ax.set_title('Regressor correlations, thresholded at ' + str(reg_corr_th))
 
     # remove all rows that don't have at least one above-threshold correlation
     # NOTE: The copy statement below is required to prevent a stale copy of the full-sized array to remain in memory
