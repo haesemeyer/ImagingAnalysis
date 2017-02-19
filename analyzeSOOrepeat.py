@@ -277,7 +277,8 @@ if __name__ == "__main__":
     for fname in graphFiles:
         f = open(fname, 'rb')
         graphs = pickle.load(f)
-        tryZCorrect(graphs, eyemask)
+        if len(graphs) > 0:
+            tryZCorrect(graphs, eyemask)
         graph_list += graphs
 
     tdd = TailDataDict(graph_list[0].CaTimeConstant)
