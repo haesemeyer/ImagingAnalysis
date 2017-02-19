@@ -1,12 +1,12 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
 from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr, KDTree
 import numpy as np
-
+from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as pl
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from time import perf_counter
-
+import scipy.signal as signal
 import pickle
 import nrrd
 import sys
@@ -550,6 +550,25 @@ if __name__ == "__main__":
 
     print("Data loaded and aggregated", flush=True)
     printElapsed()
+    # Filter our activity traces with a gaussian window for rate estimation - sigma = 0.3 seconds
+    window_size = 0.3 * exp_data[0].frameRate
+    all_activity = gaussian_filter1d(all_activity, window_size, axis=1)
+    # Plot the frequency gain characteristics of the filter used
+    delta = np.zeros(21)
+    delta[10] = 1
+    filter_coeff = gaussian_filter1d(delta, window_size)
+    nyquist = exp_data[0].frameRate/2
+    w, h = signal.freqz(filter_coeff, worN=8000)
+    with sns.axes_style('whitegrid'):
+        pl.figure()
+        pl.plot((w/np.pi)*nyquist, np.absolute(h), linewidth=2)
+        pl.xlabel('Frequency [Hz]')
+        pl.ylabel('Gain')
+        pl.title('Frequency response of gaussian filter')
+        pl.ylim(-0.05, 1.05)
+    print("Activity filtered", flush=True)
+    printElapsed()
+
     # for each cell that passes is_pot_stim holds the count of the number of other cells and other experiments that
     # are above the correlation threshold
     n_cells_above = np.zeros(is_pot_stim.sum(), dtype=np.int32)
