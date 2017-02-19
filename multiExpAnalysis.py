@@ -295,7 +295,7 @@ def MakeMeanNrrd():
     nrrd.write(directory+"mean_stack.nrrd", mean_stack.astype(np.uint8), header)
 
 
-def CreateAndReformatAllClusterStacks():
+def CreateAndReformatAllClusterStacks(membership):
     cluster_ids = np.unique(membership[membership != -1])
     for i, e in enumerate(exp_data):
         if "FB" in e.graph_info[0][0]:
