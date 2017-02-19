@@ -311,6 +311,50 @@ def CreateAndReformatAllClusterStacks(membership):
     return True
 
 
+def DumpAnalysisDataHdf5(filename):
+    """
+    Save all created analysis data into one hdf5 file for easy re-analysis
+    Args:
+        filename: The name of the file to create - if file already exists exception will be raised
+    Returns:
+        True on success
+    """
+    import h5py
+    try:
+        dfile = h5py.File(filename, 'w-')  # fail if file already exists
+    except OSError:
+        print("Could not create file. Make sure a file with the same name doesn't exist in this location.")
+        return False
+    try:
+        # save major data structures compressed
+        dfile.create_dataset("all_activity", data=all_activity, compression="gzip", compression_opts=9)
+        dfile.create_dataset("all_motor", data=all_motor, compression="gzip", compression_opts=9)
+        dfile.create_dataset("avg_analysis_data", data=avg_analysis_data, compression="gzip", compression_opts=9)
+        # pickle our experiment data as a byte-stream
+        pstring = pickle.dumps(exp_data)
+        dfile.create_dataset("exp_data_pickle", data=np.void(pstring))
+        # save smaller arrays uncompressed
+        dfile.create_dataset("exp_id", data=exp_id)
+        dfile.create_dataset("membership", data=membership)
+        dfile.create_dataset("no_nan", data=no_nan)
+        dfile.create_dataset("no_nan_aa", data=no_nan_aa)
+        dfile.create_dataset("reg_corr_mat", data=reg_corr_mat)
+        dfile.create_dataset("reg_trans", data=reg_trans)
+        dfile.create_dataset("r2_sensory_fit", data=r2_sensory_fit)
+        dfile.create_dataset("r2_sensory_motor_fit", data=r2_sensory_motor_fit)
+        dfile.create_dataset("r2_sensor_motor_shuffle", data=r2_sensory_motor_shuffle)
+        # save transformed nuclear centroids if they exist, otherwise create them
+        try:
+            tf_centroids
+        except NameError:
+            print("Transforming all coordinate centroids")
+            tf_centroids = np.vstack([transform_centroid_coordinates(save_nuclear_coordinates(e)) for e in exp_data])
+        dfile.create_dataset("tf_centroids", data=tf_centroids)
+    finally:
+        dfile.close()
+    return True
+
+
 def expVigor(expData):
     done = dict()
     vigs = []
@@ -396,6 +440,7 @@ def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox
     has_nan = np.sum(np.isnan(transformed), 1) > 0
     transformed[has_nan, :] = np.nan
     return transformed
+
 
 def rem_nan_1d(x: np.ndarray) -> np.ndarray:
     """
