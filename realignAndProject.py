@@ -38,8 +38,9 @@ if __name__ == "__main__":
         # if this run is for reference creation, we first check whether a realigned stack already exists
         if is_ref and path.exists(f_aligned):
             stack = np.load(f_aligned).astype(np.float32)
-        stack = OpenStack(f).astype(float)
-        stack = ReAlign(stack, 4 * zoom_level)[0]
+        else:
+            stack = OpenStack(f).astype(np.float32)
+            stack = ReAlign(stack, 4 * zoom_level)[0]
         if not is_ref:
             np.save(f_aligned, stack.astype(np.uint8))
         print("Stack realigned", flush=True)
