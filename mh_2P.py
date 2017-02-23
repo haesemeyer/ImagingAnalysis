@@ -18,6 +18,7 @@ from numpy import std, zeros
 import cv2
 
 import sys
+import os
 
 import warnings
 
@@ -328,6 +329,9 @@ class ImagingData:
             raise ValueError("Imaging data and swim vigor need to have the same dimensions")
         self.RawData = imagingData
         self.Vigor = swimVigor.astype(np.float32)
+        # the following can optionally be assigned later
+        self.graph_info = []  # for each unit (row) in RawData file and anatomical location of its origin
+        self.original_time_per_frame = 0  # acquisition tim of each microscope frame before interpolation
 
     @property
     def NFrames(self):
@@ -336,6 +340,34 @@ class ImagingData:
     @property
     def NUnits(self):
         return self.RawData.shape[0]
+
+    @property
+    def AvgUnitBrightness(self):
+        """
+        The average brightness of each unit in the experiment
+        """
+        if len(self.graph_info) == 0:
+            return None
+        avg_brightness = np.zeros(len(self.graph_info), dtype=np.float32)
+        projection_dict = {}
+        for i, gi in enumerate(self.graph_info):
+            sf = gi[0]
+            if sf in projection_dict:
+                projection = projection_dict[sf]
+            else:
+                # first attempt to load aligned stack
+                stackFile = sf[:-4]+"_stack.npy"
+                if os.path.exists(stackFile):
+                    stack = np.load(stackFile).astype(np.float32)
+                else:
+                    stack = OpenStack(sf).astype(np.float32)
+                projection = np.sum(stack, 0)
+                projection_dict[sf] = projection
+            bsum = 0
+            for v in gi[1]:
+                bsum += projection[v[0], v[1]]
+            avg_brightness[i] = bsum / len(gi[1])
+        return avg_brightness
 
     def motorCorrelation(self, nrolls=0, rollMin=0, rollMax=None):
         """
