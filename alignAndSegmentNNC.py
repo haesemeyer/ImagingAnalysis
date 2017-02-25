@@ -58,12 +58,7 @@ if __name__ == "__main__":
         ds_by = 4
         fr_rate_ds = frame_rate / ds_by
         stack = stack[::4, :, :].copy()
-        tfile = f[:-6] + ".tail"
-        t_data = TailData.LoadTailData(tfile, ca_time_const, 100)
-        if t_data is None:
-            print("No tail tracking file found", flush=True)
-        else:
-            print("Tail tracking data loaded", flush=True)
+
         # create shuffled stack to determine correlation seed cut-off
         st_shuff = ShuffleStackTemporal(stack)
         # we only want to consider time-series with at least min_phot photons
