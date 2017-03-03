@@ -8,6 +8,7 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 
 from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import filters, label, find_objects
 from scipy.signal import lfilter
 from scipy.interpolate import interp1d
 
@@ -225,6 +226,316 @@ class NucGraph(GraphBase):
                 if visited[x, y] == 0 and segmentImage[x, y] != 0 and predicate(x, y):
                     conn_comps.append(BFS(x, y, segmentImage[x, y]))
         return conn_comps, visited
+
+
+class CellHelper:
+    """
+    Helper class to keep track of overlapping pixel-to-cell assignments
+    """
+
+    pixel_dict = {}  # class variable to keep track of pixel-to-cell assignments across all instances
+
+    @classmethod
+    def ResetPixelDict(cls):
+        """
+        Resets the pixel-to-cell mapping dictionary across all class instances
+        """
+        cls.pixel_dict = {}
+
+    def __init__(self, x_center, y_center, x_off, y_off, im_width, im_height):
+        """
+        Creates a new CellHelper instance add all pixels to the pixel-dict as well
+        Args:
+            x_center: The x-coordinate of the center of this cell
+            y_center: The y-coordinate of the center of this cell
+            x_off: All x-coordinate offsets to include in this cell
+            y_off: All y-coordinate offsets to include in this cell
+            im_width: The width of the underlying image for clipping
+            im_height: The height of the underlying image for clipping
+        """
+        self.center = (x_center, y_center)
+        self.im_dim = (im_width, im_height)
+        self.pixels = [(x, y) for x, y in zip(x_center+x_off, y_center+y_off)
+                       if (0 <= x < im_width and 0 <= y < im_height)]
+        self.pixels.append(self.center)
+        # add the relationship between each of the current points and the current cell to the class dictionary
+        for p in self.pixels:
+            if p in CellHelper.pixel_dict:
+                CellHelper.pixel_dict[p].append(self)
+            else:
+                CellHelper.pixel_dict[p] = [self]
+
+    def AddPixel(self, x, y):
+        """
+        Add new point to cell pixels, throw ValueError if already present
+        Args:
+            x: The pixel's x-coordinate
+            y: The pixel's y-coordinate
+        """
+        p = (x, y)
+        if p in self.pixels:
+            raise ValueError("Pixel already part of cell")
+        self.pixels.append(p)
+        if p in CellHelper.pixel_dict:
+            CellHelper.pixel_dict[p].append(self)
+        else:
+            CellHelper.pixel_dict[p] = [self]
+
+    def RemovePixel(self, x, y):
+        """
+        Remove given point from the cell pixels or raise error if point not part of cell
+        Args:
+            x: The pixel's x-coordinate
+            y: The pixel's y-coordinate
+        """
+        p = (x, y)
+        if p not in self.pixels:
+            raise ValueError("Pixel is not part of cell")
+        self.pixels.remove(p)
+        if p in CellHelper.pixel_dict:
+            if self in CellHelper.pixel_dict[p]:
+                CellHelper.pixel_dict[p].remove(self)
+
+    def ClearAll(self):
+        """
+        Clears all pixels and information from this Cell and removes it from the pixel-dict
+        """
+        self.center = None
+        self.im_dim = None
+        for p in self.pixels:
+            self.RemovePixel(p[0], p[1])
+        assert len(self.pixels) == 0
+        self.pixels = None
+
+    @property
+    def X(self):
+        """
+        All pixel X-coordinates
+        """
+        return np.array([p[0]for p in self.pixels])
+
+    @property
+    def Y(self):
+        """
+        All pixel Y-coordinates
+        """
+        return np.array([p[1] for p in self.pixels])
+
+    @property
+    def P_Own(self):
+        """
+        All points which only belong to this cell
+        """
+        return [p for p in self.pixels if len(CellHelper.pixel_dict[p]) <= 1]
+
+
+class CellGraph(GraphBase):
+    """
+    Performs cell-segmentation of cytoplasmic gcamp labels
+    """
+
+    def __init__(self, id, timeseries):
+        super().__init__()
+        self.V = []
+        self.ID = id
+        self.RawTimeseries = timeseries
+
+    @staticmethod
+    def BreakPixelTies(stack):
+        """
+        Uses the pixel_dict of cell helper to identify pixels that are assigned to more
+        than one cell and subsequently uses time-series correlations to assign these to one cell only
+        """
+        p_tied = [(k, CellHelper.pixel_dict[k].copy()) for k in CellHelper.pixel_dict.keys()
+                  if len(CellHelper.pixel_dict[k]) > 1]
+        for p, cells in p_tied:
+            max_corr = 0  # maximum correlation of a cell observed so far
+            ix_max = -1  # index of cell with maximal correlation
+            ts_p = stack[:, p[0], p[1]]
+            for i, c in enumerate(cells):
+                # build timeseries of the cell under consideration only from pixels that exclusively belong to this cell
+                own_pixels = c.P_Own
+                ts = np.zeros(stack.shape[0])
+                for pix in own_pixels:
+                    ts += stack[:, pix[0], pix[1]]
+                corr = np.corrcoef(ts_p, ts)[0, 1]
+                if corr > max_corr and corr > 0:  # Note: If all corrs<0 pixel gets removed from all cells
+                    max_corr = corr
+                    ix_max = i
+            # second pass across cells - remove pixel in question from all cells that aren't max corr
+            for i, c in enumerate(cells):
+                if i != ix_max:
+                    c.RemovePixel(p[0], p[1])
+        # TODO: Remove isolated pixels, i.e. pixels that don't have any 4-connected neighbors belonging to same cell
+
+    @staticmethod
+    def GrowCells(cell_list, stack, c_thresh=0.1):
+        """
+        For each identified cells tries to grow the border by incorporating new correlated pixels within an
+        8-connected neighborhood around current pixels
+        Args:
+            cell_list: List of CellHelper objects
+            stack: Timeseries stack to evaluate pixel-correlations
+            c_thresh: Correlation threshold for a pixel to be preliminarily added to the current cell
+        """
+        for c in cell_list:
+            orig_pix = c.pixels.copy()
+            w, h = c.im_dim
+            # establish summed time-series of this cell
+            ts = np.zeros(stack.shape[0])
+            for pix in orig_pix:
+                ts += stack[:, pix[0], pix[1]]
+            for pix in orig_pix:
+                for dx in range(-1, 2):
+                    for dy in range(-1, 2):
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx = pix[0] + dx
+                        ny = pix[1] + dy
+                        if 0 <= nx < w and 0 <= ny < h:
+                            if (nx, ny) not in c.pixels:
+                                corr = np.corrcoef(ts, stack[:, nx, ny])[0, 1]
+                                if corr >= c_thresh:
+                                    c.AddPixel(nx, ny)
+
+    @classmethod
+    def CellConnComps(cls, stack, sumImage, cell_diam_px, plot=False, n_growth=1):
+        """
+        Segments a stack of nuclear excluded gcamp based on anatomical as well as correlation-based features
+        Args:
+            stack: The time-series stack (t,x,y), potentially subsampled along t to save memory
+            sumImage: The full-stack sum image across t
+            cell_diam_px: The approximate diameter of a cell in pixels
+            plot: If True plots segmentation intermediates for diagnostic purposes
+            n_growth: The number of cycles of growing cell-assigned regions by correlation
+
+        Returns:
+            A list of CellGraphs segmenting the stack
+        """
+        # 1) use anatomical features in sumImage to determine cell-centroids
+        im_scale = gaussian_filter(sumImage, cell_diam_px*10)
+        if plot:
+            pl.figure()
+            pl.imshow(im_scale)
+            pl.title("im_scale")
+        # compute local minima and maxima via circular structuring element
+        d = int(cell_diam_px)
+        rad = cell_diam_px / 2
+        if d % 2 == 0:
+            strel = np.zeros((d+1, d+1))
+        else:
+            strel = np.zeros((d+2, d+2))
+        center = strel.shape[0] // 2
+        for i in range(strel.shape[0]):
+            for j in range(strel.shape[1]):
+                dist = np.sqrt((i-center)**2 + (j-center)**2)
+                if dist <= rad:
+                    strel[i, j] = 1
+        im_min = filters.minimum_filter(sumImage, footprint=strel)
+        minima = (sumImage == im_min)
+        if plot:
+            pl.figure()
+            pl.imshow(minima)
+            pl.title("minima")
+        im_max = filters.maximum_filter(sumImage, footprint=strel)
+        # compute difference to later threshold minima
+        im_diff = (im_max - im_min) / im_scale
+        threshold = np.percentile(im_diff.ravel(), 15)
+        if plot:
+            pl.figure()
+            vals = pl.hist(im_diff.ravel(), 250)[0]
+            pl.plot([threshold, threshold], [0, vals.max()], 'r')
+            pl.title("Histogram of max-min differences")
+        # threshold minima and extract centroids of connected components
+        minima[im_diff < threshold] = 0
+        if plot:
+            pl.figure()
+            pl.imshow(minima)
+            pl.title("minima - thresholded")
+        labeled, num_objects = label(minima)
+        slices = find_objects(labeled)
+        # create coordinate arrays of the centers of the detected components
+        x, y = [], []
+        for dy, dx in slices:
+            x_center = (dx.start + dx.stop - 1)/2
+            y_center = (dy.start + dy.stop - 1)/2
+            # append only centroids that are at least cell radius away from each image edge
+            if rad < x_center < sumImage.shape[0]-rad and rad < y_center < sumImage.shape[1]-rad:
+                x.append(x_center)
+                y.append(y_center)
+        x = np.array(x).astype(int)
+        y = np.array(y).astype(int)
+        if plot:
+            log_image = np.log(sumImage)
+            log_image[np.isinf(log_image)] = 0
+            log_image = log_image / log_image.max() * (2**16)
+            log_image = log_image.astype(np.uint16)
+            pl.figure()
+            pl.imshow(log_image, cmap="bone")
+            pl.plot(x, y, 'r.')
+        # perform preliminary assignment of pixels to cells based on cell radius
+        x_offsets, y_offsets = [], []
+        for i in range(int(rad*1.5) + 2):
+            for j in range(int(rad*1.5) + 2):
+                if 0 < np.sqrt(i**2 + j**2) <= rad*1.5:
+                    x_offsets.append(i)
+                    y_offsets.append(j)
+                    if i > 0:
+                        x_offsets.append(-i)
+                        y_offsets.append(j)
+                    if j > 0:
+                        x_offsets.append(i)
+                        y_offsets.append(-j)
+                    if i > 0 and j > 0:
+                        x_offsets.append(-i)
+                        y_offsets.append(-j)
+        x_offsets = np.array(x_offsets).astype(int)
+        y_offsets = np.array(y_offsets).astype(int)
+        # build list of potential cells
+        CellHelper.ResetPixelDict()
+        cell_list = []
+        for px, py in zip(x, y):
+            cell_list.append(CellHelper(px, py, x_offsets, y_offsets, sumImage.shape[0], sumImage.shape[1]))
+        if plot:
+            pl.figure()
+            pl.imshow(log_image, cmap='bone')
+            for c in cell_list:
+                pl.plot(c.X, c.Y, '.', alpha=0.5)
+            pl.title("Original cell territories")
+
+        # 2) Use timeseries correlation to break pixel-ties (assign multi-assigned pixels to one cell only)
+        cls.BreakPixelTies(stack)
+        if plot:
+            pl.figure()
+            pl.imshow(log_image, cmap='bone')
+            for c in cell_list:
+                pl.plot(c.X, c.Y, '.', alpha=0.5)
+            pl.title("Cell territories after first tie-break")
+
+        # 3) Go through n cycles of growth and tie-breaking
+        for i in range(n_growth):
+            cls.GrowCells(cell_list, stack)
+            cls.BreakPixelTies(stack)
+        if plot:
+            pl.figure()
+            pl.imshow(log_image, cmap='bone')
+            for c in cell_list:
+                pl.plot(c.X, c.Y, '.', alpha=0.5)
+            pl.title("Final territories")
+            pl.figure()
+            pl.hist([len(c.pixels) for c in cell_list], 25)
+            pl.title("Cell size distribution")
+
+        # 4) Transform the cell list into a list of connected components
+        graph_list = []
+        for i, c in enumerate(cell_list):
+            ts = np.zeros(stack.shape[0], np.float32)
+            g = CellGraph(i, ts)
+            for p in c.pixels:
+                g.V.append(p)  # NOTE: In our other graphs, there is a third component with the BFS generation
+                g.RawTimeseries += stack[:, p[0], p[1]]
+            graph_list.append(g)
+        return graph_list
 
 
 class CorrelationGraph(GraphBase):
