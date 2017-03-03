@@ -456,7 +456,7 @@ class CellGraph(GraphBase):
         slices = find_objects(labeled)
         # create coordinate arrays of the centers of the detected components
         x, y = [], []
-        for dy, dx in slices:
+        for dx, dy in slices:
             x_center = (dx.start + dx.stop - 1)/2
             y_center = (dy.start + dy.stop - 1)/2
             # append only centroids that are at least cell radius away from each image edge
@@ -472,7 +472,7 @@ class CellGraph(GraphBase):
             log_image = log_image.astype(np.uint16)
             pl.figure()
             pl.imshow(log_image, cmap="bone")
-            pl.plot(x, y, 'r.')
+            pl.plot(y, x, 'r.')
         # perform preliminary assignment of pixels to cells based on cell radius
         x_offsets, y_offsets = [], []
         for i in range(int(rad*1.5) + 2):
@@ -500,7 +500,7 @@ class CellGraph(GraphBase):
             pl.figure()
             pl.imshow(log_image, cmap='bone')
             for c in cell_list:
-                pl.plot(c.X, c.Y, '.', alpha=0.5)
+                pl.plot(c.Y, c.X, '.', alpha=0.5)
             pl.title("Original cell territories")
 
         # 2) Use timeseries correlation to break pixel-ties (assign multi-assigned pixels to one cell only)
@@ -509,7 +509,7 @@ class CellGraph(GraphBase):
             pl.figure()
             pl.imshow(log_image, cmap='bone')
             for c in cell_list:
-                pl.plot(c.X, c.Y, '.', alpha=0.5)
+                pl.plot(c.Y, c.X, '.', alpha=0.5)
             pl.title("Cell territories after first tie-break")
 
         # 3) Go through n cycles of growth and tie-breaking
@@ -520,7 +520,7 @@ class CellGraph(GraphBase):
             pl.figure()
             pl.imshow(log_image, cmap='bone')
             for c in cell_list:
-                pl.plot(c.X, c.Y, '.', alpha=0.5)
+                pl.plot(c.Y, c.X, '.', alpha=0.5)
             pl.title("Final territories")
             pl.figure()
             pl.hist([len(c.pixels) for c in cell_list], 25)
