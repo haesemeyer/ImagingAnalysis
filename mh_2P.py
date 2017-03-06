@@ -473,11 +473,23 @@ class CellGraph(GraphBase):
             pl.figure()
             pl.imshow(log_image, cmap="bone")
             pl.plot(y, x, 'r.')
+            # plot centroid triggered average view
+            view_size = 4*d + 1
+            cent_view = np.zeros((view_size, view_size))
+            for xp, yp in zip(x, y):
+                if 2*d < xp < sumImage.shape[0]-2*d and 2*d < yp < sumImage.shape[1]-2*d:
+                    sub_view = sumImage[xp-2*d:xp+2*d+1, yp-2*d:yp+2*d+1] / im_scale[xp-2*d:xp+2*d+1, yp-2*d:yp+2*d+1]
+                    sub_view -= np.mean(sub_view)
+                    sub_view /= np.std(sub_view)
+                    cent_view += sub_view
+            pl.figure()
+            pl.imshow(cent_view / xp.size)
+            pl.title("Average surround of detected centroids")
         # perform preliminary assignment of pixels to cells based on cell radius
         x_offsets, y_offsets = [], []
-        for i in range(int(rad*1.5) + 2):
-            for j in range(int(rad*1.5) + 2):
-                if 0 < np.sqrt(i**2 + j**2) <= rad*1.5:
+        for i in range(int(rad) + 2):
+            for j in range(int(rad) + 2):
+                if 0 < np.sqrt(i**2 + j**2) <= rad:
                     x_offsets.append(i)
                     y_offsets.append(j)
                     if i > 0:
