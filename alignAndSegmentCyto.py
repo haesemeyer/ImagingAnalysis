@@ -68,9 +68,9 @@ if __name__ == "__main__":
             g.StimFrequency = np.nan
             g.CaTimeConstant = ca_time_const
             g.MaxQualScoreDeviation = np.nan
-            g.RawTimeseries = np.zeros_like(stack.shape[0])  # need to re-assign because of subsampling during segment.
+            g.RawTimeseries = np.zeros(stack.shape[0], dtype=np.float32)  # need to re-assign because of subsampling during segment.
             for v in g.V:
-                g.RawTimeseries = g.RawTimeseries + stack[:, v[0], v[1]]
+                g.RawTimeseries += np.array(stack[:, v[0], v[1]].copy())
 
         f_graph = open(f[:-3] + "graph", "wb")
         pickle.dump(graph_list, f_graph, protocol=pickle.HIGHEST_PROTOCOL)
