@@ -544,7 +544,7 @@ class CellGraph(GraphBase):
             ts = np.zeros(stack.shape[0], np.float32)
             g = CellGraph(i, ts)
             for p in c.pixels:
-                g.V.append(p)  # NOTE: In our other graphs, there is a third component with the BFS generation
+                g.V.append((p[0], p[1], 0))  # In our other graphs, the third component identifies the BFS generation
                 g.RawTimeseries += stack[:, p[0], p[1]]
             graph_list.append(g)
         return graph_list
