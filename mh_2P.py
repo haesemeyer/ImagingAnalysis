@@ -369,7 +369,7 @@ class CellGraph(GraphBase):
         # TODO: Remove isolated pixels, i.e. pixels that don't have any 4-connected neighbors belonging to same cell
 
     @staticmethod
-    def GrowCells(cell_list, stack, c_thresh=0.1):
+    def GrowCells(cell_list, stack, c_thresh, nPixelsMax):
         """
         For each identified cells tries to grow the border by incorporating new correlated pixels within an
         8-connected neighborhood around current pixels
@@ -377,29 +377,92 @@ class CellGraph(GraphBase):
             cell_list: List of CellHelper objects
             stack: Timeseries stack to evaluate pixel-correlations
             c_thresh: Correlation threshold for a pixel to be preliminarily added to the current cell
+            nPixelsMax: The maximum number of pixels that can belong to a cell
         """
-        for c in cell_list:
+        def grow_cell(c):
+            nonlocal stack, c_thresh, nPixelsMax
             orig_pix = c.pixels.copy()
+            new_pix = []
             w, h = c.im_dim
             # establish summed time-series of this cell
             ts = np.zeros(stack.shape[0])
             for pix in orig_pix:
                 ts += stack[:, pix[0], pix[1]]
-            for pix in orig_pix:
-                for dx in range(-1, 2):
-                    for dy in range(-1, 2):
-                        if dx == 0 and dy == 0:
-                            continue
-                        nx = pix[0] + dx
-                        ny = pix[1] + dy
-                        if 0 <= nx < w and 0 <= ny < h:
-                            if (nx, ny) not in c.pixels:
-                                corr = np.corrcoef(ts, stack[:, nx, ny])[0, 1]
-                                if corr >= c_thresh:
-                                    c.AddPixel(nx, ny)
+            # keep trying to add pixels as long as there are non-investigated pixels
+            while len(orig_pix) > 0 and len(c.pixels) <= nPixelsMax:
+                for pix in orig_pix:
+                    for dx in range(-1, 2):
+                        for dy in range(-1, 2):
+                            if dx == 0 and dy == 0:
+                                continue
+                            nx = pix[0] + dx
+                            ny = pix[1] + dy
+                            if 0 <= nx < w and 0 <= ny < h:
+                                # only add pixel if it doesn't belong to any other cell yet
+                                if (nx, ny) not in CellHelper.pixel_dict:
+                                    corr = np.corrcoef(ts, stack[:, nx, ny])[0, 1]
+                                    if corr >= c_thresh:
+                                        # add new pixel to cell, our new-pixel list and add its timeseries
+                                        c.AddPixel(nx, ny)
+                                        new_pix.append((nx, ny))
+                                        ts += stack[:, nx, ny]
+                    if len(c.pixels) > nPixelsMax:
+                        # if after finishing the current pixel we exceeded max size finish with this cell
+                        return
+                # there is no need to re-test for the old pixels but re-do for the newly added pixels
+                orig_pix = new_pix.copy()
+                new_pix.clear()
+
+        for c in cell_list:
+            if len(c.pixels) <= nPixelsMax:
+                grow_cell(c)
+
+    @staticmethod
+    def RemoveIsolatedPixels(cell_list):
+        """
+        From each cell in cell_list removes pixels that do not have at least 3 8-connected neighbors
+        """
+        def n_8_connected(c, p):
+            n8 = 0
+            for dx in range(-1, 2):
+                for dy in range(-1, 2):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx = p[0] + dx
+                    ny = p[1] + dy
+                    if (nx, ny) in c.pixels:
+                        n8 += 1
+            return n8
+        # loop over all cells, removing isolated pixels
+        for c in cell_list:
+            did_remove = True
+            # as long as we removed a pixel in the previous round we need to re-check
+            while did_remove:
+                did_remove = False
+                pixels = c.pixels.copy()
+                for px in pixels:
+                    n = n_8_connected(c, px)
+                    if n < 3:
+                        c.RemovePixel(px[0], px[1])
+                        did_remove = True
+
+    @staticmethod
+    def EnforceAnatomicalSize(cell_list, max_rad):
+        """
+        For each cell in cell_list removes all pixels that are more than max_rad away from the original cell center
+        """
+        def center_dist(c, p):
+            cx, cy = c.center
+            return np.sqrt((p[0]-cx)**2 + (p[1]-cy)**2)
+
+        for c in cell_list:
+            pixels = c.pixels.copy()
+            for px in pixels:
+                if center_dist(c, px) > max_rad:
+                    c.RemovePixel(px[0], px[1])
 
     @classmethod
-    def CellConnComps(cls, stack, sumImage, cell_diam_px, plot=False, n_growth=1):
+    def CellConnComps(cls, stack, sumImage, cell_diam_px, cell_max_pixels, plot=False):
         """
         Segments a stack of nuclear excluded gcamp based on anatomical as well as correlation-based features
         Args:
@@ -407,7 +470,7 @@ class CellGraph(GraphBase):
             sumImage: The full-stack sum image across t
             cell_diam_px: The approximate diameter of a cell in pixels
             plot: If True plots segmentation intermediates for diagnostic purposes
-            n_growth: The number of cycles of growing cell-assigned regions by correlation
+            cell_max_pixels: The maximum number of pixels that can be part of one cell
 
         Returns:
             A list of CellGraphs segmenting the stack
@@ -422,9 +485,9 @@ class CellGraph(GraphBase):
         d = int(cell_diam_px)
         rad = cell_diam_px / 2
         if d % 2 == 0:
-            strel = np.zeros((d+1, d+1))
+            strel = np.zeros((d-1, d-1))
         else:
-            strel = np.zeros((d+2, d+2))
+            strel = np.zeros((d, d))
         center = strel.shape[0] // 2
         for i in range(strel.shape[0]):
             for j in range(strel.shape[1]):
@@ -440,7 +503,7 @@ class CellGraph(GraphBase):
         im_max = filters.maximum_filter(sumImage, footprint=strel)
         # compute difference to later threshold minima
         im_diff = (im_max - im_min) / im_scale
-        threshold = np.percentile(im_diff.ravel(), 15)
+        threshold = 0.2  # np.percentile(im_diff.ravel(), 15)
         if plot:
             pl.figure()
             vals = pl.hist(im_diff.ravel(), 250)[0]
@@ -524,10 +587,17 @@ class CellGraph(GraphBase):
                 pl.plot(c.Y, c.X, '.', alpha=0.5)
             pl.title("Cell territories after first tie-break")
 
-        # 3) Go through n cycles of growth and tie-breaking
-        for i in range(n_growth):
-            cls.GrowCells(cell_list, stack)
-            cls.BreakPixelTies(stack)
+        # 3) Go through cycles of growth - the following threshold values are based on the observation that
+        # without spatial smoothing the maximal correlation btw. timeseries is around 0.6 and the smallest
+        # significant correlation is around 0.007
+        for thresh in np.linspace(0.7, 0.01, 15):
+            cls.GrowCells(cell_list, stack, thresh, cell_max_pixels)
+        # our growth operation should not have lead to overlapping pixels
+        assert max([len(CellHelper.pixel_dict[k]) for k in CellHelper.pixel_dict.keys()]) < 2
+
+        cls.RemoveIsolatedPixels(cell_list)
+        cls.EnforceAnatomicalSize(cell_list, rad*4/3)
+
         if plot:
             pl.figure()
             pl.imshow(log_image, cmap='bone')
