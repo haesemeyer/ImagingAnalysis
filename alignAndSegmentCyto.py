@@ -62,16 +62,19 @@ if __name__ == "__main__":
 
         del rate_stack
         stack = np.load(f[:-4] + "_stack.npy", mmap_mode='r').astype(np.float32)
-        print('Identified ', len(graph_list), 'units in slice ', i, flush=True)
         for g in graph_list:
             g.SourceFile = f  # store for convenience access
             g.StimFrequency = np.nan
             g.CaTimeConstant = ca_time_const
             g.MaxQualScoreDeviation = np.nan
-            g.RawTimeseries = np.zeros(stack.shape[0], dtype=np.float32)  # need to re-assign because of subsampling during segment.
+            # need to re-assign because of subsampling during segment.
+            g.RawTimeseries = np.zeros(stack.shape[0], dtype=np.float32)
             for v in g.V:
                 g.RawTimeseries += np.array(stack[:, v[0], v[1]].copy())
 
+        # remove all cells, that aren't at least 2/3 in size of our maximal size
+        graph_list = [g for g in graph_list if g.NPixels >= (30/(resolution**2)*2/3)]
+        print('Identified ', len(graph_list), 'units in slice ', i, flush=True)
         f_graph = open(f[:-3] + "graph", "wb")
         pickle.dump(graph_list, f_graph, protocol=pickle.HIGHEST_PROTOCOL)
         f_graph.close()
