@@ -622,7 +622,7 @@ if __name__ == "__main__":
     filter_r2_thresh = 0.4
 
     # make a temporary copy of all stimulus relevant units
-    stim_act = all_activity[is_pot_stim, :]
+    stim_act = all_activity[is_pot_stim, :].copy()
     rowmean = np.mean(stim_act, 1, keepdims=True)
     stim_act -= rowmean
     norms = np.linalg.norm(stim_act, axis=1)
