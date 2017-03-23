@@ -1320,9 +1320,115 @@ class HeatPulseExperiment(RepeatExperiment):
         self.stimOff = stimOff
 
 
+class MotorContainer:
+    """
+    Class to memory efficiently store per-cell motor events across multiple experiments by only storing one trace per
+    plane and using an overridden indexer to make it indexable like a full matrix
+    """
+
+    def __init__(self, sourceFiles, final_timebase, ca_time_constant, predicate=None, tdd=None):
+        """
+        Creates a new MotorContainer
+        Args:
+            sourceFiles: For each cell / unit the source-file name to obtain motor traces
+            final_timebase: The timebase to which the motor trace should be binned
+            ca_time_constant: The calcium indicator time-constant for convolution
+            predicate: Used on each loaded TailData object to decide which bout starts should be included - this
+             function should take a TailData object as argument and return a bout-start trace
+            tdd: Optionally a pre-filled TailDataDict to avoid loading tail files multiple times when generating many
+             containers
+        """
+        self.sourceFiles = sourceFiles
+        self.final_timebase = final_timebase
+        self.ca_time_constant = ca_time_constant
+        self.predicate = predicate
+        self.traces = {}
+        if tdd is None:
+            tdd = TailDataDict(ca_time_constant)
+        self.tdd = tdd
+        for sf in self.sourceFiles:
+            if sf in self.traces:
+                continue
+            tdata = self.tdd[sf]
+            if predicate is None:
+                start_trace = tdata.starting
+            else:
+                start_trace = predicate(tdata)
+            # convolve the trace
+            start_trace = CaConvolve(start_trace, self.ca_time_constant, 100)
+            start_trace = self.bin_trace(start_trace, tdata.frameTime)
+            self.traces[sf] = start_trace
+
+    def bin_trace(self, trace, frameTimes):
+        """
+        Bins a starting trace according to the timebase
+        Args:
+            trace: The trace to bin
+            frameTimes: The acquisition time for each frame in trace
+
+        Returns:
+            trace binned according to self.final_timebase
+        """
+        digitized = np.digitize(frameTimes, self.final_timebase)
+        return np.array([trace[digitized == i].sum() for i in range(1, self.final_timebase.size)])
+
+    @property
+    def avg_motor_output(self):
+        """
+        Returns the per-plane average motor output
+        """
+        return np.mean(np.vstack([v for v in self.traces.values()]), 0)
+
+    def _get_row(self, r_ix):
+        return self.traces[self.sourceFiles[r_ix]]
+
+    def _get_rows(self, r_ix):
+        """
+        Returns full rows at the given index or slice
+        Args:
+            r_ix: The row index or slice
+
+        Returns:
+            A vector/matrix of the indicated row(s)
+        """
+        if type(r_ix) is int:
+            return self._get_row(r_ix)
+        start, stop, step = r_ix.indices(len(self.sourceFiles))
+        rows = [self._get_row(i) for i in range(start, stop, step)]
+        if len(rows) == 1:
+            # slice only referenced a single row
+            return np.array(rows)
+        else:
+            return np.vstack(rows)
+
+    def _get_rows_cols(self, r_ix, c_ix):
+        row_all = self._get_rows(r_ix)
+        if row_all.ndim == 1:
+            return row_all[c_ix]
+        else:
+            return row_all[:, c_ix]
+
+    def __getitem__(self, item):
+        if type(item) == tuple:
+            if len(item) > 2:
+                raise ValueError("Indexer dimensionality does not match data")
+            for i in item:
+                if type(i) != int and type(i) != slice:
+                    raise TypeError("Only integers and slice objects accepted as indices")
+        elif type(item) != int and type(item) != slice:
+            raise TypeError("Only integers and slice objects accepted as indices")
+        if type(item) != tuple:
+            # we only got a single index expression - interpret as row index
+            return self._get_rows(item)
+        return self._get_rows_cols(item[0], item[1])
+
+    def __iter__(self):
+        raise NotImplementedError()
+
+
 class PixelGraph:
 
-    def __init__(self,id):
+    def __init__(self, id):
         self.V = []  # list of vertices
         self.ID = id  # id of this graph for easy component reference
 
