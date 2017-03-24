@@ -1433,7 +1433,10 @@ class MotorContainer:
         return self._get_rows_cols(item[0], item[1])
 
     def __iter__(self):
-        raise NotImplementedError()
+        ix = 0
+        while ix < len(self.sourceFiles):
+            yield self._get_row(ix)
+            ix += 1
 
 
 class PixelGraph:
