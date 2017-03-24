@@ -1346,18 +1346,6 @@ class MotorContainer:
         if tdd is None:
             tdd = TailDataDict(ca_time_constant)
         self.tdd = tdd
-        for sf in self.sourceFiles:
-            if sf in self.traces:
-                continue
-            tdata = self.tdd[sf]
-            if predicate is None:
-                start_trace = tdata.starting
-            else:
-                start_trace = predicate(tdata)
-            # convolve the trace
-            start_trace = CaConvolve(start_trace, self.ca_time_constant, 100)
-            start_trace = self.bin_trace(start_trace, tdata.frameTime)
-            self.traces[sf] = start_trace
 
     def bin_trace(self, trace, frameTimes):
         """
@@ -1379,8 +1367,30 @@ class MotorContainer:
         """
         return np.mean(np.vstack([v for v in self.traces.values()]), 0)
 
-    def _get_row(self, r_ix):
-        return self.traces[self.sourceFiles[r_ix]]
+    def _get_row(self, ix):
+        """
+        Returns the start trace that belongs to the given cell's index
+        """
+        sf = self.sourceFiles[ix]
+        if sf in self.traces:
+            return self.traces[sf]
+        else:
+            return self._add_trace(sf)
+
+    def _add_trace(self, sf):
+        """
+        Adds a new trace to the dictionary and returns it
+        """
+        tdata = self.tdd[sf]
+        if self.predicate is None:
+            start_trace = tdata.starting
+        else:
+            start_trace = self.predicate(tdata)
+        # convolve the trace
+        start_trace = CaConvolve(start_trace, self.ca_time_constant, 100)
+        start_trace = self.bin_trace(start_trace, tdata.frameTime)
+        self.traces[sf] = start_trace
+        return start_trace
 
     def _get_rows(self, r_ix):
         """
