@@ -500,6 +500,30 @@ def min_dist(points: np.ndarray, partners: np.ndarray, allow_0=False, avgSmalles
     return mds
 
 
+def create_updater(kept: np.ndarray):
+    """
+    Creates a function to update indices such that a given index into an element removed array will point to the
+    corresponding element in a full array before removal
+    Args:
+        kept: Indicates the elements kept from the original array using non-zero values
+    Returns:
+        A function for updating indices according to kept
+    """
+    def upd_ix(ix):
+        nonlocal mapping
+        if ix < 0 or ix >= mapping.size:
+            raise ValueError("Index is out of bounds for element removed array")
+        return int(mapping[ix])
+    mapping = np.zeros(np.sum(kept != 0), dtype=int)
+    skipped = 0
+    for i in range(kept.size):
+        if kept[i] != 0:
+            mapping[i - skipped] = i
+        else:
+            skipped += 1
+    return upd_ix
+
+
 ani = None
 ani_stack = []
 ani_im = []
