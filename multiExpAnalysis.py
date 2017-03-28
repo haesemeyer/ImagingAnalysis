@@ -697,7 +697,7 @@ if __name__ == "__main__":
     # use spectral clustering to identify our regressors. Use thresholded correlations as the affinity
     aad_corrs = np.corrcoef(avg_analysis_data)
     aad_corrs[aad_corrs < 0.26] = 0  # 99th percentile of correlations of a *column* shuffle of avg_analysis_data
-    n_regs = 8  # extract 8 clusters as regressors
+    n_regs = 6  # extract 6 clusters as regressors
     spec_embed = SpectralEmbedding(n_components=3, affinity='precomputed')
     spec_clust = SpectralClustering(n_clusters=n_regs, affinity='precomputed')
     spec_embed_coords = spec_embed.fit_transform(aad_corrs)
