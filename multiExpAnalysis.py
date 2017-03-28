@@ -1,5 +1,6 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
-from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr, KDTree
+from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr, KDTree, MotorContainer
+from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as pl
@@ -314,11 +315,15 @@ def DumpAnalysisDataHdf5(filename):
     try:
         # save major data structures compressed
         dfile.create_dataset("all_activity", data=all_activity, compression="gzip", compression_opts=9)
-        dfile.create_dataset("all_motor", data=all_motor, compression="gzip", compression_opts=9)
         dfile.create_dataset("avg_analysis_data", data=avg_analysis_data, compression="gzip", compression_opts=9)
         # pickle our experiment data as a byte-stream
         pstring = pickle.dumps(exp_data)
         dfile.create_dataset("exp_data_pickle", data=np.void(pstring))
+        # pickle the tail-data dict of mc_all - for some reason we cannot pickle the actual object without running
+        # out of memory so instead we save individual tail-data files with keys corresponding to the .tail files
+        for i, k in enumerate(mc_all.tdd.fileNames):
+            pstring = pickle.dumps(mc_all.tdd[k])
+            dfile.create_dataset(k, data=np.void(pstring))
         # save smaller arrays uncompressed
         dfile.create_dataset("exp_id", data=exp_id)
         dfile.create_dataset("membership", data=membership)
@@ -326,9 +331,9 @@ def DumpAnalysisDataHdf5(filename):
         dfile.create_dataset("no_nan_aa", data=no_nan_aa)
         dfile.create_dataset("reg_corr_mat", data=reg_corr_mat)
         dfile.create_dataset("reg_trans", data=reg_trans)
-        dfile.create_dataset("r2_sensory_fit", data=r2_sensory_fit)
-        dfile.create_dataset("r2_sensory_motor_fit", data=r2_sensory_motor_fit)
-        dfile.create_dataset("r2_sensor_motor_shuffle", data=r2_sensory_motor_shuffle)
+        # dfile.create_dataset("r2_sensory_fit", data=r2_sensory_fit)
+        # dfile.create_dataset("r2_sensory_motor_fit", data=r2_sensory_motor_fit)
+        # dfile.create_dataset("r2_sensor_motor_shuffle", data=r2_sensory_motor_shuffle)
         # save transformed nuclear centroids if they exist, otherwise create them
         try:
             tf_centroids
@@ -584,7 +589,7 @@ if __name__ == "__main__":
     exp_id = np.array([])  # for each unit the experiment which it came from
     stim_phase = np.array([])  # for each unit the phase at stimulus frequency during the sine-presentation
     all_activity = np.array([])
-    all_motor = np.array([])
+    source_files = []  # for each unit the imaging file from which it was derived
     for i, data in enumerate(exp_data):
         m_corr = data.motorCorrelation(0)[0].ravel()
         stim_fluct = data.computeStimulusEffect(0)[0].ravel()
@@ -595,13 +600,21 @@ if __name__ == "__main__":
         if i == 0:
             # NOTE: RawData field is 64 bit float - convert to 32 when storing in all_activity
             all_activity = data.RawData.astype(np.float32)
-            all_motor = data.Vigor
         else:
             all_activity = np.r_[all_activity, data.RawData.astype(np.float32)]
-            all_motor = np.r_[all_motor, data.Vigor]
         # after this point, the raw-data and vigor fields of experiment data are unecessary
         data.RawData = None
         data.Vigor = None
+        source_files += [g[0] for g in data.graph_info]
+
+    # create our motor event containers
+    i_time = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
+    tc = exp_data[0].caTimeConstant
+    mc_all = MotorContainer(source_files, i_time, tc)
+    mc_left = MotorContainer(source_files, i_time, tc, predicate=left_bias_bouts, tdd=mc_all.tdd)
+    mc_right = MotorContainer(source_files, i_time, tc, predicate=right_bias_bouts, tdd=mc_all.tdd)
+    mc_straight = MotorContainer(source_files, i_time, tc, predicate=unbiased_bouts, tdd=mc_all.tdd)
+    mc = [mc_all, mc_left, mc_right, mc_straight]
 
     print("Data loaded and aggregated", flush=True)
     printElapsed()
@@ -680,7 +693,9 @@ if __name__ == "__main__":
     # remove NaN containing traces from activity and motor matrix
     no_nan_aa = np.sum(np.logical_or(np.isnan(all_activity), np.isinf(all_activity)), 1) == 0
     all_activity = all_activity[no_nan_aa, :]
-    all_motor = all_motor[no_nan_aa, :]
+    # since our MotorContainer objects are not restricted to elements identified by no_nan_aa we need to create a
+    # function that allows us to update indices into a no_nan_aa restricted array accordingly
+    update_index = create_updater(no_nan_aa)
     discovery_unit_marker = discovery_unit_marker[no_nan_aa]
     print("Data filtering complete", flush=True)
     printElapsed()
@@ -703,8 +718,6 @@ if __name__ == "__main__":
     spec_embed_coords = spec_embed.fit_transform(aad_corrs)
     spec_clust_ids = spec_clust.fit_predict(aad_corrs)
 
-    # extract our stimulus regressors by aggresively thresholding at the 95th percentile for weights
-    # also plot the corresponding cluster means
     reg_orig = np.empty((analysis_data.shape[1], n_regs))
     time = np.arange(reg_orig.shape[0]) / 5
     for i in range(n_regs):
@@ -757,16 +770,20 @@ if __name__ == "__main__":
     print("Stimulus regressor derivation complete", flush=True)
     printElapsed()
 
-    # create matrix, that for each unit contains its correlation to each regressor as well as to the plane's motor reg
-    reg_corr_mat = np.empty((all_activity.shape[0], n_regs+1), dtype=np.float32)
+    # create matrix, that for each unit contains its correlation to each regressor as well as to the motor regs
+    reg_corr_mat = np.empty((all_activity.shape[0], n_regs+len(mc)), dtype=np.float32)
     for i in range(all_activity.shape[0]):
         for j in range(n_regs):
             reg_corr_mat[i, j] = np.corrcoef(all_activity[i, :], reg_trans[:, j])[0, 1]
-        reg_corr_mat[i, -1] = np.corrcoef(all_activity[i, :], all_motor[i, :])[0, 1]
+        for j in range(len(mc)):
+            # for the motor regressors we need to take care of updating our index
+            reg_corr_mat[i, n_regs + j] = np.corrcoef(all_activity[i, :], mc[j][update_index(i), :])[0, 1]
 
     reg_corr_th = 0.6
     reg_corr_mat[np.abs(reg_corr_mat) < reg_corr_th] = 0
-    no_nan = np.sum(np.isnan(reg_corr_mat), 1) == 0
+    # exclude cells where correlations with either sensory regressor are NaN *but not* cells for which one of the
+    # motor-regressors might be NaN (as we don't expect all motor types to be executed in each plane)
+    no_nan = np.sum(np.isnan(reg_corr_mat[:, :n_regs + 1]), 1) == 0
     reg_corr_mat = reg_corr_mat[no_nan, :]
 
     ab_thresh = np.sum(reg_corr_mat > 0, 1) > 0
@@ -785,7 +802,7 @@ if __name__ == "__main__":
             self.labels_ = max_index
             self.n_clusters = np.unique(self.labels_).size
 
-    km = max_cluster(np.argmax(reg_corr_mat, 1))
+    km = max_cluster(np.nanargmax(reg_corr_mat, 1))
     # km.fit(reg_corr_mat)
     # plot sorted by cluster identity
     fig, ax = pl.subplots()
@@ -825,87 +842,87 @@ if __name__ == "__main__":
     print("Clustering on all cells complete", flush=True)
     printElapsed()
 
-    orthonormals = reg_trans.copy()
-
-    # perform linear regression using the stimulus regressors
-    from sklearn.linear_model import LinearRegression
-    lr = LinearRegression()
-    r2_sensory_fit = np.empty(all_activity.shape[0], dtype=np.float32)
-    for i in range(all_activity.shape[0]):
-        lr.fit(orthonormals, all_activity[i, :])
-        r2_sensory_fit[i] = lr.score(orthonormals, all_activity[i, :])
-
-    # recompute regressions unit-by-unit (should be done plane-by-plane for efficiency!!!) with motor regressors
-    # As null distribution compute a version with shuffled (wrong-plane) motor regressors
-    r2_sensory_motor_fit = np.zeros(all_activity.shape[0], dtype=np.float32)
-    for i in range(all_activity.shape[0]):
-        mot_reg = all_motor[i, :]
-        regs = np.c_[orthonormals, mot_reg]
-        if np.any(np.isnan(regs)):
-            continue
-        else:
-            lr.fit(regs, all_activity[i, :])
-            r2_sensory_motor_fit[i] = lr.score(regs, all_activity[i, :])
-
-    r2_sensory_motor_shuffle = np.zeros(all_activity.shape[0], dtype=np.float32)
-    for i in range(all_activity.shape[0]):
-        shift = np.random.randint(50000, 100000)
-        pick = (i + shift) % all_motor.shape[0]
-        mot_reg = all_motor[pick, :]
-        regs = np.c_[orthonormals, mot_reg]
-        if np.any(np.isnan(regs)):
-            continue
-        else:
-            lr.fit(regs, all_activity[i, :])
-            r2_sensory_motor_shuffle[i] = lr.score(regs, all_activity[i, :])
-
-    # compute confidence band based on shuffle
-    ci = 99.9
-    bedges = np.linspace(0, 1, 41)
-    bc = bedges[:-1] + np.diff(bedges)/2
-    conf = np.zeros(bc.size)
-    for i in range(bedges.size - 1):
-        all_in = np.logical_and(r2_sensory_fit >= bedges[i], r2_sensory_fit < bedges[i + 1])
-        if np.sum(all_in > 0):
-            conf[i] = np.percentile(r2_sensory_motor_shuffle[all_in], ci)
-        else:
-            conf[i] = np.nan
-
-    with sns.axes_style('whitegrid'):
-        fig, ax = pl.subplots()
-        ax.scatter(r2_sensory_fit, r2_sensory_motor_shuffle, alpha=0.4, color='r', s=3)
-        ax.plot([0, 1], [0, 1], 'k--')
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_xlabel('$R^2$ Sensory regression')
-        ax.set_ylabel('$R^2$ Sensory + Motor regression')
-        ax.set_title('Shuffled motor regressor control')
-
-    with sns.axes_style('whitegrid'):
-        fig, ax = pl.subplots()
-        ax.scatter(r2_sensory_fit, r2_sensory_motor_fit, alpha=0.4, s=3)
-        ax.plot([0, 1], [0, 1], 'k--')
-        # plot confidence band
-        ax.fill_between(bc, bc, conf, color='orange', alpha=0.3)
-        ax.plot(bc, conf, 'orange')
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_xlabel('$R^2$ Sensory regression')
-        ax.set_ylabel('$R^2$ Sensory + Motor regression')
-        ax.set_title('Boost of fit by including motor regressor')
-    print("Sensory and sensory plus motor fit completed", flush=True)
-    printElapsed()
+    # orthonormals = reg_trans.copy()
+    #
+    # # perform linear regression using the stimulus regressors
+    # from sklearn.linear_model import LinearRegression
+    # lr = LinearRegression()
+    # r2_sensory_fit = np.empty(all_activity.shape[0], dtype=np.float32)
+    # for i in range(all_activity.shape[0]):
+    #     lr.fit(orthonormals, all_activity[i, :])
+    #     r2_sensory_fit[i] = lr.score(orthonormals, all_activity[i, :])
+    #
+    # # recompute regressions unit-by-unit (should be done plane-by-plane for efficiency!!!) with motor regressors
+    # # As null distribution compute a version with shuffled (wrong-plane) motor regressors
+    # r2_sensory_motor_fit = np.zeros(all_activity.shape[0], dtype=np.float32)
+    # for i in range(all_activity.shape[0]):
+    #     mot_reg = all_motor[i, :]
+    #     regs = np.c_[orthonormals, mot_reg]
+    #     if np.any(np.isnan(regs)):
+    #         continue
+    #     else:
+    #         lr.fit(regs, all_activity[i, :])
+    #         r2_sensory_motor_fit[i] = lr.score(regs, all_activity[i, :])
+    #
+    # r2_sensory_motor_shuffle = np.zeros(all_activity.shape[0], dtype=np.float32)
+    # for i in range(all_activity.shape[0]):
+    #     shift = np.random.randint(50000, 100000)
+    #     pick = (i + shift) % all_motor.shape[0]
+    #     mot_reg = all_motor[pick, :]
+    #     regs = np.c_[orthonormals, mot_reg]
+    #     if np.any(np.isnan(regs)):
+    #         continue
+    #     else:
+    #         lr.fit(regs, all_activity[i, :])
+    #         r2_sensory_motor_shuffle[i] = lr.score(regs, all_activity[i, :])
+    #
+    # # compute confidence band based on shuffle
+    # ci = 99.9
+    # bedges = np.linspace(0, 1, 41)
+    # bc = bedges[:-1] + np.diff(bedges)/2
+    # conf = np.zeros(bc.size)
+    # for i in range(bedges.size - 1):
+    #     all_in = np.logical_and(r2_sensory_fit >= bedges[i], r2_sensory_fit < bedges[i + 1])
+    #     if np.sum(all_in > 0):
+    #         conf[i] = np.percentile(r2_sensory_motor_shuffle[all_in], ci)
+    #     else:
+    #         conf[i] = np.nan
+    #
+    # with sns.axes_style('whitegrid'):
+    #     fig, ax = pl.subplots()
+    #     ax.scatter(r2_sensory_fit, r2_sensory_motor_shuffle, alpha=0.4, color='r', s=3)
+    #     ax.plot([0, 1], [0, 1], 'k--')
+    #     ax.set_xlim(0, 1)
+    #     ax.set_ylim(0, 1)
+    #     ax.set_xlabel('$R^2$ Sensory regression')
+    #     ax.set_ylabel('$R^2$ Sensory + Motor regression')
+    #     ax.set_title('Shuffled motor regressor control')
+    #
+    # with sns.axes_style('whitegrid'):
+    #     fig, ax = pl.subplots()
+    #     ax.scatter(r2_sensory_fit, r2_sensory_motor_fit, alpha=0.4, s=3)
+    #     ax.plot([0, 1], [0, 1], 'k--')
+    #     # plot confidence band
+    #     ax.fill_between(bc, bc, conf, color='orange', alpha=0.3)
+    #     ax.plot(bc, conf, 'orange')
+    #     ax.set_xlim(0, 1)
+    #     ax.set_ylim(0, 1)
+    #     ax.set_xlabel('$R^2$ Sensory regression')
+    #     ax.set_ylabel('$R^2$ Sensory + Motor regression')
+    #     ax.set_title('Boost of fit by including motor regressor')
+    # print("Sensory and sensory plus motor fit completed", flush=True)
+    # printElapsed()
 
     # compute movement triggered averages of motor correlated units as cross-correlations - both for all bouts
     # as well as by only taking bouts into account that are isolated, i.e. for which the frame distance to the next
     # bout is at least 5 frames (1s)
     def exp_bstarts(exp):
-        tdd = TailDataDict()
+        tdd = mc_all.tdd
         traces = dict()
         bstarts = []
         # for binning, we want to have one more subdivision of the times and include the endpoint - later each time-bin
         # will correspond to one timepoint in interp_times above
-        i_t = np.linspace(0, all_motor.shape[1] / 5, all_motor.shape[1] + 1, endpoint=True)
+        i_t = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1, endpoint=True)
         try:
             for gi in exp.graph_info:
                 if gi[0] not in traces:
@@ -919,7 +936,7 @@ if __name__ == "__main__":
             raw_starts = np.vstack(bstarts)
         except KeyError:
             # this is necessary since some of the older experiments have been moved!
-            return np.zeros((len(exp.graph_info), all_motor.shape[1]), dtype=np.float32)
+            return np.zeros((len(exp.graph_info), all_activity.shape[1]), dtype=np.float32)
         return raw_starts.astype(np.float32)
     # for each unit extract the original bout-trace binned to our 5Hz timebase
     raw_bstarts = np.vstack([exp_bstarts(e) for e in exp_data])
@@ -930,10 +947,8 @@ if __name__ == "__main__":
     ac_all_starts = []
     ac_singular = []
     # identify the cluster number of the motor cluster
-    mreg_corr_sums = [np.sum(reg_corr_mat[km.labels_ == l, -1]) for l in np.unique(km.labels_)]
-    mc_number = np.argmax(mreg_corr_sums)
     for i in range(all_activity.shape[0]):
-        if membership[no_nan_aa][i] == mc_number and np.sum(raw_bstarts[i, :]) > 0:
+        if membership[no_nan_aa][i] >= n_regs and np.sum(raw_bstarts[i, :]) > 0:
             cc_all_starts.append(Crosscorrelation(all_activity[i, :], raw_bstarts[i, :], max_lag))
             ac_all_starts.append(Crosscorrelation(raw_bstarts[i, :], raw_bstarts[i, :], max_lag))
             sing_starts = raw_bstarts[i, :].copy()
@@ -962,28 +977,11 @@ if __name__ == "__main__":
 
     # Plot per-fish cluster contributions
     m = int(np.ceil(np.sqrt(km.n_clusters)))
-    fig, axes = pl.subplots(m, m)
+    fig, axes = pl.subplots(4, 3)
     axes = axes.ravel()
     for i in range(km.n_clusters):
         x = np.arange(len(exp_data))
         y = np.array([np.sum(exp_id[membership == i] == n) for n in x])
         sns.barplot(x, y, ax=axes[i])
         axes[i].set_title("Cluster " + str(i))
-
-    # REMOVE THE FOLLOWING LATER
-    eid = exp_id[no_nan_aa]
-    eid2 = eid[no_nan][ab_thresh]
-    fb = eid2 < 14
-    mhb = np.logical_and(eid2 > 13, eid2 < 26)
-    trig = eid2 > 25
-    region_mat = np.zeros((km.n_clusters, 3))
-    for i in range(km.n_clusters):
-        region_mat[i, 0] = np.sum(fb[km.labels_ == i])
-        region_mat[i, 1] = np.sum(mhb[km.labels_ == i])
-        region_mat[i, 2] = np.sum(trig[km.labels_ == i])
-    rm_norm = region_mat / np.sum(region_mat, 0, keepdims=True)
-    rm_norm /= np.sum(rm_norm, 1, keepdims=True)
-    pl.figure()
-    sns.heatmap(rm_norm, cmap='bone_r', xticklabels=['FB', 'MB-HB', 'TG'])
-    pl.title('Contribution of "Brain regions" to clusters')
-
+    fig.tight_layout()
