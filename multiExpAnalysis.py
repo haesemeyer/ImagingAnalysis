@@ -187,20 +187,6 @@ def MakeAndSaveMajorTypeStack(experiment_data):
     SaveProjectionStack(zstack)
 
 
-def MakeAndSaveRegressionStack(experiment_data):
-    global orthonormals
-    r2_vals = np.zeros(experiment_data.RawData.shape[0])
-    for i, row in enumerate(experiment_data.RawData):
-        if np.any(np.isnan(row)):
-            continue
-        lreg = LinearRegression()
-        lreg.fit(orthonormals, row)
-        r2_vals[i] = lreg.score(orthonormals, row)
-    zstack = MakeCorrelationGraphStack(experiment_data, r2_vals, np.zeros_like(r2_vals), np.zeros_like(r2_vals),
-                                       cutOff=0.6)
-    SaveProjectionStack(zstack)
-
-
 def GetExperimentBaseName(exp_data):
     fullName = exp_data.graph_info[0][0]
     plane_start = fullName.find('_Z_')
