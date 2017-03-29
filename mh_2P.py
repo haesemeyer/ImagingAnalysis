@@ -2045,6 +2045,8 @@ def OpenStack(filename):
 
 
 def CaConvolve(trace, ca_timeconstant, frame_rate):
+    if ca_timeconstant == 0:
+        return trace
     kernel = TailData.CaKernel(ca_timeconstant, frame_rate)
     return np.convolve(trace, kernel)[:trace.size]
     
