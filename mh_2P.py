@@ -1365,6 +1365,10 @@ class MotorContainer:
         """
         Returns the per-plane average motor output
         """
+        # make sure that our traces dictionary contains all necessary traces
+        for sf in self.sourceFiles:
+            if sf not in self.traces:
+                self._add_trace(sf)
         return np.mean(np.vstack([v for v in self.traces.values()]), 0)
 
     def _get_row(self, ix):
