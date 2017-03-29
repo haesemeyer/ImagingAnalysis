@@ -32,7 +32,7 @@ def left_bias_bouts(tdata: TailData):
     mca = mode(tdata.cumAngles)[0]
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
-        if bb < -0.8:
+        if bb <= -0.8:
             starting[b[0]] = 1
     return starting
 
@@ -47,7 +47,7 @@ def right_bias_bouts(tdata: TailData):
     mca = mode(tdata.cumAngles)[0]
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
-        if bb > 0.8:
+        if bb >= 0.8:
             starting[b[0]] = 1
     return starting
 
@@ -62,6 +62,6 @@ def unbiased_bouts(tdata: TailData):
     mca = mode(tdata.cumAngles)[0]
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
-        if -0.5 < bb < 0.5:
+        if -0.8 < bb < 0.8:
             starting[b[0]] = 1
     return starting
