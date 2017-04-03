@@ -1,6 +1,6 @@
 from mh_2P import OpenStack, TailData, UiGetFile, NucGraph, CorrelationGraph, SOORepeatExperiment, SLHRepeatExperiment
 from mh_2P import MakeNrrdHeader, TailDataDict, vec_mat_corr, KDTree, MotorContainer
-from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts
+from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts, high_bias_bouts
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 import matplotlib.pyplot as pl
@@ -20,8 +20,14 @@ sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis'
 from mhba_basic import Crosscorrelation
 
 
-def dff(fluomat):
-    f0 = np.median(fluomat[:, :144], 1, keepdims=True)
+class max_cluster:
+    def __init__(self, max_index):
+        self.labels_ = max_index
+        self.n_clusters = np.unique(self.labels_).size
+
+
+def dff(fluomat, n_pre=5*60):
+    f0 = np.mean(fluomat[:, 15:n_pre-15], 1, keepdims=True)
     f0[f0 == 0] = 0.1
     return(fluomat-f0)/f0
 
@@ -796,11 +802,6 @@ if __name__ == "__main__":
     # remove all rows that don't have at least one above-threshold correlation
     # NOTE: The copy statement below is required to prevent a stale copy of the full-sized array to remain in memory
     reg_corr_mat = reg_corr_mat[ab_thresh, :].copy()
-
-    class max_cluster:
-        def __init__(self, max_index):
-            self.labels_ = max_index
-            self.n_clusters = np.unique(self.labels_).size
 
     km = max_cluster(np.nanargmax(reg_corr_mat, 1))
     # km.fit(reg_corr_mat)
