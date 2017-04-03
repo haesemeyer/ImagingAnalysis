@@ -2691,3 +2691,53 @@ def gram_schmidt(v, *args):
     for u in args:
         start -= project(u, v)
     return start / np.linalg.norm(start)
+
+
+def motor_nonmotor_split(activity, starting, n_reps):
+    """
+    For a given activity trace computes two traces that are NaN everywhere except for timepoints where bouts occured
+    in some but not all repeats. For these timepoints the activity in absence and presence of the bout is returned
+    Args:
+        activity: A cells activity trace
+        starting: The corresponding non-convovled starting trace at the same framerate
+        n_reps: The number of repeats performed to identify the same timepoints with and without movement
+
+    Returns:
+        [0]: A repeat-length long trace which indicates activity of the cell in absence of motor events
+        [1]: A repeat-length long trace which indicates activity of the cell in the presence of motor events
+    """
+    a_rep = np.reshape(activity, (n_reps, activity.size // n_reps))
+    s_rep = np.reshape(starting, (n_reps, activity.size // n_reps))
+    wo_motor = np.full(a_rep.shape[1], np.nan)
+    w_motor = wo_motor.copy()
+    if np.sum(starting) == 0:
+        return wo_motor, w_motor
+    motor_sums = np.sum(s_rep, 0)
+    indices = np.arange(a_rep.shape[1])
+    indices = indices[np.logical_and(motor_sums > 0, motor_sums < n_reps)]
+    for i in indices:
+        sr = s_rep[:, i]
+        wo_motor[i] = np.mean(a_rep[sr == 0, i])
+        w_motor[i] = np.mean(a_rep[sr > 0, i])
+    return wo_motor, w_motor
+
+
+def avg_motor_boost(activity, starting, n_reps):
+    """
+    For a given activity trace and bout starting trace tries to determine whether activity at a given repeat aligned
+    timepoint is higher when there was a movement versus not
+    Args:
+        activity: A cells activity trace
+        starting: The corresponding non-convovled starting trace at the same framerate
+        n_reps: The number of repeats performed to identify the same timepoints with and without movement
+
+    Returns:
+        The average normalized change in activity for motor/vs non-motor
+    """
+    wo_motor, w_motor = motor_nonmotor_split(activity, starting, n_reps)
+    wo = np.nansum(wo_motor)
+    w = np.nansum(w_motor)
+    if wo > 0:
+        return w / wo
+    else:
+        return np.nan
