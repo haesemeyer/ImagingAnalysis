@@ -1,6 +1,7 @@
 from collections import deque
 import numpy as np
 from PIL import Image
+import pickle
 
 from collections import Counter
 
@@ -1326,7 +1327,7 @@ class MotorContainer:
     plane and using an overridden indexer to make it indexable like a full matrix
     """
 
-    def __init__(self, sourceFiles, final_timebase, ca_time_constant, predicate=None, tdd=None):
+    def __init__(self, sourceFiles, final_timebase, ca_time_constant, predicate=None, tdd=None, hdf5_store=None):
         """
         Creates a new MotorContainer
         Args:
@@ -1337,6 +1338,7 @@ class MotorContainer:
              function should take a TailData object as argument and return a bout-start trace
             tdd: Optionally a pre-filled TailDataDict to avoid loading tail files multiple times when generating many
              containers
+            hdf5_store: Optionally when creating a tail data dict an hdf5 file for efficient storage of tail data
         """
         self.sourceFiles = sourceFiles
         self.final_timebase = final_timebase
@@ -1344,7 +1346,7 @@ class MotorContainer:
         self.predicate = predicate
         self.traces = {}
         if tdd is None:
-            tdd = TailDataDict(ca_time_constant)
+            tdd = TailDataDict(ca_time_constant, hdf5_store=hdf5_store)
         self.tdd = tdd
 
     def bin_trace(self, trace, frameTimes):
@@ -1634,10 +1636,18 @@ class TailDataDict:
     Class for managing TailData objects across multiple experiments
     without needing to re-read files from disk
     """
-    def __init__(self, ca_timeConstant=1.796, frameRate=100):
+    def __init__(self, ca_timeConstant=1.796, frameRate=100, hdf5_store=None):
+        """
+        Creates a new TailDataDict
+        Args:
+            ca_timeConstant: Indicator time-constant for convolution
+            frameRate: Frame-rate of original tail data
+            hdf5_store: Optional handle of hdf5 file which will be probed for storing pickled TailData objects
+        """
         self._td_dict = dict()
         self.ca_timeConstant = ca_timeConstant
         self.frameRate = frameRate
+        self.hdf5_store = hdf5_store
 
     def __getitem__(self, item):
         if type(item) != str:
@@ -1649,10 +1659,14 @@ class TailDataDict:
         if tf in self._td_dict:
             return self._td_dict[tf]
         else:
-            try:
-                td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate)
-            except:
-                raise KeyError('Could not find taildata for file')
+            if self.hdf5_store is not None and tf in self.hdf5_store:
+                # try more efficient unpickling
+                td = pickle.loads(np.array(self.hdf5_store[tf]))
+            else:
+                try:
+                    td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate)
+                except:
+                    raise KeyError('Could not find taildata for file')
             if td is None:
                 raise KeyError('Could not find taildata for file')
             self._td_dict[tf] = td
