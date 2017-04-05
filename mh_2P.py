@@ -2310,6 +2310,7 @@ def ReAlign(stack, maxShift):
             target = (0, size)
         return source, target
 
+    total_max_shift = 0
     maxShift = int(maxShift)
     x_shifts = np.zeros(stack.shape[0])
     y_shifts = np.zeros_like(x_shifts)
@@ -2323,7 +2324,11 @@ def ReAlign(stack, maxShift):
         if xshift == 0 and yshift == 0:
             continue
         if np.abs(xshift) > maxShift or np.abs(yshift) > maxShift:
-            print("Warning. Slice ", t, " requires shift greater ", maxShift, " pixels. Maximally shifted")
+            if total_max_shift < 20:
+                print("Warning. Slice ", t, " requires shift greater ", maxShift, " pixels. Maximally shifted")
+            elif total_max_shift == 20:
+                print("More than 20 slices maximally shifted, reporting total number at end.")
+            total_max_shift += 1
             if xshift > maxShift:
                 xshift = maxShift
             elif xshift < -1*maxShift:
@@ -2339,6 +2344,9 @@ def ReAlign(stack, maxShift):
         re_aligned[t, :, :] = newImage
         # add re-aligned image to sumStack
         sum_stack += newImage
+    # report back how many slices in total had to be maximally shifted
+    print("A total of {0} slices, or {1}% needed maximum shift".format(total_max_shift,
+                                                                       total_max_shift/re_aligned.shape[0]*100))
     return re_aligned, x_shifts, y_shifts
 
 
