@@ -1666,9 +1666,9 @@ class TailDataDict:
                 try:
                     td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate)
                 except:
-                    raise KeyError('Could not find taildata for file')
+                    raise KeyError('Could not find taildata for file {0}'.format(tf))
             if td is None:
-                raise KeyError('Could not find taildata for file')
+                raise KeyError('Could not find taildata for file {0}'.format(tf))
             self._td_dict[tf] = td
             return td
 
