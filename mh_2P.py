@@ -1321,6 +1321,99 @@ class HeatPulseExperiment(RepeatExperiment):
         self.stimOff = stimOff
 
 
+class DetailCharExperiment(ImagingData):
+    """
+    Class to describe our fixed-protocol detailed characterization experiment
+    """
+    def __init__(self, imagingData, swimVigor, n_repeats, t_p_f_orig, graph_info, caTimeConstant=0.4, frameRate=5):
+        """
+        Creates a new DetailCharExperiment
+        Args:
+            imagingData: The (interpolated) calcium imaging data
+            swimVigor: The swim vigor at same frequency as imagingData
+            n_repeats: The number of repeats per plane
+            t_p_f_orig: The original time per frame during acquisition
+            graph_info: Graph info for each cell
+            caTimeConstant: The indicator time constant
+            frameRate: Interpolated frame-rate of imagingData and swimVigor
+        """
+        super().__init__(imagingData, swimVigor)
+        self.n_repeats = n_repeats
+        self.original_time_per_frame = t_p_f_orig
+        self.frameRate = frameRate
+        self.caTimeConstant = caTimeConstant
+        self.graph_info = graph_info
+        self.totalSeconds = self.RawData.shape[1] / self.frameRate
+
+    def repeat_align(self, activity_mat: np.ndarray) -> np.ndarray:
+        """
+        Aligns the given matrix by repeats
+        Args:
+            activity_mat: The matrix or vector to align by repeats
+
+        Returns:
+            n_cells x n_repeats x n_timepoints array of repeat aligned data
+        """
+        if activity_mat.ndim > 2:
+            raise ValueError("activity_mat can't have more than two dimensions")
+        elif activity_mat.ndim == 1:
+            amat = activity_mat.reshape((self.n_repeats, activity_mat.size // self.n_repeats))
+            amat = amat[None, :, :]
+        else:
+            amat = activity_mat.reshape((activity_mat.shape[0],
+                                         self.n_repeats, activity_mat.shape[1] // self.n_repeats))
+        return amat
+
+    def variance_score(self) -> np.ndarray:
+        """
+        For each cell computes the activity variance score as var(average)/avg(repeat_vars)
+        """
+        amat = self.repeat_align(self.RawData)
+        # for each cell compute the variance of the repeat average
+        rep_avgs = np.mean(amat, 1)  # n_cells * repeat_time
+        var_of_avg = np.var(rep_avgs, 1)  # n_cells
+        # for each cell compute the average variance across individual repeats
+        var_per_rep = np.var(amat, 2)  # n_cells * n_repeats
+        avg_of_vars = np.mean(var_per_rep, 1)
+        return var_of_avg / avg_of_vars
+
+    def get_sine_pre_stim_ix(self):
+        """
+        Return pre and stim indices for sinewave period
+        """
+        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate)
+        time = frames / self.frameRate
+        pre_frames = frames[np.logical_and(time >= 78, time <= 82)]
+        stim_frames = frames[np.logical_and(time >= 90, time <= 110)]
+        return pre_frames, stim_frames
+
+    def get_lstep_pre_stim_ix(self):
+        """
+        Return pre and stim indices for 1500mW step
+        """
+        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate)
+        time = frames / self.frameRate
+        pre_frames = frames[np.logical_and(time >= 35, time <= 39)]
+        stim_frames = frames[np.logical_and(time >= 42, time <= 45)]
+        return pre_frames, stim_frames
+
+    def activations(self, ix_pre_repeat, ix_stim_repeat):
+        """
+        Compute average activity for all traces per repeat in activity_mat over given pre and stim indices
+        Args:
+            ix_pre_repeat: Indices in repeat aligned trace that identify pre-period
+            ix_stim_repeat: Indices in repeat aligned trace that identify stim-period
+
+        Returns:
+            [0]: n_cells x n_repeat matrix of pre averages
+            [1]: n_cells x n_repeat matrix of stim averages
+        """
+        rep_aligned = self.repeat_align(self.RawData)
+        pre = np.mean(rep_aligned[:, :, ix_pre_repeat], 2)
+        stim = np.mean(rep_aligned[:, :, ix_stim_repeat], 2)
+        return pre, stim
+
+
 class MotorContainer:
     """
     Class to memory efficiently store per-cell motor events across multiple experiments by only storing one trace per
