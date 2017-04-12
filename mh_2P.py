@@ -1424,7 +1424,8 @@ class MotorContainer:
         """
         Creates a new MotorContainer
         Args:
-            sourceFiles: For each cell / unit the source-file name to obtain motor traces
+            sourceFiles: For each cell / unit the source-file name to obtain motor traces or a list of tuples of
+             (sourceFile, ca_time_base)
             final_timebase: The timebase to which the motor trace should be binned
             ca_time_constant: The calcium indicator time-constant for convolution
             predicate: Used on each loaded TailData object to decide which bout starts should be included - this
@@ -1568,10 +1569,14 @@ def Vigor(cumAngle, winlen=10):
 
 class TailData:
 
-    def __init__(self, fileData, ca_timeconstant, frameRate):
+    def __init__(self, fileData, ca_timeconstant, frameRate, scan_frame_length=None):
         """
         Creates a new TailData object
+        Args:
             fileData: Matrix loaded from tailfile
+            ca_timeconstant: Timeconstant of calcium indicator used during experiments
+            frameRate: The tail camera acquisition framerate
+            scan_frame_length: For more accurate alignment the time it took to acquire each 2P scan frame
         """
         self.scanning = fileData[:, 0] == 1
         self.scanFrame = fileData[:, 1].astype(int)
@@ -1613,8 +1618,27 @@ class TailData:
         # of the first scan frame)
         frames = np.arange(self.cumAngles.size)
         first_frame = np.min(frames[self.scanFrame == 1]) - avgCount.astype(int)
-        frames -= first_frame
-        self.frameTime = (frames / frameRate).astype(np.float32)
+        # remove overhang from frame 0 call
+        self.scanFrame[:first_frame] = -1
+        if scan_frame_length is not None:
+            # build frame-time tied to the scan-frame clock in case camera acquisition does not follow the
+            # intended frame rate: For the camera frame which is in the middle of a given scan-frame set
+            # its time to the middle time of scan acquisition of that frame. Then interpolate times in between
+            ix_key_frame = []
+            key_frame_times = []
+            # add very first frame and its approximated time purely based on camera time
+            ix_key_frame.append(0)
+            key_frame_times.append((frames[0] - first_frame) / frameRate)
+            for i in range(self.scanFrame.max()):
+                ix_key = int(np.mean(frames[self.scanFrame == i]))
+                key_time = scan_frame_length / 2 + scan_frame_length * i
+                ix_key_frame.append(ix_key)
+                key_frame_times.append(key_time)
+            # use linear interpolation to create times for each frame
+            self.frameTime = np.interp(frames, np.array(ix_key_frame), np.array(key_frame_times))
+        else:
+            frames -= first_frame
+            self.frameTime = (frames / frameRate).astype(np.float32)
         # create bout-start trace at original frame-rate
         self.starting = np.zeros_like(self.frameTime)
         if self.bouts is not None:
@@ -1700,12 +1724,12 @@ class TailData:
             sns.despine()
 
     @staticmethod
-    def LoadTailData(filename, ca_timeConstant, frameRate=100):
+    def LoadTailData(filename, ca_timeConstant, frameRate=100, scan_frame_length=None):
         try:
             data = np.genfromtxt(filename, delimiter='\t')
         except (IOError, OSError):
             return None
-        return TailData(data, ca_timeConstant, frameRate)
+        return TailData(data, ca_timeConstant, frameRate, scan_frame_length)
 
     @staticmethod
     def CaKernel(tau, frameRate):
@@ -1743,8 +1767,23 @@ class TailDataDict:
         self.hdf5_store = hdf5_store
 
     def __getitem__(self, item):
+        """
+        Indexer into our TailData dictionary
+        Args:
+            item: Either a string identifying the underlying tail file or a tuple (string, float) identifying the
+             underlying tail file as well as the original calcium acquisition frame-rate for alignment
+
+        Returns:
+            A TailData object corresponding to the file
+        """
         if type(item) != str:
-            raise TypeError('Indexer needs to be string (filename)')
+            if type(item) != tuple or len(item) != 2 or type(item[0]) != str or type(item[1]) != float:
+                raise TypeError('Indexer needs to be string with filename or tuple (string, float)')
+        if type(item) == tuple:
+            scan_frame_length = item[1]
+            item = item[0]
+        else:
+            scan_frame_length = None
         if len(item) > 4 and item[-4:] == 'tail':
             tf = item
         else:
@@ -1757,8 +1796,8 @@ class TailDataDict:
                 td = pickle.loads(np.array(self.hdf5_store[tf]))
             else:
                 try:
-                    td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate)
-                except:
+                    td = TailData.LoadTailData(tf, self.ca_timeConstant, self.frameRate, scan_frame_length)
+                except IOError:
                     raise KeyError('Could not find taildata for file {0}'.format(tf))
             if td is None:
                 raise KeyError('Could not find taildata for file {0}'.format(tf))
@@ -1766,6 +1805,8 @@ class TailDataDict:
             return td
 
     def __contains__(self, item):
+        if type(item) == tuple:
+            item = item[0]
         if len(item) > 4 and item[-4:] == 'tail':
             tf = item
         else:
