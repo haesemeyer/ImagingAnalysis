@@ -49,10 +49,10 @@ if __name__ == "__main__":
             graph_list += pickle.load(file)
         finally:
             file.close()
-    sourceFiles = [g.SourceFile for g in graph_list]
+    sourceFiles = [(g.SourceFile, t_per_frame) for g in graph_list]
     # load laser file of first experiment (they should all be the same anyways...)
-    ext_start = sourceFiles[0].find(".tif")
-    laser_file = sourceFiles[0][:ext_start-2] + ".laser"
+    ext_start = sourceFiles[0][0].find(".tif")
+    laser_file = sourceFiles[0][0][:ext_start-2] + ".laser"
     laser_currents = (np.genfromtxt(laser_file)-lc_offset) * lc_scale
     frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
     # interpolate to our interp-frequency after filtering timeseries using oasis
