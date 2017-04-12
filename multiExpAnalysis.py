@@ -304,6 +304,23 @@ def CreateAndReformatAllClusterStacks(membership):
     return True
 
 
+def CreateAndReformatAllTGClusterStacks(membership):
+    cluster_ids = np.unique(membership[membership != -1])
+    for i, e in enumerate(exp_data):
+        name = e.graph_info[0][0]
+        if "Trigem" in name:
+            # determine whether this is left of right
+            if "_04_Z" in name or "_05_Z" in name or "_09_Z" in name or "_11_Z" in name or "_12_Z" in name:
+                left = True
+            else:
+                left = False
+            sfiles = [MakeAndSaveROIStack(e, 2, membership[exp_id == i], c) for c in cluster_ids]
+            for s in sfiles:
+                ReformatTGROIStack(s, left)
+        else:
+            continue
+
+
 def DumpAnalysisDataHdf5(filename):
     """
     Save all created analysis data into one hdf5 file for easy re-analysis
