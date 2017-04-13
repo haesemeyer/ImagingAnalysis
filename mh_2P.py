@@ -1397,6 +1397,16 @@ class DetailCharExperiment(ImagingData):
         stim_frames = frames[np.logical_and(time >= 42, time <= 45)]
         return pre_frames, stim_frames
 
+    def get_tap_pre_stim_ix(self):
+        """
+        Retunr pre and stim indices for tap
+        """
+        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate, dtype=int)
+        time = frames / self.frameRate
+        pre_frames = frames[np.logical_and(time >= 122, time <= 128)]
+        stim_frames = frames[np.logical_and(time > 128, time <= 133)]
+        return pre_frames, stim_frames
+
     def activations(self, ix_pre_repeat, ix_stim_repeat):
         """
         Compute average activity for all traces per repeat in activity_mat over given pre and stim indices
