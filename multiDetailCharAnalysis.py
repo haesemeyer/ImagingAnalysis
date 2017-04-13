@@ -48,11 +48,18 @@ if __name__ == "__main__":
     mc = [mc_all, mc_high_bias, mc_low_bias]
 
     # plot average probability of motor events
-    fig, ax = pl.subplots()
-    ax.plot(np.mean(exp_data[0].repeat_align(mc_hb_raw.avg_motor_output), 1).ravel(), label="Flicks")
-    ax.plot(np.mean(exp_data[0].repeat_align(mc_lb_raw.avg_motor_output), 1).ravel(), label="Swims")
-    ax.legend()
-    sns.despine(fig, ax)
+    fig, ax = pl.subplots(ncols=2, sharex=True, sharey=True)
+    rep_time = np.linspace(0, 135, 135*exp_data[0].frameRate, endpoint=False)
+    ax[0].plot(rep_time, np.mean(exp_data[0].repeat_align(mc_hb_raw.avg_motor_output), 1).ravel())
+    ax[0].set_xlabel("Time [s]")
+    ax[0].set_ylabel("Response probability")
+    ax[1].plot([], [])
+    ax[1].plot(rep_time, np.mean(exp_data[0].repeat_align(mc_lb_raw.avg_motor_output), 1).ravel())
+    ax[1].set_xlabel("Time [s]")
+    ax[0].set_title("Flicks")
+    ax[1].set_title("Swims")
+    sns.despine(fig)
+    fig.tight_layout()
 
     # use motor types to sort out motor units
     mc_type_corrs = np.zeros((all_activity.shape[0], len(mc)))
