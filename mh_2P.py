@@ -1381,7 +1381,7 @@ class DetailCharExperiment(ImagingData):
         """
         Return pre and stim indices for sinewave period
         """
-        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate)
+        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate, dtype=int)
         time = frames / self.frameRate
         pre_frames = frames[np.logical_and(time >= 78, time <= 82)]
         stim_frames = frames[np.logical_and(time >= 90, time <= 110)]
@@ -1391,7 +1391,7 @@ class DetailCharExperiment(ImagingData):
         """
         Return pre and stim indices for 1500mW step
         """
-        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate)
+        frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate, dtype=int)
         time = frames / self.frameRate
         pre_frames = frames[np.logical_and(time >= 35, time <= 39)]
         stim_frames = frames[np.logical_and(time >= 42, time <= 45)]
