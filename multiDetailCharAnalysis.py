@@ -72,15 +72,56 @@ if __name__ == "__main__":
     is_pot_stim = np.logical_and(var_scores > 0.05, np.max(mc_type_corrs, 1) < 0.4)
 
     # find units that show significant activation during 1500mW step and sine period
-    p_stp = []
+    p_stp = []  # p-values of activation during step and sine wave and tap
     p_sin = []
+    p_tap = []
+    act_sign = np.array([])  # sign of activation change (ON=plus, OFF=minus)
     for data in exp_data:
         pre, stim = data.activations(*data.get_lstep_pre_stim_ix())
         p_stp += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        diffs = np.array([np.mean(s-p) for p, s in zip(pre, stim)])
         pre, stim = data.activations(*data.get_sine_pre_stim_ix())
         p_sin += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        diffs += np.array([np.mean(s-p) for p, s in zip(pre, stim)])
+        act_sign = np.r_[act_sign, np.sign(diffs)]
+        pre, stim = data.activations(*data.get_tap_pre_stim_ix())
+        p_tap += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
     p_stp = np.array(p_stp)
     p_sin = np.array(p_sin)
+    p_tap = np.array(p_tap)
     # mark units that show significant change in both periods
     sig_act = np.logical_and(p_stp < 0.01, p_sin < 0.01)
     stim_units = np.logical_and(sig_act, is_pot_stim)
+    # compute repeat-average of all stim_units
+    su_avg = np.mean(data.repeat_align(all_activity[stim_units, :]), 1)
+
+    # divide cells based on heat sign an whether they also significantly respond to taps or not
+    on_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05), :]
+    on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.2), :]
+    off_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] < 0.05), :]
+    off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > 0.2), :]
+
+    # plot average activity of the types segregated by ON/OFF with heat and tap responses in separate plots
+    fig, axes = pl.subplots(2, 2, gridspec_kw={'width_ratios': [4, 1]})
+    # ON heat time
+    sns.tsplot(dff(on_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="r", ax=axes[0][0])
+    sns.tsplot(dff(on_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="orange", ax=axes[0][0])
+    axes[0][0].set_xlabel("Time [s]")
+    axes[0][0].set_ylabel("dF/F")
+    # ON tap time
+    sns.tsplot(dff(on_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="r", ax=axes[0][1])
+    sns.tsplot(dff(on_no_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="orange", ax=axes[0][1])
+    axes[0][1].set_xlabel("Time [s]")
+    axes[0][1].set_ylabel("dF/F")
+    # OFF heat time
+    sns.tsplot(dff(off_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="b", ax=axes[1][0])
+    sns.tsplot(dff(off_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="m", ax=axes[1][0])
+    axes[1][0].set_xlabel("Time [s]")
+    axes[1][0].set_ylabel("dF/F")
+    # OFF tap time
+    sns.tsplot(dff(off_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="b", ax=axes[1][1])
+    sns.tsplot(dff(off_no_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="m", ax=axes[1][1])
+    axes[1][1].set_xlabel("Time [s]")
+    axes[1][1].set_ylabel("dF/F")
+    sns.despine(fig)
+    fig.tight_layout()
