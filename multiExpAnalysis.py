@@ -304,19 +304,24 @@ def CreateAndReformatAllClusterStacks(membership):
     return True
 
 
+def is_left_tg(name):
+    """
+    Returns true if name comes from a left trigeminal tiff or fals if from right
+    """
+    if "_04_Z" in name or "_05_Z" in name or "_09_Z" in name or "_11_Z" in name or "_12_Z" in name:
+        return True
+    else:
+        return False
+
+
 def CreateAndReformatAllTGClusterStacks(membership):
     cluster_ids = np.unique(membership[membership != -1])
     for i, e in enumerate(exp_data):
         name = e.graph_info[0][0]
         if "Trigem" in name:
-            # determine whether this is left of right
-            if "_04_Z" in name or "_05_Z" in name or "_09_Z" in name or "_11_Z" in name or "_12_Z" in name:
-                left = True
-            else:
-                left = False
             sfiles = [MakeAndSaveROIStack(e, 2, membership[exp_id == i], c) for c in cluster_ids]
             for s in sfiles:
-                ReformatTGROIStack(s, left)
+                ReformatTGROIStack(s, is_left_tg(name))
         else:
             continue
 
