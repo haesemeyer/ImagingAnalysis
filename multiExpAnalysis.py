@@ -399,6 +399,8 @@ def stack_coordinate_centroid(gi):
             return 500/512/2
         elif "MidHB" in gi[0]:
             return 500/512
+        elif "Trigem" in gi[0]:
+            return 500/512/2
         else:
             raise ValueError("Could not determine zoom for stack")
     x1 = gi[0].find('_Z_') + 3
@@ -425,24 +427,41 @@ def save_nuclear_coordinates(experiment):
     return out_name
 
 
-def transform_centroid_coordinates(centroidFilename, referenceFolder="E:/Dropbox/ReferenceBrainCreation/"):
+def transform_centroid_coordinates(centroidFilename, referenceFolders=("E:/Dropbox/ReferenceBrainCreation/",
+                                                                       "E:/Dropbox/ReferenceTrigeminalCreation/")):
     """
     Transform centroid coordinates from the specified file into the reference brain space and return
     an array of those coordinates
     Args:
         centroidFilename: The file to convert. NOTE: The filename determines which transformation to apply!
-        referenceFolder: The folder of the reference brain trasnformations
+        referenceFolders: Tuple with the paths of the main and trigeminal reference brain folders
 
     Returns:
         A matrix of the transformed points
     """
+    if "Trigem" in centroidFilename:
+        referenceFolder = referenceFolders[1]
+    else:
+        referenceFolder = referenceFolders[0]
     nameOnly = os.path.basename(centroidFilename)
     suffix_start = nameOnly.find("_nucCentroids")
     ext_start = nameOnly.lower().find(".txt")
     transform_name = nameOnly[:suffix_start]
-    transform_file = referenceFolder + transform_name + '/' + transform_name + '_ffd5.xform'
+    if "Trigem" in centroidFilename:
+        # unfortunately trigeminal registrations don't follow the most useful naming scheme
+        # determine whether this is left of right
+        zstart = centroidFilename.find("_nuc")
+        snippet = centroidFilename[zstart-2:zstart]
+        if "04" in snippet or "05" in snippet or "09" in snippet or "11" in snippet or "12" in snippet:
+            suffix = "_into_left"
+        else:
+            suffix = "_into_right"
+        folder_name = snippet + suffix
+        transform_file = referenceFolder + folder_name + "/ffd5.xform"
+    else:
+        transform_file = referenceFolder + transform_name + '/' + transform_name + '_ffd5.xform'
     if not os.path.exists(transform_file):
-        print("Could not determine transform file returning all nan")
+        print("Could not determine transform file returning all nan ({0})".format(transform_file))
         outshape = np.genfromtxt(centroidFilename).shape
         return np.full(outshape, np.nan)
     outfile = referenceFolder + nameOnly[:ext_start] + '_transform.txt'
