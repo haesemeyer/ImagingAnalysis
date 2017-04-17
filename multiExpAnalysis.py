@@ -517,6 +517,27 @@ def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
     return stack, header
 
 
+def get_stack_types(exp_data):
+    """
+    Function to determine based on filename whether a given cell belongs to a brain, left or right TG stack
+    Args:
+        exp_data: The experiment data structures with the cells in question
+
+    Returns:
+        len(exp_data) sized array of strings with either "MAIN", "TG_LEFT" or "TG_RIGHT" identifying the stack type
+    """
+    tf_names = [g[0] for e in exp_data for g in e.graph_info]
+    types = []
+    for i, name in enumerate(tf_names):
+        if "Trigem" in name:
+            if is_left_tg(name):
+                types.append("TG_LEFT")
+            else:
+                types.append("TG_RIGHT")
+        else:
+            types.append("MAIN")
+    return np.array(types)
+
 
 def rem_nan_1d(x: np.ndarray) -> np.ndarray:
     """
