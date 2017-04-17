@@ -15,6 +15,8 @@ from mh_2P import ReAlign, UiGetFile,  OpenStack, TailData, MakeNrrdHeader, \
 
 from scipy.ndimage import gaussian_filter
 
+from warnings import warn
+
 if __name__ == "__main__":
     zoom_level = float(input("Please enter the acquisition zoom:"))  # the zoom level used during acquisition
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
@@ -41,7 +43,10 @@ if __name__ == "__main__":
         else:
             stack = OpenStack(f).astype(np.float32)
             resolution = 500 / stack.shape[1] / zoom_level
-            stack = ReAlign(stack, int(4 / resolution))[0]
+            stack, p_max_shift = ReAlign(stack, int(4 / resolution))[0:2]
+            if p_max_shift > 2.5:
+                warn("More than 2.5% of slices required max shift. Skipping stack {0}".format(f))
+                continue
             np.save(aligned_file, stack.astype(np.uint8))
             if write_aligned_nrrd:
                 out_stack = np.zeros((stack.shape[2], stack.shape[1], stack.shape[0]), dtype=np.uint8)

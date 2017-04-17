@@ -2489,9 +2489,9 @@ def ReAlign(stack, maxShift):
         # add re-aligned image to sumStack
         sum_stack += newImage
     # report back how many slices in total had to be maximally shifted
-    print("A total of {0} slices, or {1}% needed maximum shift".format(total_max_shift,
-                                                                       total_max_shift/re_aligned.shape[0]*100))
-    return re_aligned, x_shifts, y_shifts
+    percent_max = total_max_shift/re_aligned.shape[0]*100
+    print("A total of {0} slices, or {1}% needed maximum shift".format(total_max_shift, percent_max))
+    return re_aligned, percent_max, x_shifts, y_shifts
 
 
 def CorrelationControl(stack, nFrames):
