@@ -475,6 +475,44 @@ def transform_centroid_coordinates(centroidFilename, referenceFolders=("E:/Dropb
     return transformed
 
 
+def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
+    """
+    Create a (refernce) stack with given centroids marked as single dots
+    Args:
+        centroids_um: The (x,y,z) centroid coordinates in um
+        stack_type: Either "MAIN" or "TG" to obtain overall dimensions and resolution
+        brightness: Either a scalar btw. 0 and 1 defining the brightness of all points or array with value per centroid
+
+    Returns:
+        [0]: Stack
+        [1]: Compatible NRRD header
+    """
+    if not np.isscalar(brightness):
+        if brightness.size != centroids_um.shape[0]:
+            raise ValueError("Brightness either needs to be scaler of have one element per centroid")
+    res_z = 2.5  # all our stacks have 2.5 um z-resolution
+    if stack_type == "MAIN":
+        res_xy = 500/512/1.5
+        shape = (770, 1380, 100)
+    elif stack_type == "TG":
+        res_xy = 500/512/2
+        shape = (512, 512, 30)
+    else:
+        raise ValueError("stack_type has to be one of 'MAIN' or 'TG'")
+    stack = np.zeros(shape, dtype=np.uint8)
+    header = MakeNrrdHeader(stack, res_xy, res_z)
+    for i, cents in enumerate(centroids_um):
+        if np.any(np.isnan(cents)):
+            continue
+        if np.isscalar(brightness):
+            b = int(255 * brightness)
+        else:
+            b = int(255 * brightness[i])
+        stack[int(cents[0] / res_xy), int(cents[1] / res_xy), int(cents[2] / res_z)] = b
+    return stack, header
+
+
+
 def rem_nan_1d(x: np.ndarray) -> np.ndarray:
     """
     Remove all NaN values from given vector
