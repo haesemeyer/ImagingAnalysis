@@ -63,7 +63,7 @@ if __name__ == "__main__":
         stack = stack[::4, :, :].copy()
         # before finding cells filter stack along time-dimension
         rate_stack = gaussian_filter(stack, (fr_rate_ds, 0, 0))
-        graph_list = CellGraph.CellConnComps(rate_stack, sum_stack, cell_diam, 30/(resolution**2), True)
+        graph_list = CellGraph.CellConnComps(rate_stack, sum_stack, cell_diam, 30/(resolution**2), False)
 
         del rate_stack
         stack = np.load(f[:-4] + "_stack.npy", mmap_mode='r').astype(np.float32)
