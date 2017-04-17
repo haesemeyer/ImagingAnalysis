@@ -368,7 +368,13 @@ def DumpAnalysisDataHdf5(filename):
         except NameError:
             print("Transforming all coordinate centroids")
             tf_centroids = np.vstack([transform_centroid_coordinates(save_nuclear_coordinates(e)) for e in exp_data])
-        dfile.create_dataset("tf_centroids", data=tf_centroids)
+        stack_types = get_stack_types(exp_data)
+        tf_centroids_main = tf_centroids[stack_types == "MAIN", :]
+        tf_centroids_tg_left = tf_centroids[stack_types == "TG_LEFT", :]
+        tf_centroids_tg_right = tf_centroids[stack_types == "TG_RIGHT", :]
+        dfile.create_dataset("tf_centroids_main", data=tf_centroids_main)
+        dfile.create_dataset("tf_centroids_tg_left", data=tf_centroids_tg_left)
+        dfile.create_dataset("tf_centroids_tg_right", data=tf_centroids_tg_right)
     finally:
         dfile.close()
     return True
