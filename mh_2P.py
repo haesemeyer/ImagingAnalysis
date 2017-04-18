@@ -2972,3 +2972,39 @@ def avg_motor_boost(activity, starting, n_reps):
         return w / wo
     else:
         return np.nan
+
+
+def assign_region_label(centroids, region_list, res_xy, res_z=2.5):
+    """
+    For each centroid assigns a label of the corresponding region in region_list (note: first region matched wins)
+    Args:
+        centroids: The (x,y,z) centroids in um
+        region_list: List of RegionContainer classes
+        res_xy: Stack resolution in x/y
+        res_z: Stack resolution in z
+
+    Returns:
+        Array of strings containing the labels of the region each cell belongs to or empty string if no region found
+    """
+    # sort region list for efficient lookup
+    rlist = sorted(region_list, key=lambda rc: rc.z_index)
+    rnames = []
+    for cent in centroids:
+        if np.any(np.isnan(cent)):
+            rnames.append("")
+            continue
+        name = ""
+        x = cent[0] / res_xy
+        y = cent[1] / res_xy
+        z = int(cent[2] / res_z)
+        for rc in rlist:
+            if rc.z_index == z:
+                # NOTE: y is first row-, x second column-coordinate
+                if rc.point_in_region((y, x)):
+                    name = rc.region_name
+                    break
+            if rc.z_index > z:
+                # all following regions can't match
+                break
+        rnames.append(name)
+    return np.array(rnames)
