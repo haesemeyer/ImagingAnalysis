@@ -1512,7 +1512,7 @@ class MotorContainer:
         Returns:
             A vector/matrix of the indicated row(s)
         """
-        if type(r_ix) is int:
+        if np.issubdtype(type(r_ix), np.int):
             return self._get_row(r_ix)
         start, stop, step = r_ix.indices(len(self.sourceFiles))
         rows = [self._get_row(i) for i in range(start, stop, step)]
@@ -1534,9 +1534,9 @@ class MotorContainer:
             if len(item) > 2:
                 raise ValueError("Indexer dimensionality does not match data")
             for i in item:
-                if type(i) != int and type(i) != slice:
+                if not np.issubdtype(type(i), np.int) and type(i) != slice:
                     raise TypeError("Only integers and slice objects accepted as indices")
-        elif type(item) != int and type(item) != slice:
+        elif not np.issubdtype(type(item), np.int) and type(item) != slice:
             raise TypeError("Only integers and slice objects accepted as indices")
         if type(item) != tuple:
             # we only got a single index expression - interpret as row index
@@ -1787,8 +1787,9 @@ class TailDataDict:
         Returns:
             A TailData object corresponding to the file
         """
-        if type(item) != str:
-            if type(item) != tuple or len(item) != 2 or type(item[0]) != str or type(item[1]) != float:
+        if not np.issubdtype(type(item), np.str):
+            if type(item) != tuple or len(item) != 2 or not np.issubdtype(type(item[0]), np.str) \
+                    or not np.issubdtype(type(item[1]), np.float):
                 raise TypeError('Indexer needs to be string with filename or tuple (string, float)')
         if type(item) == tuple:
             scan_frame_length = item[1]
