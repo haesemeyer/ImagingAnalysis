@@ -157,6 +157,7 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
     Returns:
         [0]: Activity of all cells that are part of the indicated regions
         [1]: Cluster membership of each cell
+        [3]: Original indexes into all_dff of the cells that are part of the selected regions for re-mapping
     """
     global all_rl, all_dff, mship_nonan
     region_member = np.zeros_like(mship_nonan.size, dtype=bool)
@@ -166,6 +167,7 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
     else:
         region_member = all_rl == region_labels
     region_activity = all_dff[region_member, :]
+    region_indices = np.arange(all_dff.shape[0], dtype=int)[region_member]
     to_cluster = trial_average(region_activity)
     corr_mat = np.corrcoef(to_cluster)
     corr_mat[corr_mat < 0.26] = 0
@@ -178,7 +180,7 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
         spec_regs[:, i] = np.mean(region_activity[cids == i, :], 0)
     # for unified sorting determine correlation of each regressor to our "on stimulus"
     c = np.array([np.corrcoef(spec_regs[:, i], exp_data[0].stimOn)[0, 1] for i in range(n_regs)])
-    spec_regs = spec_regs[:, np.argsort(c)]
+    spec_regs = spec_regs[:, np.argsort(-1*c)]  # sort by descending correlation
     reg_corr_mat = np.zeros((region_activity.shape[0], n_regs))
     for i in range(region_activity.shape[0]):
         for j in range(n_regs):
@@ -198,24 +200,27 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
             ax.plot([0, n_regs+1], [km.labels_.size-covered, km.labels_.size-covered], 'k')
     membership = np.full(region_activity.shape[0], -1, dtype=int)
     membership[ab_thresh] = km.labels_.astype(int)
-    # don't allow clusters of singular traces
+    # don't allow clusters of less than 5 constituents
     for i in range(n_regs):
-        if np.sum(membership == i) < 2:
+        if np.sum(membership == i) < 5:
             membership[membership == i] = -1
     if plot:
         # plot per-trial cluster average traces
         fig, ax = pl.subplots()
+        time = np.arange(region_activity.shape[1]//3) / 5
         for i in range(n_regs):
-            # ax.plot(spec_regs[:, i])
-            ax.plot(np.mean(trial_average(region_activity[membership == i, :]), 0))
+            if np.sum(membership == i) > 0:
+                ax.plot(time, np.mean(trial_average(region_activity[membership == i, :]), 0), label=str(i))
+        ax.legend()
         sns.despine(fig, ax)
         # plot cluster members in embedded space
         fig = pl.figure()
         ax = fig.add_subplot(111, projection='3d')
         for i in range(n_regs):
+            if np.sum(membership == i) > 0:
                 ax.scatter(coords[membership == i, 0], coords[membership == i, 1],
                            coords[membership == i, 2], s=5)
-    return region_activity, membership
+    return region_activity, membership, region_indices
 
 
 def build_regressors(activity, cluster_membership):
