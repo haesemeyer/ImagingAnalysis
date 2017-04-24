@@ -361,15 +361,32 @@ if __name__ == "__main__":
             lreg.fit(regs, all_motor)
             resmat_all[i, j] = lreg.score(regs, all_motor)
 
-    # Plot prediction of general motor output
-    fig, ax = pl.subplots()
-    sns.heatmap(resmat_all, 0, 1, cmap="RdBu_r", annot=True, ax=ax)
-    ax.set_title("Prediction of overall motor output")
+    # # Plot prediction of general motor output
+    # fig, ax = pl.subplots()
+    # sns.heatmap(resmat_all, 0, 1, cmap="RdBu_r", annot=True, ax=ax, xticklabels=np.unique(region_mem[region_mem != -1]),
+    #             yticklabels=np.unique(region_mem[region_mem != -1]))
+    # ax.set_title("Prediction of overall motor output")
 
     # Plot prediction of low and high bias side-by-sid
     fig, (ax_h, ax_l) = pl.subplots(ncols=2)
-    sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h)
+    sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h,
+                xticklabels=np.unique(region_mem[region_mem != -1]),
+                yticklabels=np.unique(region_mem[region_mem != -1]))
     ax_h.set_title("Prediction of strong flicks")
-    sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l)
+    sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l,
+                xticklabels=np.unique(region_mem[region_mem != -1]),
+                yticklabels=np.unique(region_mem[region_mem != -1]))
     ax_l.set_title("Prediction of swims")
     fig.tight_layout()
+
+    # plot regressor-regressor correlations
+    pl.figure()
+    sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True,
+                xticklabels=np.unique(region_mem[region_mem != -1]),
+                yticklabels=np.unique(region_mem[region_mem != -1]))
+
+    # obtain per-region best fit R2 values
+    out = np.hstack((flicks_motor[:, None], swim_motor[:, None]))
+    lreg = LinearRegression()
+    lreg.fit(regressors, out)
+    print(lreg.score(regressors, out))
