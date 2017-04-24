@@ -271,8 +271,9 @@ if __name__ == "__main__":
     segFile.close()
 
     # create motor containers
+    tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
     itime = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
-    mc_all_raw = MotorContainer(sourceFiles, itime, 0)
+    mc_all_raw = MotorContainer(sourceFiles, itime, 0, hdf5_store=tailstore)
     mc_flicks_raw = MotorContainer(sourceFiles, itime, 0, predicate=high_bias_bouts, tdd=mc_all_raw.tdd)
     mc_flick_left_raw = MotorContainer(sourceFiles, itime, 0, predicate=left_bias_bouts, tdd=mc_all_raw.tdd)
     mc_flick_right_raw = MotorContainer(sourceFiles, itime, 0, predicate=right_bias_bouts, tdd=mc_all_raw.tdd)
