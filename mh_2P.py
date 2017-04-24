@@ -3009,3 +3009,27 @@ def assign_region_label(centroids, region_list, res_xy, res_z=2.5):
                 break
         rnames.append(name)
     return np.array(rnames)
+
+
+def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
+    """
+    Creates a raster plot (as in spike raster plots)
+    Args:
+        events: An nTrials*time matrix where 0 indicates no event and values >0 indicate event times
+        time: Optionally a vector to indicate timings of each column in the events matrix
+        ax: The plot axis, a new plot will be created and the axis returned otherwise
+        ticklength: The length of each tick
+        **kwargs: Additional arguments passed to vlines
+
+    Returns:
+
+    """
+    if ax is None:
+        fig, ax = pl.subplots()
+    if time is None:
+        time = np.arange(events.shape[1])
+    for ith, trial in enumerate(events):
+        trial = time[trial > 0]
+        ax.vlines(trial, ith + ticklength/2, ith + 1.5*ticklength, **kwargs)
+    ax.ylim(ticklength/2, events.shape[0] + ticklength/2)
+    return ax
