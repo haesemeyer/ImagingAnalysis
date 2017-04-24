@@ -4,6 +4,7 @@ from scipy.stats import mode
 from mh_2P import TailData
 
 strong_thresh = 0.8
+turn_thresh = 0.5
 
 
 def bias(start, end, ca, mca):
@@ -80,5 +81,35 @@ def unbiased_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if -strong_thresh < bb < strong_thresh:
+            starting[b[0]] = 1
+    return starting
+
+
+def left_bouts(tdata: TailData):
+    """
+    For a given TailData object returns a bout start array for bouts that are likely leftwards
+    """
+    if tdata.bouts is None:
+        return tdata.starting
+    starting = np.zeros(tdata.starting.size, dtype=np.float32)
+    mca = mode(tdata.cumAngles)[0]
+    for b in tdata.bouts.astype(int):
+        bb = bias(b[0], b[1], tdata.cumAngles, mca)
+        if bb <= -turn_thresh:
+            starting[b[0]] = 1
+    return starting
+
+
+def right_bouts(tdata: TailData):
+    """
+    For a given TailData object returns a bout start array for bouts that are likely rightwards
+    """
+    if tdata.bouts is None:
+        return tdata.starting
+    starting = np.zeros(tdata.starting.size, dtype=np.float32)
+    mca = mode(tdata.cumAngles)[0]
+    for b in tdata.bouts.astype(int):
+        bb = bias(b[0], b[1], tdata.cumAngles, mca)
+        if bb >= turn_thresh:
             starting[b[0]] = 1
     return starting
