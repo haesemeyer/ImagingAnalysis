@@ -17,11 +17,18 @@ from warnings import warn
 if __name__ == "__main__":
     zoom_level = float(input("Please enter the acquisition zoom:"))  # the zoom level used during acquisition
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
+    indicator = ""
+    while indicator != "f" and indicator != "s":
+        indicator = input("Please indicate whether this was gcamp 6[s] or 6[f]:").lower()
 
     frame_rate = 1 / t_per_frame
 
-    ca_time_const = 0.4  # time-constant of cytoplasmic Gcamp6F
-    # ca_time_const = 1.796  # time-constant of cytoplasmic Gcamp6F
+    if indicator == "f":
+        ca_time_const = 0.4  # time-constant of cytoplasmic Gcamp6F
+    elif indicator == "s":
+        ca_time_const = 1.796  # time-constant of cytoplasmic Gcamp6S
+    else:
+        raise ValueError("Did not recognize calcium indicator")
 
     corr_thresh = 0.5
 

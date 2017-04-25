@@ -335,8 +335,8 @@ if __name__ == "__main__":
     swim_motor = trial_average(mc_swims.avg_motor_output)
 
     # example region derivation
-    regions = ["TG_L", "TG_R"]
-    region_act, region_mem = build_region_clusters(regions)
+    regions = ["Cerebellum_L", "Cerebellum_R"]
+    region_act, region_mem = build_region_clusters(regions)[:2]
 
     regressors = build_regressors(trial_average(region_act), region_mem)
 

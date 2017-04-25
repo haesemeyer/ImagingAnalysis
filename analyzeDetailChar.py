@@ -39,6 +39,16 @@ if __name__ == "__main__":
     total_seconds = (s_pre + s_stim + s_post)*n_repeats
     t_per_frame = float(input("Please enter the duration of each frame in seconds:"))
 
+    indicator = ""
+    while indicator != "f" and indicator != "s":
+        indicator = input("Please indicate whether this was gcamp 6[s] or 6[f]:").lower()
+    if indicator == "f":
+        ca_time_const = 0.4  # time-constant of cytoplasmic Gcamp6F
+    elif indicator == "s":
+        ca_time_const = 1.796  # time-constant of cytoplasmic Gcamp6S
+    else:
+        raise ValueError("Did not recognize calcium indicator")
+
     interp_freq = 5
 
     fnames = UiGetFile([('Graph files', '.graph')], multiple=True)
@@ -56,7 +66,7 @@ if __name__ == "__main__":
     laser_currents = (np.genfromtxt(laser_file)-lc_offset) * lc_scale
     frame_times = np.arange(graph_list[0].RawTimeseries.size) * t_per_frame
     # interpolate to our interp-frequency after filtering timeseries using oasis
-    gval = oasis_g_from_t_half(0.4, t_per_frame)
+    gval = oasis_g_from_t_half(ca_time_const, t_per_frame)
     interp_times = np.linspace(0, total_seconds, total_seconds*interp_freq, endpoint=False)
     ipol = lambda y: np.interp(interp_times, frame_times, y[:frame_times.size])
     for g in graph_list:
@@ -79,7 +89,7 @@ if __name__ == "__main__":
     # create a motor container
     i_time = np.linspace(0, g.interp_data.size / 5, g.interp_data.size + 1)
     mc_all_raw = MotorContainer(sourceFiles, i_time, 0)
-    mc_all = MotorContainer(sourceFiles, i_time, 0.4, tdd=mc_all_raw.tdd)
+    mc_all = MotorContainer(sourceFiles, i_time, ca_time_const, tdd=mc_all_raw.tdd)
 
     # plot average response with time of tap drawn in
     motor_by_trial = mc_all_raw.avg_motor_output.reshape((n_repeats, mc_all_raw[0].size // n_repeats))
@@ -109,7 +119,7 @@ if __name__ == "__main__":
 
     # create experiment class
     g_info = [(g.SourceFile, g.V) for g in graph_list]
-    data = DetailCharExperiment(all_activity, all_motor, n_repeats, t_per_frame, g_info)
+    data = DetailCharExperiment(all_activity, all_motor, n_repeats, t_per_frame, g_info, caTimeConstant=ca_time_const)
     # save data to file
     z_start = graph_list[0].SourceFile.find("_Z_")
     save_name = graph_list[0].SourceFile[:z_start] + ".pickle"

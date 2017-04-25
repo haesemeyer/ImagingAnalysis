@@ -1,16 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
-from mh_2P import DetailCharExperiment, MotorContainer, UiGetFile
-from motorPredicates import high_bias_bouts, unbiased_bouts
+from mh_2P import DetailCharExperiment, MotorContainer, UiGetFile, assign_region_label, RegionContainer
+from motorPredicates import high_bias_bouts, unbiased_bouts, left_bias_bouts, right_bias_bouts
 import pickle
 from typing import List
 from scipy.stats import wilcoxon
+import h5py
+from os import path
 
 
 def dff(ts):
-    f0 = np.percentile(ts, 10, axis=1, keepdims=True)
-    f0[f0 < 0.1] = 0.1
+    # f0 = np.percentile(ts, 10, axis=1, keepdims=True)
+    f0 = np.mean(ts[:, :10*5], axis=1, keepdims=True)
+    f0[f0 < 0.05] = 0.05
     return (ts-f0)/f0
 
 
@@ -28,6 +31,8 @@ if __name__ == "__main__":
     source_files = []
     var_scores = np.array([])
     all_activity = np.array([])
+    all_rl = []  # for each cell the labeled region it is coming from
+    region_dict = {}
     for i, data in enumerate(exp_data):
         source_files += [(gi[0], data.original_time_per_frame) for gi in data.graph_info]
         var_scores = np.r_[var_scores, data.variance_score()]
@@ -36,6 +41,27 @@ if __name__ == "__main__":
             all_activity = data.RawData.astype(np.float32)
         else:
             all_activity = np.r_[all_activity, data.RawData.astype(np.float32)]
+        for gi in data.graph_info:
+            if gi[0] not in region_dict:
+                # first try to find the segmentation file in the same location as the source file
+                ext_start = gi[0].find('.tif')
+                segment_name = gi[0][:ext_start] + "_SEG.hdf5"
+                if not path.exists(segment_name):
+                    # look in same directory as experiment data files
+                    name = path.split(gi[0])[1]
+                    directory = path.split(dfnames[0])[0]
+                    ext_start = name.find('.tif')
+                    name = name[:ext_start] + "_SEG.hdf5"
+                    segment_name = path.join(directory, name)
+                cont_file = h5py.File(segment_name, 'r')
+                region_dict[gi[0]] = RegionContainer.load_container_list(cont_file)
+                cont_file.close()
+            region_list = region_dict[gi[0]]
+            # not the first vertex entry is the y-coordinate (=row of matrix),
+            # the second the x-coordinate (=column of matrix)
+            centroid = np.array([np.mean([v[1] for v in gi[1]]), np.mean([v[0] for v in gi[1]]), 0])
+            all_rl.append(assign_region_label([centroid], region_list, 1, 1))
+    all_rl = np.array(all_rl)
     var_scores[np.isnan(var_scores)] = 0
     # create motor containers
     i_time = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
@@ -43,9 +69,12 @@ if __name__ == "__main__":
     mc_all = MotorContainer(source_files, i_time, tc)
     mc_high_bias = MotorContainer(source_files, i_time, tc, high_bias_bouts, tdd=mc_all.tdd)
     mc_low_bias = MotorContainer(source_files, i_time, tc, unbiased_bouts, tdd=mc_all.tdd)
+    mc_left_bias = MotorContainer(source_files, i_time, tc, left_bias_bouts, tdd=mc_all.tdd)
+    mc_right_bias = MotorContainer(source_files, i_time, tc, right_bias_bouts, tdd=mc_all.tdd)
     mc_hb_raw = MotorContainer(source_files, i_time, 0, high_bias_bouts, tdd=mc_all.tdd)
     mc_lb_raw = MotorContainer(source_files, i_time, 0, unbiased_bouts, tdd=mc_all.tdd)
-    mc = [mc_all, mc_high_bias, mc_low_bias]
+    mc = [mc_all, mc_high_bias, mc_low_bias, mc_left_bias, mc_right_bias]
+    mc_all_raw = MotorContainer(source_files, i_time, 0, tdd=mc_all.tdd)
 
     # plot average probability of motor events
     fig, ax = pl.subplots(ncols=2, sharex=True, sharey=True)
@@ -69,7 +98,9 @@ if __name__ == "__main__":
             if np.isnan(corr):
                 corr = 0
             mc_type_corrs[i, j] = corr
-    is_pot_stim = np.logical_and(var_scores > 0.05, np.max(mc_type_corrs, 1) < 0.4)
+    is_pot_stim = np.logical_and(var_scores >= 0.1, np.max(mc_type_corrs, 1) < 0.4)
+    # only consider cells in marked regions as potential stimulus units
+    is_pot_stim = np.logical_and(is_pot_stim, all_rl.ravel() != "")
 
     # find units that show significant activation during 1500mW step and sine period
     p_stp = []  # p-values of activation during step and sine wave and tap
@@ -95,33 +126,51 @@ if __name__ == "__main__":
     # compute repeat-average of all stim_units
     su_avg = np.mean(data.repeat_align(all_activity[stim_units, :]), 1)
 
-    # divide cells based on heat sign an whether they also significantly respond to taps or not
+    # mark units that only respond to taps and compute their repeat average
+    tap_act = np.logical_and(p_tap < 0.01, is_pot_stim)
+    not_heat = np.logical_and(p_stp > 0.2, p_sin > 0.2)
+    tap_only = np.logical_and(tap_act, not_heat)
+    tu_avg = np.mean(data.repeat_align(all_activity[tap_only, :]), 1)
+
+    # divide cells based on heat sign and whether they also significantly respond to taps or not
     on_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05), :]
     on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.2), :]
     off_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] < 0.05), :]
     off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > 0.2), :]
 
     # plot average activity of the types segregated by ON/OFF with heat and tap responses in separate plots
-    fig, axes = pl.subplots(2, 2, gridspec_kw={'width_ratios': [4, 1]})
-    # ON heat time
-    sns.tsplot(dff(on_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="r", ax=axes[0][0])
-    sns.tsplot(dff(on_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="orange", ax=axes[0][0])
-    axes[0][0].set_xlabel("Time [s]")
-    axes[0][0].set_ylabel("dF/F")
-    # ON tap time
-    sns.tsplot(dff(on_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="r", ax=axes[0][1])
-    sns.tsplot(dff(on_no_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="orange", ax=axes[0][1])
-    axes[0][1].set_xlabel("Time [s]")
-    axes[0][1].set_ylabel("dF/F")
-    # OFF heat time
-    sns.tsplot(dff(off_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="b", ax=axes[1][0])
-    sns.tsplot(dff(off_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="m", ax=axes[1][0])
-    axes[1][0].set_xlabel("Time [s]")
-    axes[1][0].set_ylabel("dF/F")
-    # OFF tap time
-    sns.tsplot(dff(off_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="b", ax=axes[1][1])
-    sns.tsplot(dff(off_no_tap_cells[:, rep_time > 125]), rep_time[rep_time > 125], color="m", ax=axes[1][1])
-    axes[1][1].set_xlabel("Time [s]")
-    axes[1][1].set_ylabel("dF/F")
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
+    sns.tsplot(dff(on_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="r", ax=ax_heat)
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("dF/F0")
+    sns.tsplot(dff(on_tap_cells[:, rep_time >= 125]), rep_time[rep_time >= 125], color="r", ax=ax_tap)
+    ax_tap.set_xlabel("Time [s]")
+    sns.despine(fig)
+    fig.tight_layout()
+
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
+    sns.tsplot(dff(on_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="orange", ax=ax_heat)
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("dF/F0")
+    sns.tsplot(dff(on_no_tap_cells[:, rep_time >= 125]), rep_time[rep_time >= 125], color="orange", ax=ax_tap)
+    ax_tap.set_xlabel("Time [s]")
+    sns.despine(fig)
+    fig.tight_layout()
+
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
+    sns.tsplot(dff(off_no_tap_cells[:, rep_time < 125]), rep_time[rep_time < 125], color="b", ax=ax_heat)
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("dF/F0")
+    sns.tsplot(dff(off_no_tap_cells[:, rep_time >= 125]), rep_time[rep_time >= 125], color="b", ax=ax_tap)
+    ax_tap.set_xlabel("Time [s]")
+    sns.despine(fig)
+    fig.tight_layout()
+
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
+    sns.tsplot(dff(tu_avg[:, rep_time < 125]), rep_time[rep_time < 125], color="k", ax=ax_heat)
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("dF/F0")
+    sns.tsplot(dff(tu_avg[:, rep_time >= 125]), rep_time[rep_time >= 125], color="k", ax=ax_tap)
+    ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()

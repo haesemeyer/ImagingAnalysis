@@ -265,7 +265,6 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             poolsize = nchunks
         return np.array_split(a, poolsize, axis=axis)
 
-
     def clearPlots(self):
         self.ui.graphDFF.plotItem.clear()
         self.ui.graphBStarts.plotItem.clear()
@@ -424,16 +423,20 @@ class StartStackAnalyzer(QtGui.QMainWindow):
             sumstack = self._cash["sumStack"]
         else:
             sumstack = np.sum(self.currentStack, 0)
-            self._cash["sumStack"] = sumstack
-        # transform into 8-bit representation
-        sumstack = (sumstack / sumstack.max() * 255).astype(np.uint8)
-        ss_eroded = cv2.erode(sumstack, np.ones((3, 3)))
-        ss_eth = cv2.threshold(ss_eroded, np.mean(ss_eroded).astype(np.uint8), 1, cv2.THRESH_BINARY)[1]
+            self._cash["sumStack"] = sumstack.copy()
+        # transform into standard range, cutting outliers
+        sumstack = (cutOutliers(sumstack, 99.9) * 255).astype(np.float32)
+        # threshold
+        sumstack = cv2.threshold(sumstack, 15, 1, cv2.THRESH_TOZERO)[1]
+        # create seed image via erosion and binary thresholding
+        ss_eroded = cv2.erode(sumstack.copy(), np.ones((3, 3)))
+        ss_eth = cv2.threshold(ss_eroded, np.mean(ss_eroded).astype(np.float32), 1, cv2.THRESH_BINARY)[1]
         kernel = np.ones((3, 3)).astype(np.float32)
-        kernel[0, 0] = kernel[2, 0] = kernel[0, 2] = kernel[2, 2] = 0.0
+        kernel[0, 0] = kernel[2, 0] = kernel[0, 2] = kernel[2, 2] = 0
         kernel /= kernel.sum()
         ss_eroded = cv2.filter2D(ss_eroded, -1, kernel)
         ss_eroded = cv2.multiply(ss_eroded, ss_eth)
+        # identify connected components
         graph, colors = NucleusGraph.NuclearConnComp(self.currentStack, sumstack, ss_eroded)
         graph = [g for g in graph if g.NPixels >= 5]  # remove compoments with less than 5 pixels
         self.ui.segNucView.setImage(colors)

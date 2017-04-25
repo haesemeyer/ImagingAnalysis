@@ -281,6 +281,11 @@ if __name__ == "__main__":
             tryZCorrect(graphs, eyemask)
         graph_list += graphs
 
+    # Update ca-time-constants of the graph to better reflect *nuclear* gcamp-6s
+    for g in graph_list:
+        # g.CaTimeConstant = 3.0
+        g.CaTimeConstant = 1.76
+
     tdd = TailDataDict(graph_list[0].CaTimeConstant)
     # add frame bout start trace to graphs if required
     # for g in graph_list:
