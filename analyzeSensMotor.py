@@ -146,7 +146,7 @@ def trial_average(ts):
         return np.mean(ts.reshape((ts.shape[0], 3, ts.shape[1]//3)), 1)
 
 
-def build_region_clusters(region_labels, n_regs=6, plot=True):
+def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9):
     """
     Clusters cells in inidicated regions by performing spectral clustering followed by regression-based
     identification with r>=0.6 cut-off
@@ -154,6 +154,7 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
         region_labels: A list of labels of regions to include
         n_regs: The number of regressors to extract
         plot: If set to true, plot regressors, regressor correlation matrix and embedding
+        corr_cut_off: If two clusters are at least this correlated by avg. activity they will be merged
 
     Returns:
         [0]: Activity of all cells that are part of the indicated regions
@@ -205,6 +206,13 @@ def build_region_clusters(region_labels, n_regs=6, plot=True):
     for i in range(n_regs):
         if np.sum(membership == i) < 5:
             membership[membership == i] = -1
+    # merge clusters with a correlation >= corr_cut_off
+    avgs, clust_labels = build_regressors(trial_average(region_activity), membership)
+    avg__avg_corrs = np.corrcoef(avgs.T)
+    for i in range(avgs.shape[1]):
+        for j in range(i+1, avgs.shape[1]):
+            if avg__avg_corrs[i, j] >= corr_cut_off:
+                membership[membership == clust_labels[j]] = clust_labels[i]
     if plot:
         # plot per-trial cluster average traces
         fig, ax = pl.subplots()
