@@ -347,6 +347,16 @@ if __name__ == "__main__":
     flicks_motor = trial_average(mc_flicks.avg_motor_output)
     swim_motor = trial_average(mc_swims.avg_motor_output)
 
+    # plot motor type output
+    trial_time = np.arange(flicks_motor.size) / 5
+    fig, ax = pl.subplots()
+    ax.plot(trial_time, swim_motor, label="Swims")
+    ax.plot(trial_time, flicks_motor, label="Flicks")
+    ax.legend()
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Probability")
+    sns.despine(fig, ax)
+
     # example region derivation
     regions = ["Cerebellum_L", "Cerebellum_R"]
     region_act, region_mem = build_region_clusters(regions)[:2]
