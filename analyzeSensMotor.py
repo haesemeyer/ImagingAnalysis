@@ -297,43 +297,6 @@ if __name__ == "__main__":
     all_dff = dff(all_activity)
 
     ##################
-    # Analyze relation of lateralized activity and motor laterality
-    ##################
-    # ON cell clusters
-    on_c = [0, 1, 2]
-    ipsi_tg_on, contra_tg_on = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "TG_L", "TG_R", on_c)
-    ipsi_rh6_on, contra_rh6_on = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Rh6_L", "Rh6_R", on_c)
-    ipsi_cer_on, contra_cer_on = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Cerebellum_L", "Cerebellum_R", on_c)
-    ipsi_hab_on, contra_hab_on = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Hab_L", "Hab_R", on_c)
-
-    # OFF cell clusters
-    off_c = [4, 5]
-    ipsi_tg_off, contra_tg_off = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "TG_L", "TG_R", off_c)
-    ipsi_rh6_off, contra_rh6_off = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Rh6_L", "Rh6_R", off_c)
-    ipsi_cer_off, contra_cer_off = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Cerebellum_L", "Cerebellum_R", off_c)
-    ipsi_hab_off, contra_hab_off = activity_laterality(mc_flick_left_raw, mc_flick_right_raw, "Hab_L", "Hab_R", off_c)
-
-    fig, (ax_on, ax_off) = pl.subplots(nrows=2, ncols=4, sharey=True)
-    # plot on
-    sns.barplot(data=(ipsi_tg_on, contra_tg_on), ax=ax_on[0])
-    ax_on[0].set_title("Trigeminal")
-    ax_on[0].set_ylabel("$\Delta$F/F0 ON")
-    sns.barplot(data=(ipsi_rh6_on, contra_rh6_on), ax=ax_on[1])
-    ax_on[1].set_title("Rh6 cluster")
-    sns.barplot(data=(ipsi_cer_on, contra_cer_on), ax=ax_on[2])
-    ax_on[2].set_title("Cerebellum")
-    sns.barplot(data=(ipsi_hab_on, contra_hab_on), ax=ax_on[3])
-    ax_on[3].set_title("Habenula")
-    # plot off
-    sns.barplot(data=(ipsi_tg_off, contra_tg_off), ax=ax_off[0])
-    ax_off[0].set_ylabel("$\Delta$F/F0 OFF")
-    sns.barplot(data=(ipsi_rh6_off, contra_rh6_off), ax=ax_off[1])
-    sns.barplot(data=(ipsi_cer_off, contra_cer_off), ax=ax_off[2])
-    sns.barplot(data=(ipsi_hab_off, contra_hab_off), ax=ax_off[3])
-    sns.despine(fig)
-    fig.tight_layout()
-
-    ##################
     # Analyze predictability of average motor outcomes (convolved) by cluster activity in different regions
     ##################
     cat = exp_data[0].caTimeConstant
