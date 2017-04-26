@@ -13,6 +13,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.cluster import SpectralClustering
 from sklearn.manifold import SpectralEmbedding
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib as mpl
 
 
 def build_all_region_labels():
@@ -243,6 +244,7 @@ def build_regressors(activity, cluster_membership):
 
 if __name__ == "__main__":
     sns.reset_orig()
+    mpl.rcParams['pdf.fonttype'] = 42
     # load data
     dfile = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/datafile_170327.hdf5', 'r')
     membership = np.array(dfile['membership'])

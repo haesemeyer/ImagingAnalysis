@@ -8,6 +8,7 @@ from typing import List
 from scipy.stats import wilcoxon
 import h5py
 from os import path
+import matplotlib as mpl
 
 
 def dff(ts):
@@ -19,6 +20,7 @@ def dff(ts):
 
 if __name__ == "__main__":
     sns.reset_orig()
+    mpl.rcParams['pdf.fonttype'] = 42
     # Load data files
     print("Load data files", flush=True)
     exp_data = []  # type: List[DetailCharExperiment]
