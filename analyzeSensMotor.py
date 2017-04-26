@@ -242,12 +242,15 @@ def build_regressors(activity, cluster_membership):
 
     Returns:
         n_timepoints x n_clusters sized regressor matrix
+        n_clusters sized vector with the memberhip label of each cluster
     """
     n_regs = np.unique(cluster_membership[cluster_membership != -1]).size
     regressors = np.zeros((activity.shape[1], n_regs))
+    mem_label = []
     for i, c in enumerate(np.unique(cluster_membership[cluster_membership != -1])):
         regressors[:, i] = np.mean(activity[cluster_membership == c, :], 0)
-    return regressors
+        mem_label.append(c)
+    return regressors, np.array(mem_label)
 
 
 if __name__ == "__main__":
@@ -348,7 +351,7 @@ if __name__ == "__main__":
     regions = ["Cerebellum_L", "Cerebellum_R"]
     region_act, region_mem = build_region_clusters(regions)[:2]
 
-    regressors = build_regressors(trial_average(region_act), region_mem)
+    regressors, labels = build_regressors(trial_average(region_act), region_mem)
 
     resmat_high = np.zeros((regressors.shape[1], regressors.shape[1]))
     resmat_low = np.zeros_like(resmat_high)
@@ -379,21 +382,15 @@ if __name__ == "__main__":
 
     # Plot prediction of low and high bias side-by-sid
     fig, (ax_h, ax_l) = pl.subplots(ncols=2)
-    sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h,
-                xticklabels=np.unique(region_mem[region_mem != -1]),
-                yticklabels=np.unique(region_mem[region_mem != -1]))
+    sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=labels, yticklabels=labels)
     ax_h.set_title("Prediction of strong flicks")
-    sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l,
-                xticklabels=np.unique(region_mem[region_mem != -1]),
-                yticklabels=np.unique(region_mem[region_mem != -1]))
+    sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l, xticklabels=labels, yticklabels=labels)
     ax_l.set_title("Prediction of swims")
     fig.tight_layout()
 
     # plot regressor-regressor correlations
     pl.figure()
-    sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True,
-                xticklabels=np.unique(region_mem[region_mem != -1]),
-                yticklabels=np.unique(region_mem[region_mem != -1]))
+    sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=labels, yticklabels=labels)
 
     # obtain per-region best fit R2 values
     out = np.hstack((flicks_motor[:, None], swim_motor[:, None]))
