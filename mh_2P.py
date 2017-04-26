@@ -1646,14 +1646,19 @@ class TailData:
                 ix_key_frame.append(ix_key)
                 key_frame_times.append(key_time)
             # use linear interpolation to create times for each frame
-            self.frameTime = np.interp(frames, np.array(ix_key_frame), np.array(key_frame_times))
+            self.frameTime = np.interp(frames, np.array(ix_key_frame), np.array(key_frame_times), right=np.nan)
+            self.frameTime = self.frameTime[np.logical_not(np.isnan(self.frameTime))]
         else:
             frames -= first_frame
             self.frameTime = (frames / frameRate).astype(np.float32)
         # create bout-start trace at original frame-rate
         self.starting = np.zeros_like(self.frameTime)
         if self.bouts is not None:
-            self.starting[self.bouts[:, 0].astype(int)] = 1
+            bout_starts = self.bouts[:, 0].astype(int)
+            # since we potentially clip our starting trace to the last valid frame-time (experiment end)
+            # we also only include bout-starts that occured up to that index
+            bout_starts = bout_starts[bout_starts < self.frameTime.size]
+            self.starting[bout_starts] = 1
 
     def RemoveTrackErrors(self):
         """
