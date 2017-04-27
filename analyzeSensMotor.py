@@ -260,6 +260,45 @@ def build_regressors(activity, cluster_membership):
     return regressors, np.array(mem_label)
 
 
+def regression_CV(regressors: np.ndarray, output: np.ndarray, nboot=500):
+    """
+    Performs 50/50 cross-validation of regression leaving out 50% contiguous percent of the data for fitting.
+    This avoids having each left-out data-point ensconced btw. two highly correlated fitted points
+    Args:
+        regressors: The regressors to use
+        output: The output to predict
+        nboot: The number of cross-validations to perform
+
+    Returns:
+        [0]: nboot R2 values of the cross validation
+        [1]: nbootxregressors.shape[1] matrix of coefficients
+        [2]: nboot intercept values
+    """
+    def wrap_indices(start, length, size):
+        """
+        Returns a series of length indices starting at index start and wrapping around to 0 according to size
+        """
+        return np.sort(np.arange(start, start+length) % size)
+
+    if output.ndim < 2:
+        output = output[:, None]
+    lo_stretch_length = regressors.shape[0] // 2
+    r2_vals = np.zeros(nboot)
+    coefs = np.zeros((nboot, output.shape[1], regressors.shape[1]))
+    icepts = np.zeros((nboot, output.shape[1]))
+    all_ix = np.arange(regressors.shape[0])
+    for i in range(nboot):
+        lo_start = np.random.randint(regressors.shape[0])
+        ix_leave_out = wrap_indices(lo_start, lo_stretch_length, regressors.shape[0])
+        ix_fit = np.setdiff1d(all_ix, ix_leave_out)
+        lreg = LinearRegression()
+        lreg.fit(regressors[ix_fit, :], output[ix_fit, :])
+        coefs[i, :, :] = lreg.coef_
+        icepts[i, :] = lreg.intercept_
+        r2_vals[i] = lreg.score(regressors[ix_leave_out, :], output[ix_leave_out, :])
+    return r2_vals, coefs, icepts
+
+
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
