@@ -7,6 +7,23 @@ strong_thresh = 0.8
 turn_thresh = 0.5
 
 
+def safe_set(array, index, value):
+    """
+    Sets and element in an array if it exists
+    Args:
+        array: The array in which to set an element
+        index: The index of the element
+        value: The new value
+
+    Returns:
+        True if element was set, false otherwise
+    """
+    if index >= array.size:
+        return False
+    array[index] = value
+    return True
+
+
 def bias(start, end, ca, mca):
     """
     For a bout computes it's bias i.e. how much of the stroke is in one vs. the other direction
@@ -36,7 +53,7 @@ def left_bias_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if bb <= -strong_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
 
 
@@ -51,7 +68,7 @@ def right_bias_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if bb >= strong_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
 
 
@@ -66,7 +83,7 @@ def high_bias_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if np.abs(bb) >= strong_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
 
 
@@ -81,7 +98,7 @@ def unbiased_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if -strong_thresh < bb < strong_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
 
 
@@ -96,7 +113,7 @@ def left_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if bb <= -turn_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
 
 
@@ -111,5 +128,5 @@ def right_bouts(tdata: TailData):
     for b in tdata.bouts.astype(int):
         bb = bias(b[0], b[1], tdata.cumAngles, mca)
         if bb >= turn_thresh:
-            starting[b[0]] = 1
+            safe_set(starting, b[0], 1)
     return starting
