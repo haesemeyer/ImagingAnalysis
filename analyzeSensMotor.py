@@ -14,6 +14,7 @@ from sklearn.cluster import SpectralClustering
 from sklearn.manifold import SpectralEmbedding
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib as mpl
+import pandas
 
 
 def build_all_region_labels():
@@ -366,53 +367,72 @@ if __name__ == "__main__":
     ax.set_ylabel("Probability")
     sns.despine(fig, ax)
 
-    # example region derivation
-    regions = ["Cerebellum_L", "Cerebellum_R"]
-    region_act, region_mem = build_region_clusters(regions)[:2]
+    test_regions = [["TG_L", "TG_R"],
+                    ["Rh6_L", "Rh6_R"],
+                    ["Cerebellum_L", "Cerebellum_R"],
+                    ["Rh2_L", "Rh2_R"],
+                    ["AM_L", "AM_R"],
+                    ["Hab_L", "Hab_R"],
+                    ["D_FB_L", "D_FB_R"],
+                    "PreOptic"
+                    ]
 
-    regressors, labels = build_regressors(trial_average(region_act), region_mem)
+    test_labels = ["Trigeminal", "Rh6", "Cerebellum", "Rh2", "AM_HB", "Habenula", "Pallium", "POA"]
 
-    resmat_high = np.zeros((regressors.shape[1], regressors.shape[1]))
-    resmat_low = np.zeros_like(resmat_high)
-    resmat_all = np.zeros_like(resmat_high)
-    for i in range(regressors.shape[1]):
-        for j in range(regressors.shape[1]):
-            if j < i:
-                resmat_high[i, j] = np.nan
-                resmat_low[i, j] = np.nan
-                resmat_all[i, j] = np.nan
-                continue
-            regs = np.hstack((regressors[:, i, None], regressors[:, j, None]))
-            lreg = LinearRegression()
-            lreg.fit(regs, flicks_motor)
-            resmat_high[i, j] = lreg.score(regs, flicks_motor)
-            lreg = LinearRegression()
-            lreg.fit(regs, swim_motor)
-            resmat_low[i, j] = lreg.score(regs, swim_motor)
-            lreg = LinearRegression()
-            lreg.fit(regs, all_motor)
-            resmat_all[i, j] = lreg.score(regs, all_motor)
+    motor_out = np.hstack((swim_motor[:, None], flicks_motor[:, None]))
 
-    # # Plot prediction of general motor output
-    # fig, ax = pl.subplots()
-    # sns.heatmap(resmat_all, 0, 1, cmap="RdBu_r", annot=True, ax=ax, xticklabels=np.unique(region_mem[region_mem != -1]),
-    #             yticklabels=np.unique(region_mem[region_mem != -1]))
-    # ax.set_title("Prediction of overall motor output")
+    class RegionResults:
+        def __init__(self, name, activities, membership, regressors, original_labels):
+            self.name = name
+            self.region_acts = activities
+            self.region_mem = membership
+            self.regressors = regressors
+            self.regs_clust_labels = original_labels
 
-    # Plot prediction of low and high bias side-by-sid
-    fig, (ax_h, ax_l) = pl.subplots(ncols=2)
-    sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=labels, yticklabels=labels)
-    ax_h.set_title("Prediction of strong flicks")
-    sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l, xticklabels=labels, yticklabels=labels)
-    ax_l.set_title("Prediction of swims")
-    fig.tight_layout()
+    analysis_results = dict()
+    region_r2 = np.zeros((500, len(test_labels)))
 
-    # plot regressor-regressor correlations
-    pl.figure()
-    sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=labels, yticklabels=labels)
+    for k, regions in enumerate(test_regions):
+        region_act, region_mem = build_region_clusters(regions, plTitle=test_labels[k])[:2]
+        regressors, clust_labels = build_regressors(trial_average(region_act), region_mem)
+        # create prediction matrices
+        resmat_high = np.zeros((regressors.shape[1], regressors.shape[1]))
+        resmat_low = np.zeros_like(resmat_high)
+        for i in range(regressors.shape[1]):
+            for j in range(regressors.shape[1]):
+                if j < i:
+                    resmat_high[i, j] = np.nan
+                    resmat_low[i, j] = np.nan
+                    continue
+                regs = np.hstack((regressors[:, i, None], regressors[:, j, None]))
+                lreg = LinearRegression()
+                lreg.fit(regs, flicks_motor)
+                resmat_high[i, j] = lreg.score(regs, flicks_motor)
+                lreg = LinearRegression()
+                lreg.fit(regs, swim_motor)
+                resmat_low[i, j] = lreg.score(regs, swim_motor)
+                lreg = LinearRegression()
+                lreg.fit(regs, all_motor)
+        # Plot prediction of low and high bias side-by-side
+        fig, (ax_h, ax_l) = pl.subplots(ncols=2)
+        sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=clust_labels,
+                    yticklabels=clust_labels)
+        ax_h.set_title("Prediction of strong flicks")
+        sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l, xticklabels=clust_labels,
+                    yticklabels=clust_labels)
+        ax_l.set_title("Prediction of swims {0}".format(test_labels[k]))
+        fig.tight_layout()
 
-    # obtain per-region best fit R2 values
-    out = np.hstack((flicks_motor[:, None], swim_motor[:, None]))
-    lreg = LinearRegression()
-    lreg.fit(regressors, out)
-    print(lreg.score(regressors, out))
+        # plot regressor-regressor correlations
+        fig, ax = pl.subplots()
+        sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=clust_labels,
+                    yticklabels=clust_labels, ax=ax)
+        ax.set_title(test_labels[k])
+        analysis_results[test_labels[k]] = RegionResults(test_labels[k], region_act, region_mem, regressors,
+                                                         clust_labels)
+        region_r2[:, k] = regression_CV(regressors, motor_out)[0]
+
+    # plot CV r-squared across regions
+    dset = pandas.DataFrame({test_labels[k]: region_r2[:, k] for k in range(len(test_labels))})
+    fig, ax = pl.subplots()
+    sns.barplot(data=dset, estimator=np.median, ax=ax)
