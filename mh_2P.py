@@ -3036,5 +3036,5 @@ def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
     for ith, trial in enumerate(events):
         trial = time[trial > 0]
         ax.vlines(trial, ith + ticklength/2, ith + 1.5*ticklength, **kwargs)
-    ax.ylim(ticklength/2, events.shape[0] + ticklength/2)
+    ax.set_ylim(ticklength/2, events.shape[0] + ticklength/2)
     return ax
