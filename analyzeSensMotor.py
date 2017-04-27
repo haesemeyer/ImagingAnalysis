@@ -146,7 +146,7 @@ def trial_average(ts):
         return np.mean(ts.reshape((ts.shape[0], 3, ts.shape[1]//3)), 1)
 
 
-def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9):
+def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off=0.9, plTitle=""):
     """
     Clusters cells in inidicated regions by performing spectral clustering followed by regression-based
     identification with r>=0.6 cut-off
@@ -155,6 +155,7 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9
         n_regs: The number of regressors to extract
         plot: If set to true, plot regressors, regressor correlation matrix and embedding
         corr_cut_off: If two clusters are at least this correlated by avg. activity they will be merged
+        plTitle: For id purposes title of plots
 
     Returns:
         [0]: Activity of all cells that are part of the indicated regions
@@ -200,6 +201,8 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9
         for i in range(km.n_clusters):
             covered += np.sum(km.labels_ == i)
             ax.plot([0, n_regs+1], [km.labels_.size-covered, km.labels_.size-covered], 'k')
+        if plTitle != "":
+            ax.set_title(plTitle)
     membership = np.full(region_activity.shape[0], -1, dtype=int)
     membership[ab_thresh] = km.labels_.astype(int)
     # don't allow clusters of less than 5 constituents
@@ -220,6 +223,8 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9
         for i in range(n_regs):
             if np.sum(membership == i) > 0:
                 ax.plot(time, np.mean(trial_average(region_activity[membership == i, :]), 0), label=str(i))
+        if plTitle != "":
+            ax.set_title(plTitle)
         ax.legend()
         sns.despine(fig, ax)
         # plot cluster members in embedded space
@@ -229,6 +234,8 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off = 0.9
             if np.sum(membership == i) > 0:
                 ax.scatter(coords[membership == i, 0], coords[membership == i, 1],
                            coords[membership == i, 2], s=5)
+        if plTitle != "":
+            ax.set_title(plTitle)
     return region_activity, membership, region_indices
 
 
