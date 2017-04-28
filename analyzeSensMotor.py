@@ -308,6 +308,37 @@ def regression_CV(regressors: np.ndarray, output: np.ndarray, nboot=500):
     return r2_vals, coefs, icepts
 
 
+def regression_bootstrap(regressors: np.ndarray, output: np.ndarray, nboot=500):
+    """
+        Performs bootstrapping of regression model
+        Args:
+            regressors: The regressors to use
+            output: The output to predict
+            nboot: The number of bootstraps to perform
+
+        Returns:
+            [0]: nboot R2 values of the fits
+            [1]: nbootxregressors.shape[1] matrix of coefficients
+            [2]: nboot intercept values
+    """
+    if output.ndim < 2:
+        output = output[:, None]
+    if regressors.ndim < 2:
+        regressors = regressors[:, None]
+    r2_vals = np.zeros(nboot)
+    coefs = np.zeros((nboot, output.shape[1], regressors.shape[1]))
+    icepts = np.zeros((nboot, output.shape[1]))
+    all_ix = np.arange(regressors.shape[0])
+    for i in range(nboot):
+        to_take = np.random.choice(all_ix, all_ix.size, True)
+        lreg = LinearRegression()
+        lreg.fit(regressors[to_take, :], output[to_take, :])
+        coefs[i, :, :] = lreg.coef_
+        icepts[i, :] = lreg.intercept_
+        r2_vals[i] = lreg.score(regressors[to_take, :], output[to_take, :])
+    return r2_vals, coefs, icepts
+
+
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
