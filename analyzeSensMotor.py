@@ -173,15 +173,23 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off=0.9, 
     region_activity = all_dff[region_member, :]
     region_indices = np.arange(all_dff.shape[0], dtype=int)[region_member]
     to_cluster = trial_average(region_activity)
-    corr_mat = np.corrcoef(to_cluster)
+    print("{0} cells to process in this run".format(to_cluster.shape[0]))
+    ix = np.arange(to_cluster.shape[0])
+    if to_cluster.shape[0] > 20000:
+        # subsample
+        ix = np.random.choice(ix, 20000, False)
+        to_cluster = to_cluster[ix, :]
+        print("Performing subsampling to 20.000 cells")
+    corr_mat = np.corrcoef(to_cluster).astype(np.float32)
+    del to_cluster
     corr_mat[corr_mat < 0.26] = 0
     spc_clust = SpectralClustering(n_clusters=n_regs, affinity="precomputed")
-    spec_embed = SpectralEmbedding(n_components=3, affinity='precomputed')
+    # spec_embed = SpectralEmbedding(n_components=3, affinity='precomputed')
     cids = spc_clust.fit_predict(corr_mat)
-    coords = spec_embed.fit_transform(corr_mat)
+    # coords = spec_embed.fit_transform(corr_mat)
     spec_regs = np.zeros((region_activity.shape[1], n_regs))
     for i in range(n_regs):
-        spec_regs[:, i] = np.mean(region_activity[cids == i, :], 0)
+        spec_regs[:, i] = np.mean(region_activity[ix, :][cids == i, :], 0)
     # for unified sorting determine correlation of each regressor to our "on stimulus"
     c = np.array([np.corrcoef(spec_regs[:, i], exp_data[0].stimOn)[0, 1] for i in range(n_regs)])
     spec_regs = spec_regs[:, np.argsort(-1*c)]  # sort by descending correlation
@@ -229,14 +237,14 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off=0.9, 
         ax.legend()
         sns.despine(fig, ax)
         # plot cluster members in embedded space
-        fig = pl.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        for i in range(n_regs):
-            if np.sum(membership == i) > 0:
-                ax.scatter(coords[membership == i, 0], coords[membership == i, 1],
-                           coords[membership == i, 2], s=5)
-        if plTitle != "":
-            ax.set_title(plTitle)
+        # fig = pl.figure()
+        # ax = fig.add_subplot(111, projection='3d')
+        # for i in range(n_regs):
+        #     if np.sum(membership == i) > 0:
+        #         ax.scatter(coords[membership == i, 0], coords[membership == i, 1],
+        #                    coords[membership == i, 2], s=5)
+        # if plTitle != "":
+        #     ax.set_title(plTitle)
     return region_activity, membership, region_indices
 
 
