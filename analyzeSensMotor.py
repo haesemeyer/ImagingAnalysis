@@ -408,15 +408,15 @@ if __name__ == "__main__":
 
     test_regions = [["TG_L", "TG_R"],
                     ["Rh6_L", "Rh6_R"],
-                    ["Cerebellum_L", "Cerebellum_R"],
                     ["Rh2_L", "Rh2_R"],
-                    ["AM_L", "AM_R"],
+                    ["Cerebellum_L", "Cerebellum_R"],
                     ["Hab_L", "Hab_R"],
                     ["D_FB_L", "D_FB_R"],
+                    "SubPallium",
                     "PreOptic"
                     ]
 
-    test_labels = ["Trigeminal", "Rh6", "Cerebellum", "Rh2", "AM_HB", "Habenula", "Pallium", "POA"]
+    test_labels = ["Trigeminal", "Rh6", "Rh2", "Cerebellum", "Habenula", "Pallium", "SubPallium", "POA"]
 
     motor_out = np.hstack((swim_motor[:, None], flicks_motor[:, None]))
 
@@ -428,8 +428,9 @@ if __name__ == "__main__":
             self.regressors = regressors
             self.regs_clust_labels = original_labels
 
-    analysis_results = dict()
     region_r2 = np.zeros((500, len(test_labels)))
+
+    storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r+')
 
     for k, regions in enumerate(test_regions):
         region_act, region_mem = build_region_clusters(regions, plTitle=test_labels[k])[:2]
@@ -467,11 +468,38 @@ if __name__ == "__main__":
         sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=clust_labels,
                     yticklabels=clust_labels, ax=ax)
         ax.set_title(test_labels[k])
-        analysis_results[test_labels[k]] = RegionResults(test_labels[k], region_act, region_mem, regressors,
-                                                         clust_labels)
+        analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
         region_r2[:, k] = regression_CV(regressors, motor_out)[0]
 
+        # save new analysis into our file
+        l = test_labels[k]
+        if l in storage:
+            del storage[l]
+        stream = pickle.dumps(analysis_result)
+        storage.create_dataset(l, data=np.void(stream))
+        # flush new data to disk
+        storage.flush()
+        del stream
+        del analysis_result
+
+        print("{0} out of {1} done.".format(k+1, len(test_regions)))
+    # close storage file to save remaining data then re-open read-only
+    storage.close()
+    storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r')
     # plot CV r-squared across regions
     dset = pandas.DataFrame({test_labels[k]: region_r2[:, k] for k in range(len(test_labels))})
     fig, ax = pl.subplots()
-    sns.barplot(data=dset, estimator=np.median, ax=ax)
+    sns.barplot(data=dset, ax=ax, order=test_labels)
+
+    # replot regressors with error shadings
+    for k in storage.keys():
+        fig, ax = pl.subplots()
+        ar = pickle.loads(np.array(storage[k]))
+        for c in ar.regs_clust_labels:
+            cname = "C{0}".format(int(c))
+            data = trial_average(ar.region_acts[ar.region_mem == c, :])
+            sns.tsplot(data=data, time=trial_time, color=cname, ax=ax)
+        sns.despine(fig, ax)
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("dF/F0")
+        ax.set_title(k)
