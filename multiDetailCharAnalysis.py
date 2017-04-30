@@ -122,57 +122,60 @@ if __name__ == "__main__":
     p_stp = np.array(p_stp)
     p_sin = np.array(p_sin)
     p_tap = np.array(p_tap)
+    p_stp[np.isnan(p_stp)] = 1
+    p_sin[np.isnan(p_sin)] = 1
+    p_tap[np.isnan(p_tap)] = 1
     # mark units that show significant change in both periods
-    sig_act = np.logical_and(p_stp < 0.01, p_sin < 0.01)
+    sig_act = np.logical_and(p_stp < 0.05, p_sin < 0.05)
     stim_units = np.logical_and(sig_act, is_pot_stim)
     # compute repeat-average of all stim_units
     su_avg = np.mean(data.repeat_align(all_activity[stim_units, :]), 1)
 
     # mark units that only respond to taps and compute their repeat average
     tap_act = np.logical_and(p_tap < 0.01, is_pot_stim)
-    not_heat = np.logical_and(p_stp > 0.2, p_sin > 0.2)
+    not_heat = np.logical_and(p_stp > 0.05, p_sin > 0.05)
     tap_only = np.logical_and(tap_act, not_heat)
     tu_avg = np.mean(data.repeat_align(all_activity[tap_only, :]), 1)
 
     # divide cells based on heat sign and whether they also significantly respond to taps or not
     on_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05), :]
-    on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.2), :]
+    on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.05), :]
     off_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] < 0.05), :]
-    off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > 0.2), :]
+    off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > 0.05), :]
 
     # plot average activity of the types segregated by ON/OFF with heat and tap responses in separate plots
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(on_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="r", ax=ax_heat)
+    sns.tsplot(dff(on_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="r", ax=ax_heat, ci=95)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(on_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="r", ax=ax_tap)
+    sns.tsplot(dff(on_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="r", ax=ax_tap, ci=95)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(on_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="orange", ax=ax_heat)
+    sns.tsplot(dff(on_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="orange", ax=ax_heat, ci=95)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(on_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="orange", ax=ax_tap)
+    sns.tsplot(dff(on_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="orange", ax=ax_tap, ci=95)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(off_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="b", ax=ax_heat)
+    sns.tsplot(dff(off_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="b", ax=ax_heat, ci=95)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(off_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="b", ax=ax_tap)
+    sns.tsplot(dff(off_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="b", ax=ax_tap, ci=95)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(tu_avg)[:, rep_time < 125], rep_time[rep_time < 125], color="k", ax=ax_heat)
+    sns.tsplot(dff(tu_avg)[:, rep_time < 125], rep_time[rep_time < 125], color="k", ax=ax_heat, ci=95)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(tu_avg)[:, rep_time >= 125], rep_time[rep_time >= 125], color="k", ax=ax_tap)
+    sns.tsplot(dff(tu_avg)[:, rep_time >= 125], rep_time[rep_time >= 125], color="k", ax=ax_tap, ci=95)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
