@@ -9,6 +9,7 @@ from scipy.stats import wilcoxon
 import h5py
 from os import path
 import matplotlib as mpl
+import pandas
 
 
 def dff(ts):
@@ -179,3 +180,58 @@ if __name__ == "__main__":
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
+
+    # simplify our annotation
+    all_rl[all_rl == "Cerebellum_L"] = "Cerebellum"
+    all_rl[all_rl == "Cerebellum_R"] = "Cerebellum"
+    all_rl[all_rl == "HB_L"] = "HB"
+    all_rl[all_rl == "HB_R"] = "HB"
+    all_rl[all_rl == "RH6_R"] = "Rh_6"
+    all_rl[all_rl == "RH6_L"] = "Rh_6"
+    all_rl[all_rl == "Rh6_L"] = "Rh_6"
+    all_rl[all_rl == "Rh6_R"] = "Rh_6"
+
+    # plot counts of different types across regions
+    fig, ax = pl.subplots()
+    sns.countplot(sorted([str(a) for a in all_rl[tap_only]]), ax=ax)
+    ax.set_title("Tap only")
+    sns.despine(fig, ax)
+
+    fig, ax = pl.subplots()
+    sns.countplot(sorted([str(a) for a in all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0,
+                                                                     p_tap[stim_units] > 0.05)]]), ax=ax)
+    ax.set_title("Heat only")
+    sns.despine(fig, ax)
+
+    fig, ax = pl.subplots()
+    sns.countplot(sorted([str(a) for a in all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0,
+                                                                     p_tap[stim_units] < 0.05)]]), ax=ax)
+    ax.set_title("Heat and tap")
+    sns.despine(fig, ax)
+
+    # for each region compute it's preference for representing heat and tap only versus mixed
+    heat_pi = {}
+    tap_pi = {}
+    pure_heat = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.05)]
+    pure_tap = all_rl[tap_only]
+    mixed = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05)]
+    for i, r in enumerate(np.unique(all_rl)):
+        if r == "":
+            continue
+        phr = np.sum(pure_heat == r)
+        ptr = np.sum(pure_tap == r)
+        mr = np.sum(mixed == r)
+        heat_pi[r] = [(phr - mr) / (phr + mr)]
+        tap_pi[r] = [(ptr - mr) / (ptr + mr)]
+
+    pl.figure()
+    sns.barplot(data=pandas.DataFrame(tap_pi))
+    pl.ylim(-1, 1)
+    pl.ylabel("Preference tap only")
+    sns.despine()
+
+    pl.figure()
+    sns.barplot(data=pandas.DataFrame(heat_pi))
+    pl.ylim(-1, 1)
+    pl.ylabel("Preference heat only")
+    sns.despine()
