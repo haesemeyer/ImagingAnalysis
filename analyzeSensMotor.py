@@ -15,6 +15,7 @@ from sklearn.manifold import SpectralEmbedding
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib as mpl
 import pandas
+from scipy.stats import entropy
 
 
 def build_all_region_labels():
@@ -339,6 +340,31 @@ def regression_bootstrap(regressors: np.ndarray, output: np.ndarray, nboot=500):
     return r2_vals, coefs, icepts
 
 
+def jknife_entropy(data, nbins=10):
+    """
+    Computes the jacknife estimate of the entropy of data (Zahl, 1977)
+    Args:
+        data: nsamples x ndim sized data matrix
+        nbins: The number of histogram bins to use along each dimension
+
+    Returns:
+        The jacknife estimate of the entropy
+    """
+    hist = np.histogramdd(data, nbins)[0].ravel()
+    ent_full = entropy(hist)
+    # jacknife
+    jk_sum = 0
+    jk_n = 0
+    for i in range(hist.size):
+        if hist[i] > 0:
+            jk_hist = hist.copy()
+            jk_hist[i] -= 1
+            # for each element in this bin we get exactly one jack-nife estimate
+            jk_sum = jk_sum + hist[i] * entropy(jk_hist)
+            jk_n += hist[i]
+    return hist.sum() * ent_full - (hist.sum() - 1)*jk_sum/jk_n
+
+
 class RegionResults:
     def __init__(self, name, activities, membership, regressors, original_labels):
         self.name = name
@@ -430,14 +456,20 @@ if __name__ == "__main__":
     test_labels = ["Trigeminal", "Rh6", "Rh2", "Cerebellum", "Habenula", "Pallium", "SubPallium", "POA"]
 
     motor_out = np.hstack((swim_motor[:, None], flicks_motor[:, None]))
+    # for entropy use full timeseries not repeat averages
+    mo = np.hstack((mc_swims.avg_motor_output[:, None], mc_flicks.avg_motor_output[:, None]))
+    mo_entropy = jknife_entropy(mo, 10)
 
     region_r2 = np.zeros((500, len(test_labels)))
+    region_mi = np.zeros(len(test_labels))
 
     storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r+')
 
     for k, regions in enumerate(test_regions):
+        print("Processing ", test_labels[k])
         region_act, region_mem = build_region_clusters(regions, plTitle=test_labels[k])[:2]
         regressors, clust_labels = build_regressors(trial_average(region_act), region_mem)
+        full_averages = build_regressors(region_act, region_mem)[0]
         # create prediction matrices
         resmat_high = np.zeros((regressors.shape[1], regressors.shape[1]))
         resmat_low = np.zeros_like(resmat_high)
@@ -473,6 +505,10 @@ if __name__ == "__main__":
         ax.set_title(test_labels[k])
         analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
         region_r2[:, k] = regression_CV(regressors, motor_out)[0]
+        # compute mutual information of region regressors with motor output
+        region_entropy = jknife_entropy(full_averages, 10)
+        joint_entropy = jknife_entropy(np.hstack((full_averages, mo)), 10)
+        region_mi[k] = mo_entropy + region_entropy - joint_entropy
 
         # save new analysis into our file
         l = test_labels[k]
