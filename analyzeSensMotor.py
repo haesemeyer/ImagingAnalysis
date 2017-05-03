@@ -339,6 +339,15 @@ def regression_bootstrap(regressors: np.ndarray, output: np.ndarray, nboot=500):
     return r2_vals, coefs, icepts
 
 
+class RegionResults:
+    def __init__(self, name, activities, membership, regressors, original_labels):
+        self.name = name
+        self.region_acts = activities
+        self.region_mem = membership
+        self.regressors = regressors
+        self.regs_clust_labels = original_labels
+
+
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
@@ -421,14 +430,6 @@ if __name__ == "__main__":
     test_labels = ["Trigeminal", "Rh6", "Rh2", "Cerebellum", "Habenula", "Pallium", "SubPallium", "POA"]
 
     motor_out = np.hstack((swim_motor[:, None], flicks_motor[:, None]))
-
-    class RegionResults:
-        def __init__(self, name, activities, membership, regressors, original_labels):
-            self.name = name
-            self.region_acts = activities
-            self.region_mem = membership
-            self.regressors = regressors
-            self.regs_clust_labels = original_labels
 
     region_r2 = np.zeros((500, len(test_labels)))
 
