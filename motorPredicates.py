@@ -130,3 +130,17 @@ def right_bouts(tdata: TailData):
         if bb >= turn_thresh:
             safe_set(starting, b[0], 1)
     return starting
+
+
+def bout_vigor(tdata: TailData):
+    """
+    For a given TailData object returns a bout start trace that is weighted by the integrated tail variance
+    during the given bout
+    """
+    if tdata.bouts is None:
+        return tdata.starting
+    starting = np.zeros(tdata.starting.size, dtype=np.float32)
+    for b in tdata.bouts.astype(int):
+        bout_ca = tdata.cumAngles[b[0]: b[1]]
+        safe_set(starting, b[0], np.var(bout_ca) * (b[1] - b[0]))
+    return starting
