@@ -379,6 +379,8 @@ if __name__ == "__main__":
     stack_types = get_stack_types(exp_data)[no_nan_aa]
     # get indices of on-type cells in regions (since everything is limited to no_nan_aa these should match)
     all_rl = build_all_region_labels()
+    # remove all cells that had been classified as motor from further analysis by blanking their region labels
+    all_rl[mship_nonan > 5] = ""
     ix_all = np.arange(all_activity.shape[0], dtype=int)
     all_dff = dff(all_activity)
 
