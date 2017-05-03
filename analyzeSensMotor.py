@@ -175,11 +175,11 @@ def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off=0.9, 
     to_cluster = trial_average(region_activity)
     print("{0} cells to process in this run".format(to_cluster.shape[0]))
     ix = np.arange(to_cluster.shape[0])
-    if to_cluster.shape[0] > 20000:
+    if to_cluster.shape[0] > 30000:
         # subsample
-        ix = np.random.choice(ix, 20000, False)
+        ix = np.random.choice(ix, 30000, False)
         to_cluster = to_cluster[ix, :]
-        print("Performing subsampling to 20.000 cells")
+        print("Performing subsampling to 30.000 cells")
     corr_mat = np.corrcoef(to_cluster).astype(np.float32)
     del to_cluster
     corr_mat[corr_mat < 0.26] = 0
