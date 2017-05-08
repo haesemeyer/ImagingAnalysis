@@ -533,10 +533,12 @@ if __name__ == "__main__":
     # plot CV r-squared across regions
     dset = pandas.DataFrame({test_labels[k]: region_r2[:, k] for k in range(len(test_labels))})
     fig, ax = pl.subplots()
-    sns.barplot(data=dset, ax=ax, order=test_labels)
+    sns.barplot(data=dset, ax=ax, order=test_labels, ci=68)
+    ax.set_ylabel("Cross-validation R2")
+    sns.despine(fig, ax)
 
     # replot regressors with error shadings
-    for k in storage.keys():
+    for k in test_labels:
         fig, ax = pl.subplots()
         ar = pickle.loads(np.array(storage[k]))
         for c in ar.regs_clust_labels:
@@ -547,3 +549,4 @@ if __name__ == "__main__":
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("dF/F0")
         ax.set_title(k)
+    storage.close()
