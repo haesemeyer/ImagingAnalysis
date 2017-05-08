@@ -506,7 +506,9 @@ if __name__ == "__main__":
                     yticklabels=clust_labels, ax=ax)
         ax.set_title(test_labels[k])
         analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
-        r2, coef, icepts = regression_CV(regressors, motor_out, n_boot)
+        analysis_result.full_averages = full_averages
+        # compute regression results on full data not repeat-averaged
+        r2, coef, icepts = regression_CV(full_averages, mo, n_boot)
         region_boot_coefs.append(coef)
         region_boot_icepts.append(coef)
         region_r2[:, k] = r2
