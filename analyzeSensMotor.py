@@ -459,8 +459,10 @@ if __name__ == "__main__":
     # for entropy use full timeseries not repeat averages
     mo = np.hstack((mc_swims.avg_motor_output[:, None], mc_flicks.avg_motor_output[:, None]))
     mo_entropy = jknife_entropy(mo, 10)
-
-    region_r2 = np.zeros((500, len(test_labels)))
+    n_boot = 500
+    region_r2 = np.zeros((n_boot, len(test_labels)))
+    region_boot_coefs = []  # for each region array of bootstrap coefficients (n_bootxn_regsx2)
+    region_boot_icepts = []  # for each region matrix of bootstrap intercepts (n_bootx2)
     region_mi = np.zeros(len(test_labels))
 
     storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r+')
@@ -504,7 +506,10 @@ if __name__ == "__main__":
                     yticklabels=clust_labels, ax=ax)
         ax.set_title(test_labels[k])
         analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
-        region_r2[:, k] = regression_CV(regressors, motor_out)[0]
+        r2, coef, icepts = regression_CV(regressors, motor_out, n_boot)
+        region_boot_coefs.append(coef)
+        region_boot_icepts.append(coef)
+        region_r2[:, k] = r2
         # compute mutual information of region regressors with motor output
         region_entropy = jknife_entropy(full_averages, 10)
         joint_entropy = jknife_entropy(np.hstack((full_averages, mo)), 10)
