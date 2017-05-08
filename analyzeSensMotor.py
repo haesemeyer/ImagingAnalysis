@@ -272,7 +272,7 @@ def build_regressors(activity, cluster_membership):
 
 def regression_CV(regressors: np.ndarray, output: np.ndarray, nboot=500):
     """
-    Performs 50/50 cross-validation of regression leaving out 50% contiguous percent of the data for fitting.
+    Performs 80/20 cross-validation of regression leaving out 20% contiguous percent of the data for fitting.
     This avoids having each left-out data-point ensconced btw. two highly correlated fitted points
     Args:
         regressors: The regressors to use
@@ -292,7 +292,7 @@ def regression_CV(regressors: np.ndarray, output: np.ndarray, nboot=500):
 
     if output.ndim < 2:
         output = output[:, None]
-    lo_stretch_length = regressors.shape[0] // 2
+    lo_stretch_length = regressors.shape[0] // 5
     r2_vals = np.zeros(nboot)
     coefs = np.zeros((nboot, output.shape[1], regressors.shape[1]))
     icepts = np.zeros((nboot, output.shape[1]))
