@@ -30,6 +30,7 @@ if __name__ == "__main__":
         f = open(name, 'rb')
         d = pickle.load(f)
         exp_data.append(d)
+        f.close()
     # generate our (sourceFile, ca-frame-time) tuple list for the motor containers
     source_files = []
     var_scores = np.array([])
