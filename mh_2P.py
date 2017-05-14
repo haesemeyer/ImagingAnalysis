@@ -1424,6 +1424,23 @@ class DetailCharExperiment(ImagingData):
         stim = np.mean(rep_aligned[:, :, ix_stim_repeat], 2)
         return pre, stim
 
+    def fold_activations(self, ix_pre_repeat, ix_stim_repeat):
+        """
+        Compute per-repeat z-scored change in activity in relation to pre-standard deviations
+        Args:
+            ix_pre_repeat: Indices in repeat aligned trace that identify pre-period
+            ix_stim_repeat: Indices in repeat aligned trace that identify stim-period
+
+        Returns:
+            n_cells x n_repeat array of z-scores
+        """
+        rep_aligned = self.repeat_align(self.RawData)
+        # estimate noise using pre-periods
+        pre_std = np.std(rep_aligned[:, :, ix_pre_repeat], 2, keepdims=True) + 1e-3
+        pre_avg = np.mean(rep_aligned[:, :, ix_pre_repeat], 2, keepdims=True)
+        stim = np.mean(rep_aligned[:, :, ix_stim_repeat], 2, keepdims=True)
+        return ((stim - pre_avg) / pre_std)[:, :, 0]  # remove last dimension now
+
 
 class MotorContainer:
     """
