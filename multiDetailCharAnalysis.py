@@ -14,7 +14,7 @@ import pandas
 
 def dff(ts):
     # f0 = np.percentile(ts, 10, axis=1, keepdims=True)
-    f0 = np.mean(ts[:, :10*5], axis=1, keepdims=True)
+    f0 = np.mean(ts[:, 10*5:20*5], axis=1, keepdims=True)
     f0[f0 < 0.05] = 0.05
     return (ts-f0)/f0
 
