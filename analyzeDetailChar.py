@@ -7,6 +7,7 @@ import pickle
 from sklearn.linear_model import LinearRegression
 from os import path
 import sys
+from scipy.ndimage import gaussian_filter1d
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/OASIS')
 import functions as oa_func
 
@@ -70,7 +71,7 @@ if __name__ == "__main__":
     interp_times = np.linspace(0, total_seconds, total_seconds*interp_freq, endpoint=False)
     ipol = lambda y: np.interp(interp_times, frame_times, y[:frame_times.size])
     for g in graph_list:
-        g.interp_data = ipol(oa_func.deconvolve(g.RawTimeseries.astype(float), g=[gval], penalty=1)[0])
+        g.interp_data = gaussian_filter1d(ipol(g.RawTimeseries.astype(float)), 1.5)
     # bin down the laser currents to our interpolation frequency
     laser_currents = np.add.reduceat(laser_currents, np.arange(0, laser_currents.size, 20//interp_freq))
     laser_currents /= (20//interp_freq)
