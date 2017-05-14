@@ -94,6 +94,19 @@ if __name__ == "__main__":
     sns.despine(fig)
     fig.tight_layout()
 
+    # plot overall motor output split into heat and tap period for scaling
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]})
+    ax_heat.plot(rep_time[rep_time < 125],
+                 np.mean(exp_data[0].repeat_align(mc_all_raw.avg_motor_output), 1).ravel()[rep_time < 125])
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("Response probability")
+    ax_tap.plot(rep_time[rep_time >= 125],
+                np.mean(exp_data[0].repeat_align(mc_all_raw.avg_motor_output), 1).ravel()[rep_time >= 125])
+    ax_tap.set_xlabel("Time [s]")
+    ax_tap.set_ylabel("Response probability")
+    sns.despine(fig)
+    fig.tight_layout()
+
     # use motor types to sort out motor units
     mc_type_corrs = np.zeros((all_activity.shape[0], len(mc)))
     for i, act in enumerate(all_activity):
