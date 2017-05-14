@@ -481,15 +481,15 @@ if __name__ == "__main__":
                     resmat_high[i, j] = np.nan
                     resmat_low[i, j] = np.nan
                     continue
-                regs = np.hstack((regressors[:, i, None], regressors[:, j, None]))
+                regs = np.hstack((full_averages[:, i, None], full_averages[:, j, None]))
                 lreg = LinearRegression()
-                lreg.fit(regs, flicks_motor)
-                resmat_high[i, j] = lreg.score(regs, flicks_motor)
+                lreg.fit(regs, mo[:, 1])
+                resmat_high[i, j] = lreg.score(regs, mo[:, 1])
                 lreg = LinearRegression()
-                lreg.fit(regs, swim_motor)
-                resmat_low[i, j] = lreg.score(regs, swim_motor)
-                lreg = LinearRegression()
-                lreg.fit(regs, all_motor)
+                lreg.fit(regs, mo[:, 0])
+                resmat_low[i, j] = lreg.score(regs, mo[:, 0])
+                # lreg = LinearRegression()
+                # lreg.fit(regs, all_motor)
         # Plot prediction of low and high bias side-by-side
         fig, (ax_h, ax_l) = pl.subplots(ncols=2)
         sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=clust_labels,
