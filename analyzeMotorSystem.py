@@ -146,4 +146,5 @@ if __name__ == "__main__":
                tf_centroids[np.logical_and(stypes_nonan == "MAIN", motormem_nonan == 6), 1], s=2, c="C1",
                label="Stim only motor")
     ax.set_aspect('equal', 'datalim')
+    ax.legend()
     sns.despine(fig, ax)
