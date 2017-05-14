@@ -115,82 +115,95 @@ if __name__ == "__main__":
             if np.isnan(corr):
                 corr = 0
             mc_type_corrs[i, j] = corr
-    is_pot_stim = np.logical_and(var_scores >= 0.1, np.max(mc_type_corrs, 1) < 0.4)
+    is_pot_stim = np.logical_and(var_scores >= 0.05, np.max(mc_type_corrs, 1) < 0.4)
     # only consider cells in marked regions as potential stimulus units
     is_pot_stim = np.logical_and(is_pot_stim, all_rl.ravel() != "")
 
     # find units that show significant activation during 1500mW step and sine period
-    p_stp = []  # p-values of activation during step and sine wave and tap
+    p_stp = []  # z-scores of activation during step and sine wave and tap
     p_sin = []
     p_tap = []
     act_sign = np.array([])  # sign of activation change (ON=plus, OFF=minus)
     for data in exp_data:
         pre, stim = data.activations(*data.get_lstep_pre_stim_ix())
-        p_stp += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_stp += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_stp += [np.abs(np.mean(s) - np.mean(p)) / np.std(p) for p, s in zip(pre, stim)]
+        f_act = data.fold_activations(*data.get_lstep_pre_stim_ix())
+        p_stp += [np.abs(np.median(f)) for f in f_act]
         diffs = np.array([np.mean(s-p) for p, s in zip(pre, stim)])
         pre, stim = data.activations(*data.get_sine_pre_stim_ix())
-        p_sin += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_sin += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_sin += [np.abs(np.mean(s) - np.mean(p)) / np.std(p) for p, s in zip(pre, stim)]
+        f_act = data.fold_activations(*data.get_sine_pre_stim_ix())
+        p_sin += [np.abs(np.median(f)) for f in f_act]
         diffs += np.array([np.mean(s-p) for p, s in zip(pre, stim)])
         act_sign = np.r_[act_sign, np.sign(diffs)]
         pre, stim = data.activations(*data.get_tap_pre_stim_ix())
-        p_tap += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_tap += [wilcoxon(p, s)[1] for p, s in zip(pre, stim)]
+        # p_tap += [np.abs(np.mean(s) - np.mean(p)) / np.std(p) for p, s in zip(pre, stim)]
+        f_act = data.fold_activations(*data.get_tap_pre_stim_ix())
+        p_tap += [np.abs(np.median(f)) for f in f_act]
+
     p_stp = np.array(p_stp)
     p_sin = np.array(p_sin)
     p_tap = np.array(p_tap)
-    p_stp[np.isnan(p_stp)] = 1
-    p_sin[np.isnan(p_sin)] = 1
-    p_tap[np.isnan(p_tap)] = 1
+    # we consider p > 2 as positive and p < 1 as negative - put our nan's in the middle to not consider for either
+    p_stp[np.isnan(p_stp)] = 1.5
+    p_sin[np.isnan(p_sin)] = 1.5
+    p_tap[np.isnan(p_tap)] = 1.5
+    cut_pos = 2
+    cut_neg = 0.75
     # mark units that show significant change in both periods
-    sig_act = np.logical_and(p_stp < 0.05, p_sin < 0.05)
+    sig_act = p_sin > cut_pos  # np.logical_and(p_stp > cut_pos, p_sin > cut_pos)
     stim_units = np.logical_and(sig_act, is_pot_stim)
     # compute repeat-average of all stim_units
     su_avg = np.mean(data.repeat_align(all_activity[stim_units, :]), 1)
 
     # mark units that only respond to taps and compute their repeat average
-    tap_act = np.logical_and(p_tap < 0.01, is_pot_stim)
-    not_heat = np.logical_and(p_stp > 0.05, p_sin > 0.05)
+    tap_act = np.logical_and(p_tap > cut_pos, is_pot_stim)
+    not_heat = np.logical_and(p_stp < cut_neg, p_sin < cut_neg)
     tap_only = np.logical_and(tap_act, not_heat)
     tu_avg = np.mean(data.repeat_align(all_activity[tap_only, :]), 1)
 
     # divide cells based on heat sign and whether they also significantly respond to taps or not
-    on_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05), :]
-    on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.05), :]
-    off_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] < 0.05), :]
-    off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > 0.05), :]
+    on_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > cut_pos), :]
+    on_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < cut_neg), :]
+    off_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] > cut_pos), :]
+    off_no_tap_cells = su_avg[np.logical_and(act_sign[stim_units] < 0, p_tap[stim_units] < cut_neg), :]
 
     # plot average activity of the types segregated by ON/OFF with heat and tap responses in separate plots
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(on_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="r", ax=ax_heat, ci=95)
+    sns.tsplot(dff(on_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="r", ax=ax_heat, ci=68)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(on_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="r", ax=ax_tap, ci=95)
+    sns.tsplot(dff(on_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="r", ax=ax_tap, ci=68)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(on_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="orange", ax=ax_heat, ci=95)
+    sns.tsplot(dff(on_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="orange", ax=ax_heat, ci=68)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(on_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="orange", ax=ax_tap, ci=95)
+    sns.tsplot(dff(on_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="orange", ax=ax_tap, ci=68)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(off_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="b", ax=ax_heat, ci=95)
+    sns.tsplot(dff(off_no_tap_cells)[:, rep_time < 125], rep_time[rep_time < 125], color="b", ax=ax_heat, ci=68)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(off_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="b", ax=ax_tap, ci=95)
+    sns.tsplot(dff(off_no_tap_cells)[:, rep_time >= 125], rep_time[rep_time >= 125], color="b", ax=ax_tap, ci=68)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
 
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
-    sns.tsplot(dff(tu_avg)[:, rep_time < 125], rep_time[rep_time < 125], color="k", ax=ax_heat, ci=95)
+    sns.tsplot(dff(tu_avg)[:, rep_time < 125], rep_time[rep_time < 125], color="k", ax=ax_heat, ci=68)
     ax_heat.set_xlabel("Time [s]")
     ax_heat.set_ylabel("dF/F0")
-    sns.tsplot(dff(tu_avg)[:, rep_time >= 125], rep_time[rep_time >= 125], color="k", ax=ax_tap, ci=95)
+    sns.tsplot(dff(tu_avg)[:, rep_time >= 125], rep_time[rep_time >= 125], color="k", ax=ax_tap, ci=68)
     ax_tap.set_xlabel("Time [s]")
     sns.despine(fig)
     fig.tight_layout()
@@ -204,6 +217,7 @@ if __name__ == "__main__":
     all_rl[all_rl == "RH6_L"] = "Rh_6"
     all_rl[all_rl == "Rh6_L"] = "Rh_6"
     all_rl[all_rl == "Rh6_R"] = "Rh_6"
+    all_rl[all_rl == "Rh6"] = "Rh_6"
 
     # plot counts of different types across regions
     fig, ax = pl.subplots()
@@ -213,22 +227,22 @@ if __name__ == "__main__":
 
     fig, ax = pl.subplots()
     sns.countplot(sorted([str(a) for a in all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0,
-                                                                     p_tap[stim_units] > 0.05)]]), ax=ax)
+                                                                     p_tap[stim_units] < cut_neg)]]), ax=ax)
     ax.set_title("Heat only")
     sns.despine(fig, ax)
 
     fig, ax = pl.subplots()
     sns.countplot(sorted([str(a) for a in all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0,
-                                                                     p_tap[stim_units] < 0.05)]]), ax=ax)
+                                                                     p_tap[stim_units] > cut_pos)]]), ax=ax)
     ax.set_title("Heat and tap")
     sns.despine(fig, ax)
 
     # for each region compute it's preference for representing heat and tap only versus mixed
     heat_pi = {}
     tap_pi = {}
-    pure_heat = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > 0.05)]
+    pure_heat = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < cut_neg)]
     pure_tap = all_rl[tap_only]
-    mixed = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] < 0.05)]
+    mixed = all_rl[stim_units][np.logical_and(act_sign[stim_units] > 0, p_tap[stim_units] > cut_pos)]
     for i, r in enumerate(np.unique(all_rl)):
         if r == "":
             continue
