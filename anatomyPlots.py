@@ -1,4 +1,4 @@
-# Script to analyze region-specific contingencies between sensory activity and motor events
+# Script to perform anatomical plots of cell locations
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -93,11 +93,6 @@ if __name__ == "__main__":
     membership = np.array(dfile['membership'])
     no_nan_aa = np.array(dfile['no_nan_aa'])
     mship_nonan = membership[no_nan_aa]
-    all_activity = np.array(dfile['all_activity'])
-    # # rotate each line in all_activity
-    # for i in range(all_activity.shape[0]):
-    #     r = np.random.randint(30 * 5, 120 * 5)
-    #     all_activity[i, :] = np.roll(all_activity[i, :], r)
     pstream = np.array(dfile['exp_data_pickle'])
     exp_data = pickle.loads(pstream)  # type: List[SLHRepeatExperiment]
     del pstream
