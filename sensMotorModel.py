@@ -16,7 +16,8 @@ from analyzeSensMotor import RegionResults
 import os
 
 
-default_filter_length = 100  # default filter length is 20 seconds
+default_exp_filter_length = 100  # default filter length for exponential decay is 20 seconds - external process
+default_sin_filter_length = 20   # default filter length for neuronal filtering is 4 seconds
 
 
 def sin_filter(f_shift, f_freq, f_decay):
@@ -30,7 +31,7 @@ def sin_filter(f_shift, f_freq, f_decay):
     Returns:
         The linear filter
     """
-    frames = np.arange(default_filter_length)
+    frames = np.arange(default_sin_filter_length)
     return np.sin(frames * 2 * np.pi * f_freq + f_shift) * np.exp(-f_decay * frames)
 
 
@@ -60,7 +61,7 @@ def exp_filter(f_scale, f_decay):
     Returns:
         The linear filter
     """
-    frames = np.arange(default_filter_length)
+    frames = np.arange(default_exp_filter_length)
     return f_scale * np.exp(-f_decay * frames)
 
 
@@ -80,12 +81,33 @@ def exp_filter_fit_function(x, f_scale, f_decay):
     return np.convolve(x, f)[:x.size]
 
 
-def cubic_nonlin(x, a, b, c):
-    return a*(x**3) + b*(x**2) + c*x
+def cubic_nonlin(x, a, b, c, d):
+    return a*(x**3) + b*(x**2) + c*x + d
 
 
 def exp_nonlin(x, offset, rate, scale):
     return scale*np.exp(rate * x) + offset
+
+
+def predict_response_w_filter(predictors, output, param_bounds=([-10, -0.1, -0.5], [10, 2.5, 10])):
+    # linear regression fit
+    lr = LinearRegression()
+    lr.fit(predictors, output)
+    # fit linear filter
+    reg_out = lr.predict(predictors)
+    shift, freq, decay = curve_fit(sin_filter_fit_function, reg_out, output, bounds=param_bounds)[0]
+    return lr, (shift, freq, decay)
+
+
+def r2(prediction, real):
+    ss_res = np.sum((prediction - real)**2)
+    ss_tot = np.sum((real - np.mean(real))**2)
+    return 1 - ss_res/ss_tot
+
+
+def standardize(x):
+    return (x - np.mean(x)) / np.std(x)
+
 
 if __name__ == "__main__":
     sns.reset_orig()
@@ -129,21 +151,32 @@ if __name__ == "__main__":
         motor_file.create_dataset("flicks_out", data=flicks_out)
         motor_file.create_dataset("swims_out", data=swims_out)
         motor_file.close()
+
+    # NOTE: We are unable to explain difference in some OFF responses in very beginning vs. inter-stimulus periods.
+    # Therefore all r2 will be calculated *ignoring* the period before the first stim-on (first 300 frames) and fits
+    # of nonlinearities will also ignore these frames.
+    # Also to make coefficients more comparable all model inputs and desired outputs
+    # will be scaled to unit variance and mean-subtracted
+    f_s = 300
+
     # provisionally use the convolved laser stimulus as model input
     stim_in = exp_data[0].stimOn
+    stim_in = standardize(stim_in)
 
-    # case study (1): Laser input to trigeminal ON type
+    # Laser input to trigeminal ON type
     tg_on = region_results["Trigeminal"].full_averages[:, 0]
+    tg_on = standardize(tg_on)
     # 1) Linear regression
     lr = LinearRegression()
     lr.fit(stim_in[:, None], tg_on)
+    print("ON coefficients = ", lr.coef_)
     reg_out = lr.predict(stim_in[:, None])
     # 2) Fit linear filter - since most of this will be governed by Laser -> Temperature use exponential filter
     scale, decay = curve_fit(exp_filter_fit_function, reg_out, tg_on)[0]
     filtered_out = exp_filter_fit_function(reg_out, scale, decay)
     # 3) Fit cubic output nonlinearity
-    a, b, c = curve_fit(cubic_nonlin, filtered_out, tg_on)[0]
-    tg_on_prediction = cubic_nonlin(filtered_out, a, b, c)
+    a, b, c, d = curve_fit(cubic_nonlin, filtered_out[f_s:], tg_on[f_s:])[0]
+    tg_on_prediction = cubic_nonlin(filtered_out, a, b, c, d)
     # plot successive fits
     fig, ax = pl.subplots()
     ax.plot(stim_in, lw=0.5)
@@ -164,26 +197,26 @@ if __name__ == "__main__":
     # plot output nonlinearity
     fig, ax = pl.subplots()
     input_range = np.linspace(filtered_out.min(), filtered_out.max())
-    ax.scatter(filtered_out, tg_on, alpha=0.2, s=1, color='C0')
-    ax.plot(input_range, cubic_nonlin(input_range, a, b, c), 'k')
+    ax.scatter(filtered_out[f_s:], tg_on[f_s:], alpha=0.2, s=1, color='C0')
+    ax.plot(input_range, cubic_nonlin(input_range, a, b, c, d), 'k')
     ax.set_xlabel("f(Temperature)")
     ax.set_ylabel("g[f(Temperature)]")
     ax.set_title("Output nonlinearity, Trigeminal ON")
     sns.despine(fig, ax)
+    print("R2 TG ON prediction = ", r2(tg_on_prediction[f_s:], tg_on[f_s:]))
 
-    # case study (2): Laser input to trigeminal OFF type
-    # NOTE: We are unable to explain difference in OFF response in very beginning vs. inter-stimulus periods. Therefore
-    # all fits will be calculated *ignoring* the period before the first stim-on (first 300 frames)
+    # Laser input to trigeminal OFF type
     tg_off = region_results["Trigeminal"].full_averages[:, 1]
     # 1) Linear regression
     lr = LinearRegression()
-    lr.fit(stim_in[300:, None], tg_off[300:])
+    lr.fit(stim_in[:, None], tg_off)
+    print("OFF coefficients = ", lr.coef_)
     reg_out = lr.predict(stim_in[:, None])
     # 2) Fit linear filter - since most of this will be governed by Laser -> Temperature use exponential filter
-    scale, decay = curve_fit(exp_filter_fit_function, reg_out[300:], tg_off[300:])[0]
+    scale, decay = curve_fit(exp_filter_fit_function, reg_out, tg_off)[0]
     filtered_out = exp_filter_fit_function(reg_out, scale, decay)
     # 3) Fit exponential output nonlinearity
-    o, r, s = curve_fit(exp_nonlin, filtered_out[300:], tg_off[300:])[0]
+    o, r, s = curve_fit(exp_nonlin, filtered_out[f_s:], tg_off[f_s:])[0]
     tg_off_prediction = exp_nonlin(filtered_out, o, r, s)
     # plot successive fits
     fig, ax = pl.subplots()
@@ -205,9 +238,10 @@ if __name__ == "__main__":
     # plot output nonlinearity
     fig, ax = pl.subplots()
     input_range = np.linspace(filtered_out.min(), filtered_out.max())
-    ax.scatter(filtered_out[300:], tg_off[300:], alpha=0.2, s=1, color='C0')
+    ax.scatter(filtered_out[f_s:], tg_off[f_s:], alpha=0.2, s=1, color='C0')
     ax.plot(input_range, exp_nonlin(input_range, o, r, s), 'k')
     ax.set_xlabel("f(Temperature)")
     ax.set_ylabel("g[f(Temperature)]")
     ax.set_title("Output nonlinearity, Trigeminal OFF")
     sns.despine(fig, ax)
+    print("R2 TG OFF prediction = ", r2(tg_off_prediction[f_s:], tg_off[f_s:]))
