@@ -57,7 +57,11 @@ def PlotRegionHeatFraction_TopDown(rlabels, ax=None):
     if col_index > 14:
         col_index = 14
     c_hull = ConvexHull(tf_centroids[in_region, :2])
-    ax.scatter(tf_centroids[in_region, 0], tf_centroids[in_region, 1], s=1, c=pal[col_index], alpha=0.3)
+    # subsample
+    ix_to_plot = np.arange(in_region.sum())
+    ix_to_plot = np.random.choice(ix_to_plot, ix_to_plot.size // 20)
+    ax.scatter(tf_centroids[in_region, 0][ix_to_plot], tf_centroids[in_region, 1][ix_to_plot], s=1, c=pal[col_index]
+               , alpha=0.3)
     # for simplex in c_hull.simplices:
     #     ax.plot(tf_centroids[in_region, :][simplex, 0], tf_centroids[in_region, :][simplex, 1], 'k--', lw=0.5)
     return fraction, heat, total
@@ -79,7 +83,11 @@ def PlotRegionHeatFraction_Side(rlabels, ax=None):
     if col_index > 14:
         col_index = 14
     c_hull = ConvexHull(tf_centroids[in_region, 1:])
-    ax.scatter(tf_centroids[in_region, 1], tf_centroids[in_region, 2], s=1, c=pal[col_index], alpha=0.3)
+    # subsample
+    ix_to_plot = np.arange(in_region.sum())
+    ix_to_plot = np.random.choice(ix_to_plot, ix_to_plot.size // 20)
+    ax.scatter(tf_centroids[in_region, 1][ix_to_plot], tf_centroids[in_region, 2][ix_to_plot], s=1, c=pal[col_index],
+               alpha=0.3)
     # for simplex in c_hull.simplices:
     #     ax.plot(tf_centroids[in_region, :][simplex, 1], tf_centroids[in_region, :][simplex, 2], 'k--', lw=0.5)
     return fraction, heat, total
