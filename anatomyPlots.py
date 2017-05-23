@@ -56,14 +56,11 @@ def PlotRegionHeatFraction_TopDown(rlabels, ax=None):
     col_index = int((fraction * 15) / 0.15)
     if col_index > 14:
         col_index = 14
-    c_hull = ConvexHull(tf_centroids[in_region, :2])
     # subsample
     ix_to_plot = np.arange(in_region.sum())
     ix_to_plot = np.random.choice(ix_to_plot, ix_to_plot.size // 20)
     ax.scatter(tf_centroids[in_region, 0][ix_to_plot], tf_centroids[in_region, 1][ix_to_plot], s=1, c=pal[col_index]
                , alpha=0.3)
-    # for simplex in c_hull.simplices:
-    #     ax.plot(tf_centroids[in_region, :][simplex, 0], tf_centroids[in_region, :][simplex, 1], 'k--', lw=0.5)
     return fraction, heat, total
 
 
@@ -82,14 +79,11 @@ def PlotRegionHeatFraction_Side(rlabels, ax=None):
     col_index = int((fraction * 15) / 0.15)
     if col_index > 14:
         col_index = 14
-    c_hull = ConvexHull(tf_centroids[in_region, 1:])
     # subsample
     ix_to_plot = np.arange(in_region.sum())
     ix_to_plot = np.random.choice(ix_to_plot, ix_to_plot.size // 20)
     ax.scatter(tf_centroids[in_region, 1][ix_to_plot], tf_centroids[in_region, 2][ix_to_plot], s=1, c=pal[col_index],
                alpha=0.3)
-    # for simplex in c_hull.simplices:
-    #     ax.plot(tf_centroids[in_region, :][simplex, 1], tf_centroids[in_region, :][simplex, 2], 'k--', lw=0.5)
     return fraction, heat, total
 
 
@@ -209,7 +203,7 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
 
     fig, ax = pl.subplots()
-    r_side = ["SubPallium", "D_FB_R", "Hab_R", "Tect_R", "Cerebellum_R", "Rh6_R"]
+    r_side = ["PreOptic", "SubPallium", "D_FB_R", "Hab_R", "Tect_R", "Cerebellum_R", "Rh6_R"]
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "MAIN"]
     ix_bground = np.random.choice(ix_bground, ix_bground.size // 100, False)
     ax.scatter(tf_centroids[ix_bground, 1], tf_centroids[ix_bground, 2], s=1, alpha=0.2, c='k')
@@ -244,9 +238,10 @@ if __name__ == "__main__":
         ["Tect_L", "Tect_R"],
         ["Hab_L", "Hab_R"],
         ["D_FB_L", "D_FB_R"],
-        "SubPallium"
+        "SubPallium",
+        "PreOptic"
     ]
-    labels = ["Trigeminal", "Rh6", "Cerebellum", "Tectum", "Habenula", "Pallium", "Subpallium"]
+    labels = ["Trigeminal", "Rh6", "Cerebellum", "Tectum", "Habenula", "Pallium", "Subpallium", "POA"]
 
     def part_of(regions):
         if type(regions) == str:
