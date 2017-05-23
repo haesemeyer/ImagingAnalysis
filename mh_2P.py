@@ -3055,3 +3055,46 @@ def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
         ax.vlines(trial, ith + ticklength/2, ith + 1.5*ticklength, **kwargs)
     ax.set_ylim(ticklength/2, events.shape[0] + ticklength/2)
     return ax
+
+
+def IndexingMatrix(trigger_frames, f_past, f_future, input_length):
+    """
+    Builds an indexing matrix with length(trigger_frames) rows and columns
+    that index out frames from trigger_frames(n)-f_past to
+    trigger_frames(n)+f_future. Indices will be clipped at [1...input_length]
+    with rows containing frames outside that range removed
+    Args:
+        trigger_frames: Vector with all the intended trigger frames
+        f_past: The number of frames before each trigger frame that should be included
+        f_future: The same for the number of frames after each trigger frame
+        input_length: The length of the input on which to trigger. Determines
+            which rows will be removed from the matrix because they would index out
+            non-existent frames
+            
+    Returns:
+        [0]: The trigger matrix for indexing out all frames
+        [1]: The number of rows that have been cut out because they would have
+             contained frames with index < 0
+        [2]: The number of rows that have been removed from the back because
+             they would have contained frames with index >= input_length
+    """
+    if trigger_frames.ndim > 1:
+        raise ValueError('trigger_frames has to be a vector')
+
+    toTake = np.r_[-1 * f_past:f_future + 1]
+
+    # turn trigger_frames into a size 2 array consisting of 1 column only
+    tf = np.expand_dims(trigger_frames, 1)
+    # turn toTake into a size 2 array consisting of one row only
+    toTake = np.expand_dims(toTake, 0)
+    # now we can use repeat to construct matrices:
+    indexMat = np.repeat(tf, toTake.size, 1) + np.repeat(toTake, tf.size, 0)
+    # identify front and back rows that need to be removed
+    cutFront = np.sum(np.sum(indexMat < 0, 1, dtype=float) > 0, 0)
+    cutBack = np.sum(np.sum(indexMat >= input_length, 1, dtype=float) > 0, 0)
+    # remove out-of-bounds rows and return - if statement (seems) necessary since
+    # there is no -0 for indexing the final frame
+    if cutBack > 0:
+        return indexMat[cutFront:-1 * cutBack, :].astype(int), cutFront, cutBack
+    else:
+        return indexMat[cutFront::, :].astype(int), cutFront, cutBack
