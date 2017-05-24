@@ -372,6 +372,7 @@ class RegionResults:
         self.region_mem = membership
         self.regressors = regressors
         self.regs_clust_labels = original_labels
+        self.full_averages = None
 
 
 if __name__ == "__main__":
