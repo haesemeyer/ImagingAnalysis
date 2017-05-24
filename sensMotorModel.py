@@ -4,7 +4,7 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 import h5py
 import pickle
-from mh_2P import RegionContainer, assign_region_label, MotorContainer, SLHRepeatExperiment, IndexingMatrix
+from mh_2P import RegionContainer, assign_region_label, MotorContainer, SLHRepeatExperiment, IndexingMatrix, CaConvolve
 from multiExpAnalysis import get_stack_types, dff, max_cluster
 from typing import List, Dict
 from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts, high_bias_bouts
@@ -151,7 +151,7 @@ def standardize(x):
     return (x - np.mean(x)) / np.std(x)
 
 
-def dexp_f(frames, s1, t1, t2):
+def dexp_f(frames: np.ndarray, s1, t1, t2) -> np.ndarray:
     """
     Returns a filter that is the sum of an exponential and it's derivate
     Args:
@@ -251,6 +251,8 @@ if __name__ == "__main__":
         motor_file.create_dataset("swims_out", data=swims_out)
         motor_file.close()
 
+    model_results = {}
+
     # NOTE: We are unable to explain difference in some OFF responses in very beginning vs. inter-stimulus periods.
     # Therefore all r2 will be calculated *ignoring* the period before the first stim-on (first 300 frames) and fits
     # of nonlinearities will also ignore these frames.
@@ -302,6 +304,7 @@ if __name__ == "__main__":
     ax.set_title("Output nonlinearity, Trigeminal ON")
     sns.despine(fig, ax)
     print("R2 TG ON prediction = ", r2(tg_on_prediction[f_s:], tg_on[f_s:]))
+    model_results["TG_ON"] = ModelResult(stim_in[:, None], lr.coef_, exp_filter(scale, decay), "CUBIC", (a, b, c, d))
 
     # Laser input to trigeminal OFF type
     tg_off = trial_average(region_results["Trigeminal"].full_averages[:, 1])
@@ -343,12 +346,12 @@ if __name__ == "__main__":
     ax.set_title("Output nonlinearity, Trigeminal OFF")
     sns.despine(fig, ax)
     print("R2 TG OFF prediction = ", r2(tg_off_prediction[f_s:], tg_off[f_s:]))
+    model_results["TG_OFF"] = ModelResult(stim_in[:, None], lr.coef_, exp_filter(scale, decay), "EXP", (o, r, s))
 
     # fit of Rh6 units from trigeminal inputs
     filter_length = 22
     tg_out = np.hstack((tg_on[:, None], tg_off[:, None]))
     response_names = ["Fast_ON", "Slow_ON", "Fast_OFF", "Slow_OFF", "Delayed_OFF"]
-    rh6_dict = {}
     fig, ax = pl.subplots()
     filter_time = np.arange(filter_length) / -5.0
     for i in range(region_results["Rh6"].full_averages.shape[1]):
@@ -365,6 +368,8 @@ if __name__ == "__main__":
         prediction = cubic_nonlin(filtered_out, *nl_params)
         print("Type {0} R2: {1}".format(i, r2(prediction[f_s:], output[f_s:])))
         print("Type {0} FVU: {1}".format(i, fvu(prediction[f_s:], output[f_s:])))
+        n = response_names[i]
+        model_results[n] = ModelResult(tg_out, params[-tg_out.shape[1]:], f, "CUBIC", nl_params)
         # test contribution of tg components
         for j in range(tg_out.shape[1]):
             comp = tg_out[:, j]
@@ -373,3 +378,122 @@ if __name__ == "__main__":
             nlp = curve_fit(cubic_nonlin, fout[f_s:], output[f_s:])[0]
             red_pred = cubic_nonlin(fout, *nlp)
             print("Type {0} with tg component {1} R2: {2}".format(i, j, r2(red_pred[f_s:], output[f_s:])))
+
+    # fit of motor type rates from Rh6 cells - since we do not fit activity traces but rates do not fit filters
+    motor_store = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/motor_system.hdf5", "r")
+    motor_type_regs = standardize(trial_average(np.array(motor_store["motor_type_regs"]).T)).T
+    flick_out = standardize(trial_average(np.array(motor_store["flick_out"])))
+    swim_out = standardize(trial_average(np.array(motor_store["swim_out"])))
+    motor_store.close()
+    rh_6_out = standardize(trial_average(region_results["Rh6"].full_averages.T)).T
+
+    motor_res_names = ["M_All", "M_Flick", "M_Swim", "M_StimOn", "M_NoStim"]
+    for i in range(motor_type_regs.shape[1]):
+        n = motor_res_names[i]
+        output = motor_type_regs[:, i]
+        lr = LinearRegression()
+        lr.fit(rh_6_out, output)
+        prediction = lr.predict(rh_6_out)
+        model_results[n] = ModelResult(rh_6_out, lr.coef_, None, None, None)
+        print("Type {0} coefficients: {1}".format(i, lr.coef_))
+        print("Type {0} R2: {1}".format(i, r2(prediction, output)))
+        # test contribution of Rh6 components alone
+        for j in range(rh_6_out.shape[1]):
+            lr = LinearRegression()
+            lr.fit(rh_6_out[:, j][:, None], output)
+            red_pred = lr.predict(rh_6_out[:, j][:, None])
+            print("Type {0} with rh6 component {1} R2: {2}".format(i, j, r2(red_pred, output)))
+
+    # predict swims
+    lr = LinearRegression()
+    lr.fit(motor_type_regs, swim_out)
+    prediction = lr.predict(motor_type_regs)
+    model_results["swim_out"] = ModelResult(motor_type_regs, lr.coef_, None, None, None)
+    print("Swim coefficients: {0}".format(lr.coef_))
+    print("Swim R2: {0}".format(r2(prediction, swim_out)))
+    for j in range(motor_type_regs.shape[1]):
+        lr = LinearRegression()
+        lr.fit(motor_type_regs[:, j][:, None], swim_out)
+        red_pred = lr.predict(motor_type_regs[:, j][:, None])
+        print("Swim with motor type component {0} R2: {1}".format(j, r2(red_pred, swim_out)))
+
+    # predict flicks
+    lr = LinearRegression()
+    lr.fit(motor_type_regs, flick_out)
+    prediction = lr.predict(motor_type_regs)
+    model_results["flick_out"] = ModelResult(motor_type_regs, lr.coef_, None, None, None)
+    print("Flick coefficients: {0}".format(lr.coef_))
+    print("Flick R2: {0}".format(r2(prediction, flick_out)))
+    for j in range(motor_type_regs.shape[1]):
+        lr = LinearRegression()
+        lr.fit(motor_type_regs[:, j][:, None], flick_out)
+        red_pred = lr.predict(motor_type_regs[:, j][:, None])
+        print("Flick with motor type component {0} R2: {1}".format(j, r2(red_pred, flick_out)))
+
+    # run model on data predicting from stimulus to motor output
+    def run_model(laser_stimulus):
+        tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
+        tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
+        tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
+        fast_on_prediction = model_results["Fast_ON"].predict(tg_out_prediction)
+        slow_on_prediction = model_results["Slow_ON"].predict(tg_out_prediction)
+        fast_off_prediction = model_results["Fast_OFF"].predict(tg_out_prediction)
+        slow_off_prediction = model_results["Slow_OFF"].predict(tg_out_prediction)
+        del_off_prediction = model_results["Delayed_OFF"].predict(tg_out_prediction)
+        rh6_out_prediction = np.hstack((fast_on_prediction[:, None], slow_on_prediction[:, None],
+                                        fast_off_prediction[:, None], slow_off_prediction[:, None],
+                                        del_off_prediction[:, None]))
+        m_all_p = model_results["M_All"].predict(rh6_out_prediction)
+        m_fl_p = model_results["M_Flick"].predict(rh6_out_prediction)
+        m_sw_p = model_results["M_Swim"].predict(rh6_out_prediction)
+        m_so_p = model_results["M_StimOn"].predict(rh6_out_prediction)
+        m_ns_p = model_results["M_NoStim"].predict(rh6_out_prediction)
+        motor_out_prediction = np.hstack((m_all_p[:, None], m_fl_p[:, None], m_sw_p[:, None], m_so_p[:, None],
+                                          m_ns_p[:, None]))
+        swim_prediction = model_results["swim_out"].predict(motor_out_prediction)
+        flick_prediction = model_results["flick_out"].predict(motor_out_prediction)
+        return swim_prediction, flick_prediction
+
+    swim_pred, flick_pred = run_model(stim_in)
+    trial_time = np.arange(stim_in.size) / 5.0
+    fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
+    ax_sw.plot(trial_time, standardize(swim_out), 'k', label="Swims")
+    ax_sw.plot(trial_time, standardize(swim_pred), "C0", label="Swim prediction")
+    ax_sw.set_xlabel("Time [s]")
+    ax_sw.set_ylabel("Motor output [AU]")
+    ax_sw.set_title("R2 = {0:.2}".format(np.corrcoef(swim_pred, swim_out)[0, 1]**2))
+    ax_sw.legend()
+    ax_flk.plot(trial_time, standardize(flick_out), 'k', label="Flicks")
+    ax_flk.plot(trial_time, standardize(flick_pred), "C1", label="Flick prediction")
+    ax_flk.set_xlabel("Time [s]")
+    ax_flk.set_title("R2 = {0:.2}".format(np.corrcoef(flick_pred, flick_out)[0, 1] ** 2))
+    ax_flk.legend()
+    sns.despine(fig)
+    fig.tight_layout()
+
+    # try to predict motor output during detail-char experiments
+    laser_currents = np.load("detailChar_TrialCurrents.npy")
+    lc = standardize(CaConvolve(laser_currents, 3, 5))
+    s, f = run_model(lc)
+    # use last trial prediction - since the average is the same
+    dt_swim_pred = s[-675:]
+    dt_flick_pred = f[-675:]
+    detChar_swims = np.load("detailChar_swims.npy")
+    detChar_flicks = np.load("detailChar_flicks.npy")
+    dt_trial_time = np.arange(dt_swim_pred.size) / 5.0
+    # we can only predict what happens during periods where there is no tap influence
+    no_tap_inf = np.logical_and(dt_trial_time > 10, dt_trial_time < 128)
+    fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
+    ax_sw.plot(dt_trial_time[no_tap_inf], standardize(detChar_swims[no_tap_inf]), 'k', label="Swims")
+    ax_sw.plot(dt_trial_time[no_tap_inf], standardize(dt_swim_pred[no_tap_inf]), "C0", label="Swim prediction")
+    ax_sw.set_xlabel("Time [s]")
+    ax_sw.set_ylabel("Motor output [AU]")
+    ax_sw.set_title("R2 = {0:.2}".format(np.corrcoef(detChar_swims[no_tap_inf], dt_swim_pred[no_tap_inf])[0, 1] ** 2))
+    ax_sw.legend()
+    ax_flk.plot(dt_trial_time[no_tap_inf], standardize(detChar_flicks[no_tap_inf]), 'k', label="Flicks")
+    ax_flk.plot(dt_trial_time[no_tap_inf], standardize(dt_flick_pred[no_tap_inf]), "C1", label="Flick prediction")
+    ax_flk.set_xlabel("Time [s]")
+    ax_flk.set_title("R2 = {0:.2}".format(np.corrcoef(detChar_flicks[no_tap_inf], dt_flick_pred[no_tap_inf])[0, 1] ** 2))
+    ax_flk.legend()
+    sns.despine(fig)
+    fig.tight_layout()
