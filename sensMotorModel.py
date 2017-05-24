@@ -11,7 +11,7 @@ from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts, h
 from sklearn.linear_model import LinearRegression
 from scipy.optimize import curve_fit, least_squares
 import matplotlib as mpl
-from analyzeSensMotor import RegionResults
+from analyzeSensMotor import RegionResults, trial_average
 import os
 
 
@@ -277,10 +277,10 @@ if __name__ == "__main__":
 
     # provisionally use the convolved laser stimulus as model input
     stim_in = exp_data[0].stimOn
-    stim_in = standardize(stim_in)
+    stim_in = standardize(trial_average(stim_in))
 
     # Laser input to trigeminal ON type
-    tg_on = region_results["Trigeminal"].full_averages[:, 0]
+    tg_on = trial_average(region_results["Trigeminal"].full_averages[:, 0])
     tg_on = standardize(tg_on)
     # 1) Linear regression
     lr = LinearRegression()
@@ -321,7 +321,8 @@ if __name__ == "__main__":
     print("R2 TG ON prediction = ", r2(tg_on_prediction[f_s:], tg_on[f_s:]))
 
     # Laser input to trigeminal OFF type
-    tg_off = region_results["Trigeminal"].full_averages[:, 1]
+    tg_off = trial_average(region_results["Trigeminal"].full_averages[:, 1])
+    tg_off = standardize(tg_off)
     # 1) Linear regression
     lr = LinearRegression()
     lr.fit(stim_in[:, None], tg_off)
@@ -361,25 +362,20 @@ if __name__ == "__main__":
     print("R2 TG OFF prediction = ", r2(tg_off_prediction[f_s:], tg_off[f_s:]))
 
     # fit of Rh6 units from trigeminal inputs
-    tg_out = np.hstack((standardize(tg_on_prediction[:, None]), standardize(tg_off_prediction[:, None])))
+    filter_length = 22
+    tg_out = np.hstack((tg_on[:, None], tg_off[:, None]))
     response_names = ["Fast_ON", "Slow_ON", "Fast_OFF", "Slow_OFF", "Delayed_OFF"]
     rh6_dict = {}
-    # ff = make_full_fit_fun(dexp_filter)
-    # p0, bounds = get_fit_initials("DEXP", tg_out.shape[1])
     fig, ax = pl.subplots()
-    filter_time = np.arange(11) / -5.0
+    filter_time = np.arange(filter_length) / -5.0
     for i in range(region_results["Rh6"].full_averages.shape[1]):
-        output = standardize(region_results["Rh6"].full_averages[:, i])
-        # lr, f_params = predict_response_w_filter(tg_out, output)
-        resid_fun, p0 = make_dexp_residual_function(tg_out, output, 11)
-        params = least_squares(resid_fun, p0).x
-        # params = curve_fit(ff, tg_out, output, p0=p0, bounds=bounds)[0]
-        # print("Type {0} coefficients: {1}".format(i, lr.coef_))
+        output = standardize(trial_average(region_results["Rh6"].full_averages[:, i]))
+        resid_fun, p0 = make_dexp_residual_function(tg_out, output, filter_length)
+        params = least_squares(resid_fun, p0/10).x
         print("Type {0} coefficients: {1}".format(i, params[-tg_out.shape[1]:]))
-        f = dexp_f(np.arange(11), *params[:-2])
+        f = dexp_f(np.arange(filter_length), *params[:-2])
         ax.plot(filter_time, f)
-        # filtered_out = bp_gauss_filter_fit_function(lr.predict(tg_out), *f_params)
-        # filtered_out = ff(tg_out, *params)
+        print("Type {0} filter sum: {1}".format(i, f.sum()))
         lr_sum = np.sum(tg_out * params[-tg_out.shape[1]:][None, :], 1)
         filtered_out = np.convolve(lr_sum, f)[:tg_on_prediction.size]
         nl_params = curve_fit(cubic_nonlin, filtered_out[f_s:], output[f_s:])[0]
