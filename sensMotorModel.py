@@ -23,28 +23,18 @@ class ModelResult:
     """
     Stores result of a modeling step
     """
-    def __init__(self, lr_inputs: np.ndarray, filter_type: str, fit_params, nonlin_type: str, nonlin_params):
+    def __init__(self, lr_inputs: np.ndarray, lr_factors, filter_coefs: np.ndarray, nonlin_type: str, nonlin_params):
         """
         Creates a new model result
         Args:
-            lr_inputs: The input activities to the model
-            filter_type: The type of the linear filter or None if not used
-            fit_params: The parameters (coefficients and filter) of the performed fit
+            lr_inputs: The original input activities to the model
+            lr_factors: The linear regression factors acting on the inputs
+            filter_coefs: The filter coefficients for convolution or None if no filtering
             nonlin_type: The type of the output nonlinearity or None if not used
             nonlin_params: The parameters of the output nonlinearity
         """
-        if filter_type is None:
-            self.filter_type = None
-        elif filter_type.upper() == "SINE":
-            self.filter_type = "SINE"
-        elif filter_type.upper() == "EXP":
-            self.filter_type = "EXP"
-        elif filter_type.upper() == "DEXP":
-            self.filter_type = "DEXP"
-        elif filter_type.upper() == "DELTA":
-            self.filter_type = "DELTA"
-        else:
-            raise ValueError("Did not recognize filter type. Should be 'SINE', 'EXP', 'GAUSS'")
+        if lr_inputs.shape[1] != lr_factors.size:
+            raise ValueError("The needs to be one lr_factor per lr_input!")
         if nonlin_type is None:
             self.nonlin_type = None
             self.nonlin_params = None
@@ -60,41 +50,34 @@ class ModelResult:
         else:
             raise ValueError("Did not recognize nonlin type. Should be 'CUBIC' or 'EXP'")
         self.predictors = lr_inputs
-        self.fit_params = fit_params
+        self.lr_factors = lr_factors
+        self.filter_coefs = filter_coefs
 
-    @property
-    def lr_coef(self):
-        return self.fit_params[:self.predictors.shape[1]]
-
-    @property
-    def filter_params(self):
-        return self.fit_params[self.predictors.shape[1]:]
-
-    @property
-    def filter_function(self):
-        if self.filter_type == "SINE":
-            return sin_filter
-        elif self.filter_type == "EXP":
-            return exp_filter
-        elif self.filter_type == "DEXP":
-            return dexp_filter
-        elif self.filter_type == "DELTA":
-            return delta_filter
-        else:
-            return None
-
-    def predict(self):
+    def predict_original(self):
         """
-        The predicts the output of this modeling step using the original inputs
+        Predicts the output of this modeling step using the original inputs
         Returns:
             The predicted timeseries
         """
-        if self.filter_type is None:
-            lr_res = np.dot(self.predictors, self.lr_coef)
+        return self.predict(self.predictors)
+
+    def predict(self, model_in):
+        """
+        Predicts the output of this modeling step given the input
+        Args:
+            model_in: n_samples x n_features input to the model
+
+        Returns:
+            The predicted timeseries
+        """
+        if self.lr_factors.size > 1:
+            lr_res = np.dot(model_in, self.lr_factors.T).ravel()
+        else:
+            lr_res = (model_in * self.lr_factors).ravel()
+        if self.filter_coefs is None:
             filt_res = lr_res
         else:
-            fit_function = make_full_fit_fun(self.filter_function)
-            filt_res = fit_function(self.predictors, *self.fit_params)
+            filt_res = np.convolve(lr_res, self.filter_coefs)[:lr_res.size]
         if self.nonlin_type is None:
             return filt_res
         else:
