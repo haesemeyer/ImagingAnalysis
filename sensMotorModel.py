@@ -452,7 +452,7 @@ if __name__ == "__main__":
                                           m_ns_p[:, None]))
         swim_prediction = model_results["swim_out"].predict(motor_out_prediction)
         flick_prediction = model_results["flick_out"].predict(motor_out_prediction)
-        return swim_prediction, flick_prediction
+        return swim_prediction, flick_prediction, rh6_out_prediction
 
     swim_pred, flick_pred = run_model(stim_in)
     trial_time = np.arange(stim_in.size) / 5.0
