@@ -18,6 +18,9 @@ def dff(ts):
     f0[f0 < 0.05] = 0.05
     return (ts-f0)/f0
 
+cut_pos = 2
+cut_neg = 0.75
+
 
 if __name__ == "__main__":
     sns.reset_orig()
@@ -151,8 +154,6 @@ if __name__ == "__main__":
     p_stp[np.isnan(p_stp)] = 1.5
     p_sin[np.isnan(p_sin)] = 1.5
     p_tap[np.isnan(p_tap)] = 1.5
-    cut_pos = 2
-    cut_neg = 0.75
     # mark units that show significant change in both periods
     sig_act = p_sin > cut_pos  # np.logical_and(p_stp > cut_pos, p_sin > cut_pos)
     stim_units = np.logical_and(sig_act, is_pot_stim)
