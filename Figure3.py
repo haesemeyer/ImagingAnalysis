@@ -147,16 +147,16 @@ if __name__ == "__main__":
         heat_pi[r] = [(phr - mr) / (phr + mr)]
         tap_pi[r] = [(ptr - mr) / (ptr + mr)]
 
-    pl.figure()
-    sns.barplot(data=pandas.DataFrame(tap_pi), order=plot_order)
-    pl.ylim(-1, 1)
-    pl.ylabel("Preference tap only")
-    sns.despine()
+    fig, ax = pl.subplots()
+    sns.barplot(data=pandas.DataFrame(tap_pi), order=plot_order, ax=ax)
+    ax.set_ylim(-1, 1)
+    ax.set_ylabel("Preference tap only")
+    sns.despine(fig, ax)
     fig.savefig(save_folder + "pi_tap.pdf", type="pdf")
 
-    pl.figure()
-    sns.barplot(data=pandas.DataFrame(heat_pi), order=plot_order)
-    pl.ylim(-1, 1)
-    pl.ylabel("Preference heat only")
-    sns.despine()
+    fig, ax = pl.subplots()
+    sns.barplot(data=pandas.DataFrame(heat_pi), order=plot_order, ax=ax)
+    ax.set_ylim(-1, 1)
+    ax.set_ylabel("Preference heat only")
+    sns.despine(fig, ax)
     fig.savefig(save_folder + "pi_heat.pdf", type="pdf")
