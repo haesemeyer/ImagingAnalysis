@@ -5,7 +5,7 @@ import seaborn as sns
 import h5py
 import pickle
 from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment
-from multiExpAnalysis import get_stack_types
+from multiExpAnalysis import get_stack_types, min_dist
 from typing import List
 import matplotlib as mpl
 from scipy.spatial import ConvexHull
@@ -287,3 +287,34 @@ if __name__ == "__main__":
     ax.set_ylabel("Fraction of OFF cells")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "PerRegion_OFF_Fraction.pdf", type="pdf")
+
+    # plot ON-ON and ON-OFF distances
+    mship_main = mship_nonan[stack_types == "MAIN"]
+    cents_main = tf_centroids[stack_types == "MAIN", :]
+    on = np.logical_and(mship_main > -1, mship_main < 4)
+    off = np.logical_and(mship_main > 3, mship_main < 6)
+    c_on = cents_main[on, :]
+    c_off = cents_main[off, :]
+    subs_c_on = c_on[np.random.choice(np.arange(c_on.shape[0]), c_off.shape[0], False), :]
+    d_on_on = min_dist(subs_c_on, subs_c_on, avgSmallest=2)
+    d_on_off = min_dist(subs_c_on, c_off, avgSmallest=2)
+    d_off_off = min_dist(c_off, c_off, avgSmallest=2)
+    d_off_on = min_dist(c_off, subs_c_on, avgSmallest=2)
+
+    fig, ax = pl.subplots()
+    sns.kdeplot(d_on_on, cut=0, ax=ax, color="C0")
+    sns.kdeplot(d_on_off, cut=0, ax=ax, color="C1")
+    ax.set_xlim(0, 30)
+    ax.set_xlabel("Distance [um]")
+    ax.set_ylabel("Density")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "ON-ON_ON-OFF_DistanceCompare.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    sns.kdeplot(d_off_off, cut=0, ax=ax, color="C0")
+    sns.kdeplot(d_off_on, cut=0, ax=ax, color="C1")
+    ax.set_xlim(0, 30)
+    ax.set_xlabel("Distance [um]")
+    ax.set_ylabel("Density")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "OFF-OFF_OFF-ON_DistanceCompare.pdf", type="pdf")
