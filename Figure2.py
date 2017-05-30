@@ -2,7 +2,6 @@
 import numpy as np
 import matplotlib.pyplot as pl
 import seaborn as sns
-import matplotlib as mpl
 import h5py
 import pickle
 from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment
