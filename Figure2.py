@@ -161,16 +161,16 @@ if __name__ == "__main__":
     in_tleft = all_rl == "TG_L"
     hull = ConvexHull(tf_centroids[in_tleft, :2])
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "TG_LEFT"]
-    ix_bground = np.random.choice(ix_bground, ix_bground.size // 2, False)
+    ix_bground = np.random.choice(ix_bground, ix_bground.size // 3, False)
     tleft_cells = np.logical_and(tf_centroids[:, 2] >= np.min(tf_centroids[all_rl == "TG_L", 2]),
                                  tf_centroids[:, 2] <= np.max(tf_centroids[all_rl == "TG_L", 2]))
     tleft_cells = np.logical_and(tleft_cells, stack_types == "TG_LEFT")
     ax.scatter(tf_centroids[ix_bground, 0], tf_centroids[ix_bground, 1], s=1, alpha=0.2, c='k', label="")
     ax.scatter(tf_centroids[np.logical_and(stack_types == "TG_LEFT", on_cells), 0],
-               tf_centroids[np.logical_and(stack_types == "TG_LEFT", on_cells), 1], s=3, alpha=0.3, c='m',
+               tf_centroids[np.logical_and(stack_types == "TG_LEFT", on_cells), 1], s=4, alpha=0.3, c='m',
                label="ON cells")
     ax.scatter(tf_centroids[np.logical_and(stack_types == "TG_LEFT", off_cells), 0],
-               tf_centroids[np.logical_and(stack_types == "TG_LEFT", off_cells), 1], s=3, alpha=0.3, c="g",
+               tf_centroids[np.logical_and(stack_types == "TG_LEFT", off_cells), 1], s=4, alpha=0.3, c="g",
                label="OFF cells")
     for simplex in hull.simplices:
         ax.plot(tf_centroids[in_tleft, :][simplex, 0], tf_centroids[in_tleft, :][simplex, 1], 'C0')
@@ -183,16 +183,16 @@ if __name__ == "__main__":
     in_tright = all_rl == "TG_R"
     hull = ConvexHull(tf_centroids[in_tright, :2])
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "TG_RIGHT"]
-    ix_bground = np.random.choice(ix_bground, ix_bground.size // 2, False)
+    ix_bground = np.random.choice(ix_bground, ix_bground.size // 3, False)
     tright_cells = np.logical_and(tf_centroids[:, 2] >= np.min(tf_centroids[all_rl == "TG_R", 2]),
                                   tf_centroids[:, 2] <= np.max(tf_centroids[all_rl == "TG_R", 2]))
     tright_cells = np.logical_and(tright_cells, stack_types == "TG_RIGHT")
     ax.scatter(tf_centroids[ix_bground, 0], tf_centroids[ix_bground, 1], s=1, alpha=0.2, c='k', label="")
     ax.scatter(tf_centroids[np.logical_and(tright_cells, on_cells), 0],
-               tf_centroids[np.logical_and(tright_cells, on_cells), 1], s=3, alpha=0.3, c='m',
+               tf_centroids[np.logical_and(tright_cells, on_cells), 1], s=4, alpha=0.3, c='m',
                label="ON cells")
     ax.scatter(tf_centroids[np.logical_and(tright_cells, off_cells), 0],
-               tf_centroids[np.logical_and(tright_cells, off_cells), 1], s=3, alpha=0.3, c="g",
+               tf_centroids[np.logical_and(tright_cells, off_cells), 1], s=4, alpha=0.3, c="g",
                label="OFF cells")
     for simplex in hull.simplices:
         ax.plot(tf_centroids[in_tright, :][simplex, 0], tf_centroids[in_tright, :][simplex, 1], 'C0')
