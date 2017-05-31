@@ -260,9 +260,12 @@ if __name__ == "__main__":
     # will be scaled to unit variance and mean-subtracted
     f_s = 300
 
-    # provisionally use the convolved laser stimulus as model input
-    stim_in = exp_data[0].stimOn
-    stim_in = standardize(trial_average(stim_in))
+    # load temperature
+    stim_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/stimFile.hdf5', 'r')
+    t_at_samp = np.array(stim_file["sine_L_H_temp"])
+    t_at_samp = trial_average(np.add.reduceat(t_at_samp, np.arange(0, t_at_samp.size, 20 // 5))).ravel() / (20 // 5)
+    stim_file.close()
+    stim_in = standardize(t_at_samp)
 
     # Laser input to trigeminal ON type
     tg_on = trial_average(region_results["Trigeminal"].full_averages[:, 0])
@@ -472,9 +475,13 @@ if __name__ == "__main__":
     fig.tight_layout()
 
     # try to predict motor output during detail-char experiments
-    laser_currents = np.load("detailChar_TrialCurrents.npy")
-    lc = standardize(CaConvolve(laser_currents, 3, 5))
-    s, f = run_model(lc)
+    stim_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/stimFile.hdf5', 'r')
+    dt_t_at_samp = np.array(stim_file["detail_char_temp"])
+    dt_t_at_samp = trial_average(np.add.reduceat(dt_t_at_samp,
+                                                 np.arange(0, dt_t_at_samp.size, 20 // 5)), 10).ravel() / (20 // 5)
+    stim_file.close()
+    lc = standardize(dt_t_at_samp)
+    s, f, dt_rh6 = run_model(lc)
     # use last trial prediction - since the average is the same
     dt_swim_pred = s[-675:]
     dt_flick_pred = f[-675:]
