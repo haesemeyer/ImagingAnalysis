@@ -4,8 +4,8 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 import h5py
 import pickle
-from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment
-from multiExpAnalysis import get_stack_types
+from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment, MotorContainer
+from multiExpAnalysis import get_stack_types, dff
 from typing import List
 import matplotlib as mpl
 from scipy.spatial import ConvexHull
@@ -112,6 +112,7 @@ if __name__ == "__main__":
     sourceFiles = [(g[0], e.original_time_per_frame) for e in exp_data for g in e.graph_info]
     sourceFiles = [sf for i, sf in enumerate(sourceFiles) if no_nan_aa[i]]
     tf_centroids = np.array(dfile['tf_centroids'])[no_nan_aa, :]
+    all_activity = np.array(dfile["all_activity"])
     dfile.close()
     # load segmentation files
     segFile = h5py.File("E:/Dropbox/2P_FuncStack_Annotation/fullStack_segmentation.hdf5")
@@ -138,16 +139,15 @@ if __name__ == "__main__":
     # plot motor clustering
     labels = ["All motor", "Flicks", "Right flicks", "Left flicks", "Swims", "Stim only", "No stim"]
     motor_corrs_sig = motor_corrs[motor_cells, :].copy()
+    plot_corrs = []
+    for c in np.unique(cluster_labels[motor_cells]):
+        plot_corrs.append(motor_corrs_sig[cluster_labels[motor_cells] == c, :])
+        # append "spacer" - NOTE: This means that y-axis becomes meaningless
+        plot_corrs.append(np.full((250, motor_corrs_sig.shape[1]), np.nan))
     fig, ax = pl.subplots()
-    sns.heatmap(motor_corrs_sig[np.argsort(cluster_labels[motor_cells]), :], vmin=0, vmax=1, yticklabels=2500,
-                xticklabels=labels, cmap="viridis", rasterized=True)
-    # plot cluster boundaries
-    covered = 0
-    for i in range(motor_corrs_sig.shape[1]):
-        covered += np.sum(cluster_labels[motor_cells] == i)
-        ax.plot([0, motor_corrs_sig.shape[1] + 1], [cluster_labels[motor_cells].size-covered,
-                                                    cluster_labels[motor_cells].size-covered], 'k')
-    fig.savefig(save_folder + "Motor_correlations.pdf", type="pdf")
+    sns.heatmap(np.vstack(plot_corrs), vmin=0, vmax=1, yticklabels=False,
+                xticklabels=labels, cmap="inferno", rasterized=True)
+    fig.savefig(save_folder + "Motor_correlations.pdf", type="pdf", dpi=150)
 
     # plot whole-brain overview of motor related cells
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "MAIN"]
@@ -251,3 +251,50 @@ if __name__ == "__main__":
     ax.set_ylabel("Fraction of motor related cells")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "PerRegion_Motor_Fraction.pdf", type="pdf")
+
+    # plot example from stim-noStim-allMotor category
+    tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
+    itime = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
+    mc_all = MotorContainer(sourceFiles, itime, 3, hdf5_store=tailstore)
+    ix_stim_only = 45064
+    ix_no_stim = 45179
+    ix_all = 45072
+
+    deltaFF = dff(all_activity)
+
+    fig, ax = pl.subplots()
+    rep_time = np.arange(all_activity.shape[1]) / 5.0
+    ax.plot(rep_time, mc_all[ix_stim_only], 'k')
+    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Convolved bouts")
+    ax.set_xlim(0, rep_time.max())
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Example_motor.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    ax.plot(rep_time, deltaFF[ix_stim_only, :], 'C3')
+    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("dF/F")
+    ax.set_xlim(0, rep_time.max())
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Example_stim_only.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    ax.plot(rep_time, deltaFF[ix_no_stim, :], 'C0')
+    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("dF/F")
+    ax.set_xlim(0, rep_time.max())
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Example_no_stim.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    ax.plot(rep_time, deltaFF[ix_all, :], 'C2')
+    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("dF/F")
+    ax.set_xlim(0, rep_time.max())
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Example_all_motor.pdf", type="pdf")
