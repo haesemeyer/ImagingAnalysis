@@ -294,6 +294,7 @@ if __name__ == "__main__":
     t_at_samp = np.array(stim_file["sine_L_H_temp"])
     t_at_samp = trial_average(np.add.reduceat(t_at_samp, np.arange(0, t_at_samp.size, 20 // 5))).ravel() / (20 // 5)
     stim_file.close()
+    m_in, s_in = np.mean(t_at_samp), np.std(t_at_samp)  # store for later use
     stim_in = standardize(t_at_samp)
 
     # Laser input to trigeminal ON type
@@ -509,7 +510,8 @@ if __name__ == "__main__":
     dt_t_at_samp = trial_average(np.add.reduceat(dt_t_at_samp,
                                                  np.arange(0, dt_t_at_samp.size, 20 // 5)), 10).ravel() / (20 // 5)
     stim_file.close()
-    lc = standardize(dt_t_at_samp)
+    # use the same subtraction/division as used for the temperature stimulus above *not* this mean and std!
+    lc = (dt_t_at_samp - m_in) / s_in
     s, f, dt_rh6 = run_model(lc)
     # use last trial prediction - since the average is the same
     dt_swim_pred = s[-675:]
