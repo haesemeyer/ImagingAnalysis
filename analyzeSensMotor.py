@@ -351,7 +351,7 @@ def jknife_entropy(data, nbins=10):
         The jacknife estimate of the entropy
     """
     hist = np.histogramdd(data, nbins)[0].ravel()
-    ent_full = entropy(hist)
+    ent_full = entropy(hist, base=2)
     # jacknife
     jk_sum = 0
     jk_n = 0
@@ -360,7 +360,7 @@ def jknife_entropy(data, nbins=10):
             jk_hist = hist.copy()
             jk_hist[i] -= 1
             # for each element in this bin we get exactly one jack-nife estimate
-            jk_sum = jk_sum + hist[i] * entropy(jk_hist)
+            jk_sum = jk_sum + hist[i] * entropy(jk_hist, base=2)
             jk_n += hist[i]
     return hist.sum() * ent_full - (hist.sum() - 1)*jk_sum/jk_n
 
