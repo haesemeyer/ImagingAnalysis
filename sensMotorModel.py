@@ -454,7 +454,7 @@ if __name__ == "__main__":
         flick_prediction = model_results["flick_out"].predict(motor_out_prediction)
         return swim_prediction, flick_prediction, rh6_out_prediction
 
-    swim_pred, flick_pred = run_model(stim_in)
+    swim_pred, flick_pred = run_model(stim_in)[:2]
     trial_time = np.arange(stim_in.size) / 5.0
     fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
     ax_sw.plot(trial_time, standardize(swim_out), 'k', label="Swims")
