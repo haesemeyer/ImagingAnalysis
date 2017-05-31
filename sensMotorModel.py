@@ -114,6 +114,35 @@ def exp_filter_fit_function(x, f_scale, f_decay):
     return np.convolve(x, f)[:x.size]
 
 
+def on_off_filter(tau_on, tau_off):
+    """
+    Creates a double-exponential ris-decay filter
+    Args:
+        tau_on: The time-constant of the on-component
+        tau_off: The time-constant of the off-component
+
+    Returns:
+        The linear filter
+    """
+    frames = np.arange(default_exp_filter_length)
+    return np.exp(-frames / tau_off) * (1 - np.exp(-frames / tau_on))
+
+
+def on_off_filter_fit_function(x, tau_on, tau_off):
+    """
+    Function to fit an on-off filter
+    Args:
+        x: The input data
+        tau_on: The time-constant of the on-component
+        tau_off: The time-constant of the off-component
+
+    Returns:
+        The filtered signal
+    """
+    f = on_off_filter(tau_on, tau_off)
+    return np.convolve(x, f)[:x.size]
+
+
 def cubic_nonlin(x, a, b, c, d):
     """
     Parametrization of a cubic nonlinearity applied to x
@@ -276,8 +305,8 @@ if __name__ == "__main__":
     print("ON coefficients = ", lr.coef_)
     reg_out = lr.predict(stim_in[:, None])
     # 2) Fit linear filter - since most of this will be governed by Laser -> Temperature use exponential filter
-    scale, decay = curve_fit(exp_filter_fit_function, reg_out, tg_on)[0]
-    filtered_out = exp_filter_fit_function(reg_out, scale, decay)
+    t_on, t_off = curve_fit(on_off_filter_fit_function, reg_out, tg_on)[0]
+    filtered_out = on_off_filter_fit_function(reg_out, t_on, t_off)
     # 3) Fit cubic output nonlinearity
     a, b, c, d = curve_fit(cubic_nonlin, filtered_out[f_s:], tg_on[f_s:])[0]
     tg_on_prediction = cubic_nonlin(filtered_out, a, b, c, d)
@@ -291,7 +320,7 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     # plot linear input filter
     fig, ax = pl.subplots()
-    ax.plot(np.arange(-99, 1) / 5, exp_filter(scale, decay)[::-1], 'k')
+    ax.plot(np.arange(-99, 1) / 5, on_off_filter(t_on, t_off)[::-1], 'k')
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("f(t)")
     ax.set_ylim(0)
@@ -307,7 +336,7 @@ if __name__ == "__main__":
     ax.set_title("Output nonlinearity, Trigeminal ON")
     sns.despine(fig, ax)
     print("R2 TG ON prediction = ", r2(tg_on_prediction[f_s:], tg_on[f_s:]))
-    model_results["TG_ON"] = ModelResult(stim_in[:, None], lr.coef_, exp_filter(scale, decay), "CUBIC", (a, b, c, d))
+    model_results["TG_ON"] = ModelResult(stim_in[:, None], lr.coef_, on_off_filter(t_on, t_off), "CUBIC", (a, b, c, d))
 
     # Laser input to trigeminal OFF type
     tg_off = trial_average(region_results["Trigeminal"].full_averages[:, 1])
@@ -318,11 +347,11 @@ if __name__ == "__main__":
     print("OFF coefficients = ", lr.coef_)
     reg_out = lr.predict(stim_in[:, None])
     # 2) Fit linear filter - since most of this will be governed by Laser -> Temperature use exponential filter
-    scale, decay = curve_fit(exp_filter_fit_function, reg_out, tg_off)[0]
-    filtered_out = exp_filter_fit_function(reg_out, scale, decay)
+    t_on, t_off = curve_fit(on_off_filter_fit_function, reg_out, tg_off)[0]
+    filtered_out = on_off_filter_fit_function(reg_out, t_on, t_off)
     # 3) Fit exponential output nonlinearity
-    o, r, s = curve_fit(exp_nonlin, filtered_out[f_s:], tg_off[f_s:])[0]
-    tg_off_prediction = exp_nonlin(filtered_out, o, r, s)
+    a, b, c, d = curve_fit(cubic_nonlin, filtered_out[f_s:], tg_off[f_s:])[0]
+    tg_off_prediction = cubic_nonlin(filtered_out, a, b, c, d)
     # plot successive fits
     fig, ax = pl.subplots()
     ax.plot(stim_in, lw=0.5)
@@ -333,7 +362,7 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     # plot linear input filter
     fig, ax = pl.subplots()
-    ax.plot(np.arange(-99, 1) / 5, exp_filter(scale, decay)[::-1], 'k')
+    ax.plot(np.arange(-99, 1) / 5, on_off_filter(t_on, t_off)[::-1], 'k')
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("f(t)")
     ax.set_ylim(0)
@@ -343,13 +372,13 @@ if __name__ == "__main__":
     fig, ax = pl.subplots()
     input_range = np.linspace(filtered_out.min(), filtered_out.max())
     ax.scatter(filtered_out[f_s:], tg_off[f_s:], alpha=0.2, s=1, color='C0')
-    ax.plot(input_range, exp_nonlin(input_range, o, r, s), 'k')
+    ax.plot(input_range, cubic_nonlin(input_range, a, b, c, d), 'k')
     ax.set_xlabel("f(Temperature)")
     ax.set_ylabel("g[f(Temperature)]")
     ax.set_title("Output nonlinearity, Trigeminal OFF")
     sns.despine(fig, ax)
     print("R2 TG OFF prediction = ", r2(tg_off_prediction[f_s:], tg_off[f_s:]))
-    model_results["TG_OFF"] = ModelResult(stim_in[:, None], lr.coef_, exp_filter(scale, decay), "EXP", (o, r, s))
+    model_results["TG_OFF"] = ModelResult(stim_in[:, None], lr.coef_, on_off_filter(t_on, t_off), "CUBIC", (a, b, c, d))
 
     # fit of Rh6 units from trigeminal inputs
     filter_length = 22
