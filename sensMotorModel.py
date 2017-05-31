@@ -504,3 +504,30 @@ if __name__ == "__main__":
     ax_flk.legend()
     sns.despine(fig)
     fig.tight_layout()
+
+    # use predicted rh6 activity in detail char experiments to cluster Rh6 data from those experiments into our types
+    dfile = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/detailChar_data.hdf5", "r")
+    dt_act = np.array(dfile["all_activity"])
+    dt_regions = pickle.loads(np.array(dfile["all_rl_pickle"]))
+    dfile.close()
+    rh6_act = dt_act[(dt_regions == "Rh_6").ravel(), :]
+    # create trial averages of rh6 activity
+    ta_rh6_act = np.mean(rh6_act.reshape((rh6_act.shape[0], 25, rh6_act.shape[1] // 25)), 1)
+    # create correlation matrix for correlations of real activity to predicted rh6 activity as regressors
+    pred_reg_corr_mat = np.zeros((ta_rh6_act.shape[0], dt_rh6.shape[1]))
+    for i in range(dt_rh6.shape[1]):
+        reg = dt_rh6[-675:, i]
+        for j, a in enumerate(ta_rh6_act):
+            pred_reg_corr_mat[j, i] = np.corrcoef(a, reg)[0, 1]
+    dt_sig_corrs = pred_reg_corr_mat[np.sum(pred_reg_corr_mat >= 0.6, 1) > 0, :]
+    activity_sig_corrs = ta_rh6_act[np.sum(pred_reg_corr_mat >= 0.6, 1) > 0, :]
+    mclust = max_cluster(np.argmax(dt_sig_corrs, 1))
+    fig, ax = pl.subplots()
+    sns.heatmap(dt_sig_corrs[np.argsort(mclust.labels_), :], yticklabels=50,
+                xticklabels=["Fast ON", "Slow ON", "Fast OFF", "Slow OFF", "Dld. OFF"], ax=ax)
+    # plot cluster boundaries
+    covered = 0
+    for i in range(pred_reg_corr_mat.shape[1]):
+        covered += np.sum(mclust.labels_ == i)
+        ax.plot([0, dt_sig_corrs.shape[1] + 1], [mclust.labels_.size - covered, mclust.labels_.size - covered], 'k')
+    ax.set_ylabel("Cells")
