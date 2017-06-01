@@ -71,6 +71,7 @@ if __name__ == "__main__":
             sns.tsplot(data=data, time=rep_time, color=cname, ax=ax)
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("dF/F")
+        ax.set_xticks([0, 30, 60, 90, 120, 150])
         sns.despine(fig, ax)
         fig.savefig(save_folder+"regressors_"+dl+".pdf", type="pdf")
 
