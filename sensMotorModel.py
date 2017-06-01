@@ -237,6 +237,41 @@ def make_dexp_residual_function(inputs: np.ndarray, output: np.ndarray, f_len):
     return residuals, p0
 
 
+def run_model(laser_stimulus, model_results):
+    """
+    Run model on stimulus predicting from input to motor output
+    Args:
+        laser_stimulus: The stimulus temperature, standardized
+        model_results: Dictionary of model fits
+
+    Returns:
+        [0]: Swim prediction (conv. with Ca kernel by model)
+        [1]: Flick prediction (conv. with Ca kernel by model)
+        [2]: Prediction of activity in Rh6
+    """
+    tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
+    tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
+    tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
+    fast_on_prediction = model_results["Fast_ON"].predict(tg_out_prediction)
+    slow_on_prediction = model_results["Slow_ON"].predict(tg_out_prediction)
+    fast_off_prediction = model_results["Fast_OFF"].predict(tg_out_prediction)
+    slow_off_prediction = model_results["Slow_OFF"].predict(tg_out_prediction)
+    del_off_prediction = model_results["Delayed_OFF"].predict(tg_out_prediction)
+    rh6_out_prediction = np.hstack((fast_on_prediction[:, None], slow_on_prediction[:, None],
+                                    fast_off_prediction[:, None], slow_off_prediction[:, None],
+                                    del_off_prediction[:, None]))
+    m_all_p = model_results["M_All"].predict(rh6_out_prediction)
+    m_fl_p = model_results["M_Flick"].predict(rh6_out_prediction)
+    m_sw_p = model_results["M_Swim"].predict(rh6_out_prediction)
+    m_so_p = model_results["M_StimOn"].predict(rh6_out_prediction)
+    m_ns_p = model_results["M_NoStim"].predict(rh6_out_prediction)
+    motor_out_prediction = np.hstack((m_all_p[:, None], m_fl_p[:, None], m_sw_p[:, None], m_so_p[:, None],
+                                      m_ns_p[:, None]))
+    swim_prediction = model_results["swim_out"].predict(motor_out_prediction)
+    flick_prediction = model_results["flick_out"].predict(motor_out_prediction)
+    return swim_prediction, flick_prediction, rh6_out_prediction
+
+
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
@@ -463,31 +498,7 @@ if __name__ == "__main__":
         red_pred = lr.predict(motor_type_regs[:, j][:, None])
         print("Flick with motor type component {0} R2: {1}".format(j, r2(red_pred, flick_out)))
 
-    # run model on data predicting from stimulus to motor output
-    def run_model(laser_stimulus):
-        tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
-        tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
-        tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
-        fast_on_prediction = model_results["Fast_ON"].predict(tg_out_prediction)
-        slow_on_prediction = model_results["Slow_ON"].predict(tg_out_prediction)
-        fast_off_prediction = model_results["Fast_OFF"].predict(tg_out_prediction)
-        slow_off_prediction = model_results["Slow_OFF"].predict(tg_out_prediction)
-        del_off_prediction = model_results["Delayed_OFF"].predict(tg_out_prediction)
-        rh6_out_prediction = np.hstack((fast_on_prediction[:, None], slow_on_prediction[:, None],
-                                        fast_off_prediction[:, None], slow_off_prediction[:, None],
-                                        del_off_prediction[:, None]))
-        m_all_p = model_results["M_All"].predict(rh6_out_prediction)
-        m_fl_p = model_results["M_Flick"].predict(rh6_out_prediction)
-        m_sw_p = model_results["M_Swim"].predict(rh6_out_prediction)
-        m_so_p = model_results["M_StimOn"].predict(rh6_out_prediction)
-        m_ns_p = model_results["M_NoStim"].predict(rh6_out_prediction)
-        motor_out_prediction = np.hstack((m_all_p[:, None], m_fl_p[:, None], m_sw_p[:, None], m_so_p[:, None],
-                                          m_ns_p[:, None]))
-        swim_prediction = model_results["swim_out"].predict(motor_out_prediction)
-        flick_prediction = model_results["flick_out"].predict(motor_out_prediction)
-        return swim_prediction, flick_prediction, rh6_out_prediction
-
-    swim_pred, flick_pred = run_model(stim_in)[:2]
+    swim_pred, flick_pred = run_model(stim_in, model_results)[:2]
     trial_time = np.arange(stim_in.size) / 5.0
     fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
     ax_sw.plot(trial_time, standardize(swim_out), 'k', label="Swims")
@@ -512,7 +523,7 @@ if __name__ == "__main__":
     stim_file.close()
     # use the same subtraction/division as used for the temperature stimulus above *not* this mean and std!
     lc = (dt_t_at_samp - m_in) / s_in
-    s, f, dt_rh6 = run_model(lc)
+    s, f, dt_rh6 = run_model(lc, model_results)
     # use last trial prediction - since the average is the same
     dt_swim_pred = s[-675:]
     dt_flick_pred = f[-675:]
