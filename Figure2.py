@@ -318,3 +318,31 @@ if __name__ == "__main__":
     ax.set_ylabel("Density")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "OFF-OFF_OFF-ON_DistanceCompare.pdf", type="pdf")
+
+    # plot stim-stim vs. stim non-stim distances
+    stim_act = np.logical_and(mship_main > -1, mship_main < 6)
+    not_stim = mship_main == -1
+    c_s_a = cents_main[stim_act, :]
+    c_n_s = cents_main[not_stim, :]
+    subs_c_n_s = c_n_s[np.random.choice(np.arange(c_n_s.shape[0]), c_s_a.shape[0], False), :]
+    d_s_s = min_dist(c_s_a, c_s_a, avgSmallest=2)
+    d_s_ns = min_dist(c_s_a, subs_c_n_s, avgSmallest=2)
+    d_ns_ns = min_dist(subs_c_n_s, subs_c_n_s, avgSmallest=2)
+    d_ns_s = min_dist(subs_c_n_s, c_s_a, avgSmallest=2)
+
+    fig, ax = pl.subplots()
+    sns.kdeplot(d_s_s, cut=0, ax=ax, color="C0")
+    sns.kdeplot(d_s_ns, cut=0, ax=ax, color="C1")
+    ax.set_xlim(0, 30)
+    ax.set_xlabel("Distance [um]")
+    ax.set_ylabel("Density")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "stim-stim_stim-nostim_DistanceCompare.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    sns.kdeplot(d_ns_ns, cut=0, ax=ax, color="C0")
+    sns.kdeplot(d_ns_s, cut=0, ax=ax, color="C1")
+    ax.set_xlim(0, 30)
+    ax.set_xlabel("Distance [um]")
+    ax.set_ylabel("Density")
+    sns.despine(fig, ax)
