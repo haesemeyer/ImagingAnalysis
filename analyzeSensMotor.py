@@ -141,11 +141,11 @@ def motor_activity_boost(mc, region_labels, cluster_ids, fstd=0.5):
     return act_boost
 
 
-def trial_average(ts):
+def trial_average(ts, ntrials=3):
     if ts.ndim == 1:
-        return np.mean(ts.reshape((3, ts.size//3)), 0)
+        return np.mean(ts.reshape((ntrials, ts.size//ntrials)), 0)
     elif ts.ndim == 2:
-        return np.mean(ts.reshape((ts.shape[0], 3, ts.shape[1]//3)), 1)
+        return np.mean(ts.reshape((ts.shape[0], ntrials, ts.shape[1]//ntrials)), 1)
 
 
 def build_region_clusters(region_labels, n_regs=6, plot=True, corr_cut_off=0.9, plTitle=""):
