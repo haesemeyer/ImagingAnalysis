@@ -317,13 +317,6 @@ if __name__ == "__main__":
 
     model_results = {}
 
-    # NOTE: We are unable to explain difference in some OFF responses in very beginning vs. inter-stimulus periods.
-    # Therefore all r2 will be calculated *ignoring* the period before the first stim-on (first 300 frames) and fits
-    # of nonlinearities will also ignore these frames.
-    # Also to make coefficients more comparable all model inputs and desired outputs
-    # will be scaled to unit variance and mean-subtracted
-    f_s = 300
-
     # load temperature
     stim_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/stimFile.hdf5', 'r')
     t_at_samp = np.array(stim_file["sine_L_H_temp"])
@@ -344,7 +337,7 @@ if __name__ == "__main__":
     t_on, t_off = curve_fit(on_off_filter_fit_function, reg_out, tg_on)[0]
     filtered_out = on_off_filter_fit_function(reg_out, t_on, t_off)
     # 3) Fit cubic output nonlinearity
-    a, b, c, d = curve_fit(cubic_nonlin, filtered_out[f_s:], tg_on[f_s:])[0]
+    a, b, c, d = curve_fit(cubic_nonlin, filtered_out, tg_on)[0]
     tg_on_prediction = cubic_nonlin(filtered_out, a, b, c, d)
     # plot fit
     fig, ax = pl.subplots()
@@ -365,13 +358,13 @@ if __name__ == "__main__":
     # plot output nonlinearity
     fig, ax = pl.subplots()
     input_range = np.linspace(filtered_out.min(), filtered_out.max())
-    ax.scatter(filtered_out[f_s:], tg_on[f_s:], alpha=0.2, s=1, color='C0')
+    ax.scatter(filtered_out, tg_on, alpha=0.2, s=1, color='C0')
     ax.plot(input_range, cubic_nonlin(input_range, a, b, c, d), 'k')
     ax.set_xlabel("f(Temperature)")
     ax.set_ylabel("g[f(Temperature)]")
     ax.set_title("Output nonlinearity, Trigeminal ON")
     sns.despine(fig, ax)
-    print("R2 TG ON prediction = ", r2(tg_on_prediction[f_s:], tg_on[f_s:]))
+    print("R2 TG ON prediction = ", r2(tg_on_prediction, tg_on))
     model_results["TG_ON"] = ModelResult(stim_in[:, None], lr.coef_, on_off_filter(t_on, t_off), "CUBIC", (a, b, c, d))
 
     # Laser input to trigeminal OFF type
@@ -386,7 +379,7 @@ if __name__ == "__main__":
     t_on, t_off = curve_fit(on_off_filter_fit_function, reg_out, tg_off)[0]
     filtered_out = on_off_filter_fit_function(reg_out, t_on, t_off)
     # 3) Fit exponential output nonlinearity
-    a, b, c, d = curve_fit(cubic_nonlin, filtered_out[f_s:], tg_off[f_s:])[0]
+    a, b, c, d = curve_fit(cubic_nonlin, filtered_out, tg_off)[0]
     tg_off_prediction = cubic_nonlin(filtered_out, a, b, c, d)
     # plot successive fits
     fig, ax = pl.subplots()
@@ -407,13 +400,13 @@ if __name__ == "__main__":
     # plot output nonlinearity
     fig, ax = pl.subplots()
     input_range = np.linspace(filtered_out.min(), filtered_out.max())
-    ax.scatter(filtered_out[f_s:], tg_off[f_s:], alpha=0.2, s=1, color='C0')
+    ax.scatter(filtered_out, tg_off, alpha=0.2, s=1, color='C0')
     ax.plot(input_range, cubic_nonlin(input_range, a, b, c, d), 'k')
     ax.set_xlabel("f(Temperature)")
     ax.set_ylabel("g[f(Temperature)]")
     ax.set_title("Output nonlinearity, Trigeminal OFF")
     sns.despine(fig, ax)
-    print("R2 TG OFF prediction = ", r2(tg_off_prediction[f_s:], tg_off[f_s:]))
+    print("R2 TG OFF prediction = ", r2(tg_off_prediction, tg_off))
     model_results["TG_OFF"] = ModelResult(stim_in[:, None], lr.coef_, on_off_filter(t_on, t_off), "CUBIC", (a, b, c, d))
 
     # fit of Rh6 units from trigeminal inputs
@@ -429,13 +422,11 @@ if __name__ == "__main__":
         print("Type {0} coefficients: {1}".format(i, params[-tg_out.shape[1]:]))
         f = dexp_f(np.arange(filter_length), *params[:-2])
         ax.plot(filter_time, f)
-        print("Type {0} filter sum: {1}".format(i, f.sum()))
         lr_sum = np.sum(tg_out * params[-tg_out.shape[1]:][None, :], 1)
         filtered_out = np.convolve(lr_sum, f)[:tg_on_prediction.size]
-        nl_params = curve_fit(cubic_nonlin, filtered_out[f_s:], output[f_s:])[0]
+        nl_params = curve_fit(cubic_nonlin, filtered_out, output)[0]
         prediction = cubic_nonlin(filtered_out, *nl_params)
-        print("Type {0} R2: {1}".format(i, r2(prediction[f_s:], output[f_s:])))
-        print("Type {0} FVU: {1}".format(i, fvu(prediction[f_s:], output[f_s:])))
+        print("Type {0} R2: {1}".format(i, r2(prediction, output)))
         n = response_names[i]
         model_results[n] = ModelResult(tg_out, params[-tg_out.shape[1]:], f, "CUBIC", nl_params)
         # test contribution of tg components
@@ -443,9 +434,9 @@ if __name__ == "__main__":
             comp = tg_out[:, j]
             lrs = comp * params[-tg_out.shape[1]:][j]
             fout = np.convolve(lrs, f)[:tg_off_prediction.size]
-            nlp = curve_fit(cubic_nonlin, fout[f_s:], output[f_s:])[0]
+            nlp = curve_fit(cubic_nonlin, fout, output)[0]
             red_pred = cubic_nonlin(fout, *nlp)
-            print("Type {0} with tg component {1} R2: {2}".format(i, j, r2(red_pred[f_s:], output[f_s:])))
+            print("Type {0} with tg component {1} R2: {2}".format(i, j, r2(red_pred, output)))
 
     # fit of motor type rates from Rh6 cells - since we do not fit activity traces but rates do not fit filters
     motor_store = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/motor_system.hdf5", "r")
