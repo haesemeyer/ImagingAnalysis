@@ -4,12 +4,18 @@ import matplotlib.pyplot as pl
 import seaborn as sns
 import h5py
 import pickle
-from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment, MotorContainer
+from mh_2P import RegionContainer, assign_region_label, SLHRepeatExperiment, MotorContainer, IndexingMatrix
 from multiExpAnalysis import get_stack_types, dff
 from typing import List
 import matplotlib as mpl
 from scipy.spatial import ConvexHull
 import pandas
+import sys
+from analyzeSensMotor import RegionResults
+from motorPredicates import left_bias_bouts, right_bias_bouts
+
+sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
+from mhba_basic import Crosscorrelation
 
 
 def build_all_region_labels():
@@ -252,49 +258,150 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     fig.savefig(save_folder + "PerRegion_Motor_Fraction.pdf", type="pdf")
 
-    # plot example from stim-noStim-allMotor category
+    # create motor-containers for crosscorrelation below
     tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
     itime = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
-    mc_all = MotorContainer(sourceFiles, itime, 3, hdf5_store=tailstore)
-    ix_stim_only = 45064
-    ix_no_stim = 45179
-    ix_all = 45072
+    mc_all_raw = MotorContainer(sourceFiles, itime, 0, hdf5_store=tailstore)
+    mc_fleft_raw = MotorContainer(sourceFiles, itime, 0, tdd=mc_all_raw.tdd, predicate=left_bias_bouts)
+    mc_fright_raw = MotorContainer(sourceFiles, itime, 0, tdd=mc_all_raw.tdd, predicate=right_bias_bouts)
 
+    # create and plot stimulus (when sine-wave comes on) triggered averages for all, stim_only and no_stim
     deltaFF = dff(all_activity)
-
+    ix_stim = IndexingMatrix(np.array([60*5, (60+165)*5, (60+2*165)*5]), 50, 50, deltaFF.shape[1])[0]
+    s_time = np.linspace(-10, 10, 101)
+    s_trig_all = []
+    for row in deltaFF[membership_motor == 0, :]:
+        s_trig_all.append(np.mean(row[ix_stim], 0, keepdims=True))
+    s_trig_all = np.vstack(s_trig_all)
+    s_trig_stimOnly = []
+    for row in deltaFF[membership_motor == 5, :]:
+        s_trig_stimOnly.append(np.mean(row[ix_stim], 0, keepdims=True))
+    s_trig_stimOnly = np.vstack(s_trig_stimOnly)
+    s_trig_no_stim = []
+    for row in deltaFF[membership_motor == 6, :]:
+        s_trig_no_stim.append(np.mean(row[ix_stim], 0, keepdims=True))
+    s_trig_no_stim = np.vstack(s_trig_no_stim)
+    on_cells = np.logical_and(mship_nonan > -1, mship_nonan < 4)
+    off_cells = np.logical_and(mship_nonan > 3, mship_nonan < 6)
+    s_trig_on = []
+    for row in deltaFF[on_cells, :]:
+        s_trig_on.append(np.mean(row[ix_stim], 0, keepdims=True))
+    s_trig_on = np.vstack(s_trig_on)
+    s_trig_off = []
+    for row in deltaFF[off_cells, :]:
+        s_trig_off.append(np.mean(row[ix_stim], 0, keepdims=True))
+    s_trig_off = np.vstack(s_trig_off)
+    # plot sensory triggered averages
     fig, ax = pl.subplots()
-    rep_time = np.arange(all_activity.shape[1]) / 5.0
-    ax.plot(rep_time, mc_all[ix_stim_only], 'k')
-    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Convolved bouts")
-    ax.set_xlim(0, rep_time.max())
-    sns.despine(fig, ax)
-    fig.savefig(save_folder + "Example_motor.pdf", type="pdf")
-
-    fig, ax = pl.subplots()
-    ax.plot(rep_time, deltaFF[ix_stim_only, :], 'C3')
-    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
-    ax.set_xlabel("Time [s]")
+    sns.tsplot(s_trig_all, s_time, color="C0", ax=ax, ci=99.9, condition="All motor")
+    sns.tsplot(s_trig_stimOnly, s_time, color="C1", ax=ax, ci=99.9, condition="ON motor")
+    sns.tsplot(s_trig_no_stim, s_time, color="C2", ax=ax, ci=99.9, condition="OFF motor")
+    sns.tsplot(s_trig_on, s_time, color="C3", ax=ax, ci=99.9, condition="Sensory ON")
+    sns.tsplot(s_trig_off, s_time, color="C4", ax=ax, ci=99.9, condition="Sensory OFF")
+    ax.set_xlabel("Time around stimulus onset [s]")
     ax.set_ylabel("dF/F")
-    ax.set_xlim(0, rep_time.max())
     sns.despine(fig, ax)
-    fig.savefig(save_folder + "Example_stim_only.pdf", type="pdf")
+    fig.savefig(save_folder + "Sensory_triggered_avgs.pdf", type="pdf")
 
-    fig, ax = pl.subplots()
-    ax.plot(rep_time, deltaFF[ix_no_stim, :], 'C0')
-    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("dF/F")
-    ax.set_xlim(0, rep_time.max())
-    sns.despine(fig, ax)
-    fig.savefig(save_folder + "Example_no_stim.pdf", type="pdf")
+    # compute and plot motor cross-correlations for on-motor and off-motor categories
+    max_lag = 50
+    # compute crosscorrelations for all_motor, on_motor and off_motor against bouts while stimulus is on and off
+    cc_all_stim = []
+    cc_all_nostim = []
+    cc_onmot_stim = []
+    cc_onmot_nostim = []
+    cc_offmot_stim = []
+    cc_offmot_nostim = []
+    cc_on_stim = []
+    cc_on_nostim = []
+    cc_off_stim = []
+    cc_off_nostim = []
+    storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r')
+    poa_data = pickle.loads(np.array(storage["POA"]))  # type: RegionResults
+    poa_sens = np.mean(poa_data.region_acts[poa_data.region_mem == 1, :], 0)
+    storage.close()
+    # we create the following stimulus-motor regressors:
+    # A multiplication of mc_all with a 0/1 thresholded version of the activity trace (only events when active)
+    poa_thresh = 0.25  # POA slow ON cells are considered active above this threshold, based on looking at average
+    poa_on = poa_sens > 0.25
+    poa_off = poa_sens <= 0.25
 
-    fig, ax = pl.subplots()
-    ax.plot(rep_time, deltaFF[ix_all, :], 'C2')
-    ax.set_xticks([0, 60, 120, 180, 240, 300, 360, 420, 480])
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("dF/F")
-    ax.set_xlim(0, rep_time.max())
-    sns.despine(fig, ax)
-    fig.savefig(save_folder + "Example_all_motor.pdf", type="pdf")
+    for i in range(all_activity.shape[0]):
+        on_starts = mc_all_raw[i] * poa_on
+        off_starts = mc_all_raw[i] * poa_off
+        # only consider planes where we have both on and off starts
+        if np.sum(on_starts) == 0 or np.sum(off_starts) == 0:
+            continue
+        if membership_motor[i] == 0:
+            cc_all_stim.append(Crosscorrelation(all_activity[i, :], on_starts, max_lag))
+            cc_all_nostim.append(Crosscorrelation(all_activity[i, :], off_starts, max_lag))
+        elif membership_motor[i] == 5:
+            cc_onmot_stim.append(Crosscorrelation(all_activity[i, :], on_starts, max_lag))
+            cc_onmot_nostim.append(Crosscorrelation(all_activity[i, :], off_starts, max_lag))
+        elif membership_motor[i] == 6:
+            cc_offmot_stim.append(Crosscorrelation(all_activity[i, :], on_starts, max_lag))
+            cc_offmot_nostim.append(Crosscorrelation(all_activity[i, :], off_starts, max_lag))
+        elif on_cells[i]:
+            cc_on_stim.append(Crosscorrelation(all_activity[i, :], on_starts, max_lag))
+            cc_on_nostim.append(Crosscorrelation(all_activity[i, :], off_starts, max_lag))
+        elif off_cells[i]:
+            cc_off_stim.append(Crosscorrelation(all_activity[i, :], on_starts, max_lag))
+            cc_off_nostim.append(Crosscorrelation(all_activity[i, :], off_starts, max_lag))
+
+    # plot cross-correlations
+    fig, (ax_on, ax_off) = pl.subplots(ncols=2, sharey=True)
+    t = np.arange(-1*max_lag, max_lag+1) / 5
+    sns.tsplot(data=cc_all_stim, time=t, ci=99.9, ax=ax_on, color='C1')
+    sns.tsplot(data=cc_onmot_stim, time=t, ci=99.9, ax=ax_on, color='C3')
+    sns.tsplot(data=cc_offmot_stim, time=t, ci=99.9, ax=ax_on, color='C0')
+    ax_on.set_xlabel('Time lag around stim bout [s]')
+    ax_on.set_ylabel('Cross correlation')
+    sns.tsplot(data=cc_all_nostim, time=t, ci=99.9, ax=ax_off, color='C1')
+    sns.tsplot(data=cc_onmot_nostim, time=t, ci=99.9, ax=ax_off, color='C3')
+    sns.tsplot(data=cc_offmot_nostim, time=t, ci=99.9, ax=ax_off, color='C0')
+    ax_off.set_xlabel('Time lag around no-stim bout [s]')
+    ax_off.set_ylabel('Cross correlation')
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "onoffmotor_MTA.pdf", type="pdf")
+
+    # compute and plot motor-triggered averages for flick-left and flick-right categories
+    cc_all_left = []
+    cc_all_right = []
+    cc_left_left = []
+    cc_left_right = []
+    cc_right_left = []
+    cc_right_right = []
+    for i in range(all_activity.shape[0]):
+        left = mc_fleft_raw[i]
+        right = mc_fright_raw[i]
+        if left.sum() == 0 or right.sum() == 0:
+            continue
+        if membership_motor[i] == 2:  # note: predicate names are actually side-inverted!
+            # right flick cell
+            cc_right_left.append(Crosscorrelation(all_activity[i, :], left, max_lag))
+            cc_right_right.append(Crosscorrelation(all_activity[i, :], right, max_lag))
+        elif membership_motor[i] == 3:
+            # left flick cell
+            cc_left_left.append(Crosscorrelation(all_activity[i, :], left, max_lag))
+            cc_left_right.append(Crosscorrelation(all_activity[i, :], right, max_lag))
+        elif membership_motor[i] == 0:
+            # all motor cell
+            cc_all_left.append(Crosscorrelation(all_activity[i, :], left, max_lag))
+            cc_all_right.append(Crosscorrelation(all_activity[i, :], right, max_lag))
+            # plot cross-correlations
+    fig, (ax_left, ax_right) = pl.subplots(ncols=2, sharey=True)
+    t = np.arange(-1 * max_lag, max_lag + 1) / 5
+    sns.tsplot(data=cc_all_left, time=t, ci=99.9, ax=ax_left, color='C1')
+    sns.tsplot(data=cc_left_left, time=t, ci=99.9, ax=ax_left, color='C4')
+    sns.tsplot(data=cc_right_left, time=t, ci=99.9, ax=ax_left, color='C2')
+    ax_left.set_xlabel('Time lag around right flick [s]')
+    ax_left.set_ylabel('Cross correlation')
+    sns.tsplot(data=cc_all_right, time=t, ci=99.9, ax=ax_right, color='C1')
+    sns.tsplot(data=cc_left_right, time=t, ci=99.9, ax=ax_right, color='C4')
+    sns.tsplot(data=cc_right_right, time=t, ci=99.9, ax=ax_right, color='C2')
+    ax_right.set_xlabel('Time lag around left flick [s]')
+    ax_right.set_ylabel('Cross correlation')
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "leftright_MTA.pdf", type="pdf")
