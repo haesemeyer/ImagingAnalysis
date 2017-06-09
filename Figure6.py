@@ -119,3 +119,35 @@ if __name__ == "__main__":
         ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_lr_coefs.pdf", type="pdf")
+
+    swim_fit = model_results["swim_out"].predict(motor_type_regs)
+    # prediction
+    fig, ax = pl.subplots()
+    ax.scatter(swim_fit, swim_out, s=2)
+    ax.set_xlabel("Predicted rate [AU]")
+    ax.set_ylabel("Real rate [AU]")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "swimout_prediction.pdf", type="pdf")
+    # coefficients
+    coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results["swim_out"].lr_factors)})
+    fig, ax = pl.subplots()
+    sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
+    ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "swimout_lr_coefs.pdf", type="pdf")
+
+    flick_fit = model_results["flick_out"].predict(motor_type_regs)
+    # prediction
+    fig, ax = pl.subplots()
+    ax.scatter(flick_fit, flick_out, s=2)
+    ax.set_xlabel("Predicted rate [AU]")
+    ax.set_ylabel("Real rate [AU]")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "flickout_prediction.pdf", type="pdf")
+    # coefficients
+    coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results["flick_out"].lr_factors)})
+    fig, ax = pl.subplots()
+    sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
+    ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "flickout_lr_coefs.pdf", type="pdf")
