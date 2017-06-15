@@ -108,6 +108,10 @@ if __name__ == "__main__":
         # prediction
         fig, ax = pl.subplots()
         ax.scatter(model_fit, act_real, s=2)
+        mn = min(model_fit.min(), act_real.min())
+        ma = max(model_fit.max(), act_real.max())
+        # add identity line
+        ax.plot([mn, ma], [mn, ma], 'k--')
         ax.set_xlabel("Predicted rate [AU]")
         ax.set_ylabel("Real rate [AU]")
         sns.despine(fig, ax)
@@ -124,6 +128,10 @@ if __name__ == "__main__":
     # prediction
     fig, ax = pl.subplots()
     ax.scatter(swim_fit, swim_out, s=2)
+    mn = min(swim_fit.min(), swim_out.min())
+    ma = max(swim_fit.max(), swim_out.max())
+    # add identity line
+    ax.plot([mn, ma], [mn, ma], 'k--')
     ax.set_xlabel("Predicted rate [AU]")
     ax.set_ylabel("Real rate [AU]")
     sns.despine(fig, ax)
@@ -140,6 +148,10 @@ if __name__ == "__main__":
     # prediction
     fig, ax = pl.subplots()
     ax.scatter(flick_fit, flick_out, s=2)
+    mn = min(flick_fit.min(), flick_out.min())
+    ma = max(flick_fit.max(), flick_out.max())
+    # add identity line
+    ax.plot([mn, ma], [mn, ma], 'k--')
     ax.set_xlabel("Predicted rate [AU]")
     ax.set_ylabel("Real rate [AU]")
     sns.despine(fig, ax)
