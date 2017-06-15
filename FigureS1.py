@@ -3,6 +3,8 @@
 # B) Stabilizer movements (either RFP or gcamp experiments??)
 # C) Effect of image stabilization on stimulus correlations in RFP stacks
 # D) Tail angle examples of swims and flicks
+# E) Activity heatmap after activity shuffle
+# F) Comparison of average MI with stimulus for cells in original and shuffled
 
 import matplotlib.pyplot as pl
 import seaborn as sns
@@ -15,6 +17,10 @@ import pickle
 from typing import List
 from scipy.stats import mode
 import os
+from multiExpAnalysis import dff
+from Figure1 import trial_average
+from analyzeSensMotor import jknife_entropy
+from pandas import DataFrame, Series
 
 if __name__ == "__main__":
     save_folder = "./HeatImaging/FigureS1/"
@@ -23,14 +29,22 @@ if __name__ == "__main__":
     # load data
     dfile = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/datafile_170327.hdf5', 'r')
     no_nan_aa = np.array(dfile['no_nan_aa'])
-    nframes = np.array(dfile['all_activity']).shape[1]
     pstream = np.array(dfile['exp_data_pickle'])
     exp_data = pickle.loads(pstream)  # type: List[SLHRepeatExperiment]
     del pstream
     # limit sourceFiles to the contents of all_activity
     sourceFiles = [(g[0], e.original_time_per_frame) for e in exp_data for g in e.graph_info]
     sourceFiles = [sf for i, sf in enumerate(sourceFiles) if no_nan_aa[i]]
+    all_activity = np.array(dfile["all_activity"])
+    nframes = all_activity.shape[1]
+    membership = np.array(dfile["membership"])
+    mship_nonan = membership[no_nan_aa]
     dfile.close()
+    # load temperature stimulus
+    stim_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/stimFile.hdf5', 'r')
+    t_at_samp = np.array(stim_file["sine_L_H_temp"])
+    t_at_samp = np.add.reduceat(t_at_samp, np.arange(0, t_at_samp.size, 20 // 5)) / (20 // 5)
+    stim_file.close()
     # create motor containers
     tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
     itime = np.linspace(0, nframes / 5, nframes + 1)
@@ -118,3 +132,47 @@ if __name__ == "__main__":
     ax.set_ylabel("Z stabilizer offset [um]")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "Stabilizer_Movement.pdf", type="pdf")
+
+    # load shuffled data
+    dfile = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/df_shuffle_170615.hdf5', 'r')
+    sh_membership = np.array(dfile['membership'])
+    sh_no_nan_aa = np.array(dfile['no_nan_aa'])
+    sh_mship_nonan = sh_membership[sh_no_nan_aa]
+    sh_all_activity = np.array(dfile["all_activity"])
+    dfile.close()
+
+    sh_active_cells = np.logical_and(sh_mship_nonan > -1, sh_mship_nonan < 6)
+
+    # plot heatmap of shuffled activity sorted by membership
+    mship_active = sh_mship_nonan[sh_active_cells]
+    act_to_plot = dff(trial_average(sh_all_activity[sh_active_cells, :]))
+    fig, ax = pl.subplots()
+    sns.heatmap(act_to_plot[np.argsort(mship_active), :], xticklabels=150, yticklabels=250, vmin=-3, vmax=3, ax=ax,
+                rasterized=True)
+    fig.savefig(save_folder + "sh_activity_heatmap.pdf", type="pdf")
+
+    # compare average mutual information between real and shuffled cells and sensory stimulus
+    active_cells = np.logical_and(mship_nonan > -1, mship_nonan < 6)
+    ent_sens = jknife_entropy(t_at_samp, 20)  # stimulus entropy
+    mi_real = np.zeros(active_cells.sum())
+    mi_shuffled = np.zeros(sh_active_cells.sum())
+    for i, row in enumerate(all_activity[active_cells, :]):
+        # compute entropy of cell
+        ent_cell = jknife_entropy(row, 20)
+        # compute joint entropy
+        ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
+        mi_real[i] = (ent_sens + ent_cell) - ent_joint
+    for i, row in enumerate(sh_all_activity[sh_active_cells, :]):
+        ent_cell = jknife_entropy(row, 20)
+        # compute joint entropy
+        ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
+        mi_shuffled[i] = (ent_sens + ent_cell) - ent_joint
+
+    d = {"Real": mi_real.tolist(), "Shuffled": mi_shuffled.tolist()}
+    dframe = DataFrame(dict([(k, Series(d[k])) for k in d]))
+
+    fig, ax = pl.subplots()
+    sns.barplot(data=dframe, ax=ax)
+    sns.despine(fig, ax)
+    ax.set_ylabel("Cell average mututal information [bits]")
+    fig.savefig(save_folder + "sh_stim_mutual_information.pdf", type="pdf")
