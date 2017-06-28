@@ -124,19 +124,39 @@ if __name__ == "__main__":
     rl_tg_right = RegionContainer.load_container_list(segFile)
     segFile.close()
 
+    def partition(a, nchunks=10):
+        """
+        Partion an array in n nearly equal sized chunks
+        """
+        chunks = []
+        chnksize = a.size // nchunks
+        for i in range(nchunks):
+            s = i*chnksize
+            if i == nchunks-1:
+                e = a.size
+            else:
+                e = (i+1) * chnksize
+            chunks.append(a[s:e])
+        return chunks
+
     stack_types = get_stack_types(exp_data)[no_nan_aa]
     # get indices of on-type cells in regions (since everything is limited to no_nan_aa these should match)
     all_rl = build_all_region_labels()
     on_cells = np.logical_and(mship_nonan > -1, mship_nonan < 3)
+    on_indices = np.arange(tf_centroids.shape[0])[np.logical_and(stack_types == "MAIN", on_cells)]
+    np.random.shuffle(on_indices)
+    on_indices = partition(on_indices)
     off_cells = np.logical_and(mship_nonan > 3, mship_nonan < 6)
+    off_indices = np.arange(tf_centroids.shape[0])[np.logical_and(stack_types == "MAIN", off_cells)]
+    np.random.shuffle(off_indices)
+    off_indices = partition(off_indices)
     # plot whole-brain overview of ON and OFF types
     fig, ax = pl.subplots()
-    ax.scatter(tf_centroids[np.logical_and(stack_types == "MAIN", on_cells), 0],
-               tf_centroids[np.logical_and(stack_types == "MAIN", on_cells), 1], s=1, alpha=0.3, c='m',
-               label="ON cells")
-    ax.scatter(tf_centroids[np.logical_and(stack_types == "MAIN", off_cells), 0],
-               tf_centroids[np.logical_and(stack_types == "MAIN", off_cells), 1], s=1, alpha=0.3, c="g",
-               label="OFF cells")
+    for i in range(10):
+        ax.scatter(tf_centroids[on_indices[i], 0],
+                   tf_centroids[on_indices[i], 1], s=1, alpha=0.3, c='m')
+        ax.scatter(tf_centroids[off_indices[i], 0],
+                   tf_centroids[off_indices[i], 1], s=1, alpha=0.3, c="g")
     ax.set_aspect('equal', 'datalim')
     ax.legend()
     sns.despine(fig, ax)
@@ -145,12 +165,18 @@ if __name__ == "__main__":
     fig, ax = pl.subplots()
     half_brain = np.logical_and(tf_centroids[:, 0] < np.nanmedian(tf_centroids[stack_types == "MAIN", 0]),
                                 stack_types == "MAIN")
-    ax.scatter(tf_centroids[np.logical_and(half_brain, on_cells), 1],
-               tf_centroids[np.logical_and(half_brain, on_cells), 2], s=1, alpha=0.3, c='m',
-               label="ON cells")
-    ax.scatter(tf_centroids[np.logical_and(half_brain, off_cells), 1],
-               tf_centroids[np.logical_and(half_brain, off_cells), 2], s=1, alpha=0.3, c="g",
-               label="OFF cells")
+    on_indices = np.arange(tf_centroids.shape[0])[np.logical_and(half_brain, on_cells)]
+    np.random.shuffle(on_indices)
+    on_indices = partition(on_indices)
+    off_cells = np.logical_and(mship_nonan > 3, mship_nonan < 6)
+    off_indices = np.arange(tf_centroids.shape[0])[np.logical_and(half_brain, off_cells)]
+    np.random.shuffle(off_indices)
+    off_indices = partition(off_indices)
+    for i in range(10):
+        ax.scatter(tf_centroids[on_indices[i], 1],
+                   tf_centroids[on_indices[i], 2], s=1, alpha=0.3, c='m')
+        ax.scatter(tf_centroids[off_indices[i], 1],
+                   tf_centroids[off_indices[i], 2], s=1, alpha=0.3, c="g")
     ax.set_aspect('equal', 'datalim')
     ax.legend()
     sns.despine(fig, ax)
