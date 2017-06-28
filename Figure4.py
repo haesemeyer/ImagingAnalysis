@@ -12,7 +12,7 @@ from scipy.spatial import ConvexHull
 import pandas
 import sys
 from analyzeSensMotor import RegionResults
-from motorPredicates import left_bias_bouts, right_bias_bouts
+from motorPredicates import left_bias_bouts, right_bias_bouts, unbiased_bouts
 
 sys.path.append('C:/Users/mhaesemeyer/Documents/Python Scripts/BehaviorAnalysis')
 from mhba_basic import Crosscorrelation
@@ -409,3 +409,51 @@ if __name__ == "__main__":
     sns.despine(fig)
     fig.tight_layout()
     fig.savefig(save_folder + "leftright_MTA.pdf", type="pdf")
+
+    # plot example motor regressors with calicum activity
+    indices = np.arange(motor_corrs.shape[0])
+    pot_all = indices[motor_corrs[:, 0] >= 0.85]
+    pot_left = indices[motor_corrs[:, 3] >= 0.85]
+    pot_swim = indices[motor_corrs[:, 4] >= 0.85]
+    ix_all = 108505
+    ix_right = 5052
+    ix_swim = 109708
+    mc_all = MotorContainer(sourceFiles, itime, 3, tdd=mc_all_raw.tdd)
+    mc_fright = MotorContainer(sourceFiles, itime, 3, tdd=mc_all_raw.tdd, predicate=right_bias_bouts)
+    mc_swim = MotorContainer(sourceFiles, itime, 3, tdd=mc_all_raw.tdd, predicate=unbiased_bouts)
+    time = np.arange(all_activity.shape[1]) / 5
+    fig, ax = pl.subplots(nrows=3, sharex=True)
+    act_all = all_activity[ix_all, :]
+    act_all = act_all / act_all.max()  # NOTE: Not in place so as to not modify sources!
+    reg_all = mc_all[ix_all]
+    reg_all = reg_all / reg_all.max() + act_all.min()
+    ax[0].plot(time, reg_all, 'k')
+    ax[0].plot(time, act_all, "C1", label=str(round(motor_corrs[ix_all, 0], 2)))
+    ax[0].set_ylabel("Activity [AU]")
+    ax[0].legend()
+    ax[0].set_ylim(0, 1.2)
+    ax[0].set_yticks([0, 0.5, 1])
+    act_left = all_activity[ix_right, :]
+    act_left = act_left / act_left.max()
+    reg_left = mc_fright[ix_right]
+    reg_left = reg_left / reg_left.max() + act_left.min()
+    ax[1].plot(time, reg_left, 'k')
+    ax[1].plot(time, act_left, "C4", label=str(round(motor_corrs[ix_right, 3], 2)))
+    ax[1].set_ylabel("Activity [AU]")
+    ax[1].legend()
+    ax[1].set_ylim(0, 1.2)
+    ax[1].set_yticks([0, 0.5, 1])
+    act_swim = all_activity[ix_swim, :]
+    act_swim = act_swim / act_swim.max()
+    reg_swim = mc_swim[ix_swim]
+    reg_swim = reg_swim / reg_swim.max() + act_swim.min()
+    ax[2].plot(time, reg_swim, 'k')
+    ax[2].plot(time, act_swim, "C5", label=str(round(motor_corrs[ix_swim, 4], 2)))
+    ax[2].set_ylabel("Activity [AU]")
+    ax[2].set_xlabel("Time [s]")
+    ax[2].legend()
+    ax[2].set_ylim(0, 1.2)
+    ax[2].set_yticks([0, 0.5, 1])
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "regressor_examples.pdf", type="pdf")
