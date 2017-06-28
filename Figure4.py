@@ -47,7 +47,7 @@ def build_all_region_labels():
     return np.array(labels)
 
 
-def PlotRegionMotorFraction_TopDown(rlabels, ax=None, plot_color_bar=False):
+def PlotRegionMotorFraction_TopDown(rlabels, ax=None, plot_color_bar=False, alpha=0.3):
     pal = sns.color_palette("plasma", n_colors=10)
     max_fraction = 0.05
     if plot_color_bar:
@@ -72,7 +72,7 @@ def PlotRegionMotorFraction_TopDown(rlabels, ax=None, plot_color_bar=False):
     ix_to_plot = np.arange(in_region.sum())
     ix_to_plot = np.random.choice(ix_to_plot, ix_to_plot.size // 20)
     ax.scatter(tf_centroids[in_region, 0][ix_to_plot], tf_centroids[in_region, 1][ix_to_plot], s=1, c=pal[col_index]
-               , alpha=0.3)
+               , alpha=alpha)
     return fraction, motor, total
 
 
@@ -204,21 +204,25 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     fig.savefig(save_folder + "Motor_Stim_NoStim.pdf", type="pdf")
 
-    # plot map of motor-responsive fraction for different example regions - NOTE: ordered from ventral to dorsal!
-    r_to_plot = ["D_FB_L", "D_FB_R", "Hab_L", "Hab_R", "ncMLF", "Tect_L", "Tect_R", "A_HB_L", "A_HB_R",
-                 "Cerebellum_L", "Cerebellum_R"]
+    # plot map of motor-responsive fraction for different example regions - NOTE: ordered from ventral to dorsal
+    # but ncMLF last!
+    r_to_plot = ["D_FB_L", "D_FB_R", "Hab_L", "Hab_R", "Tect_L", "Tect_R", "A_HB_L", "A_HB_R",
+                 "Cerebellum_L", "Cerebellum_R", "ncMLF"]
     fig, ax = pl.subplots()
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "MAIN"]
     ix_bground = np.random.choice(ix_bground, ix_bground.size // 100, False)
     ax.scatter(tf_centroids[ix_bground, 0], tf_centroids[ix_bground, 1], s=1, alpha=0.2, c='k')
     for r in r_to_plot:
-        PlotRegionMotorFraction_TopDown(r, ax)
+        if r == "ncMLF":
+            PlotRegionMotorFraction_TopDown(r, ax, alpha=0.8)
+        else:
+            PlotRegionMotorFraction_TopDown(r, ax)
     ax.set_aspect('equal', 'datalim')
     sns.despine(fig, ax)
     fig.savefig(save_folder + "MotorFractionMap_Brain_Top.pdf", type="pdf")
 
     fig, ax = pl.subplots()
-    r_side = ["D_FB_R", "Hab_R", "ncMLF", "Tect_R", "A_HB_R", "Cerebellum_R"]
+    r_side = ["D_FB_R", "Hab_R", "Tect_R", "A_HB_R", "Cerebellum_R", "ncMLF"]
     ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "MAIN"]
     ix_bground = np.random.choice(ix_bground, ix_bground.size // 100, False)
     ax.scatter(tf_centroids[ix_bground, 1], tf_centroids[ix_bground, 2], s=1, alpha=0.2, c='k')
