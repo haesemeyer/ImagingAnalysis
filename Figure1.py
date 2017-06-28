@@ -5,7 +5,7 @@ import seaborn as sns
 import matplotlib as mpl
 import h5py
 import pickle
-from mh_2P import MotorContainer, SLHRepeatExperiment, raster_plot
+from mh_2P import MotorContainer, SLHRepeatExperiment, raster_plot, OpenStack, cutOutliers
 from typing import List
 from motorPredicates import bias, high_bias_bouts, unbiased_bouts
 from multiExpAnalysis import dff
@@ -37,9 +37,11 @@ if __name__ == "__main__":
     pstream = np.array(dfile['exp_data_pickle'])
     exp_data = pickle.loads(pstream)  # type: List[SLHRepeatExperiment]
     del pstream
-    # limit sourceFiles to the contents of all_activity
+    # limit sourceFiles and vertices to the contents of all_activity
     sourceFiles = [(g[0], e.original_time_per_frame) for e in exp_data for g in e.graph_info]
+    verts = [g[1] for e in exp_data for g in e.graph_info]
     sourceFiles = [sf for i, sf in enumerate(sourceFiles) if no_nan_aa[i]]
+    verts = [vs for i, vs in enumerate(verts) if no_nan_aa[i]]
     dfile.close()
     # create motor containers
     tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
@@ -96,18 +98,36 @@ if __name__ == "__main__":
     fig.savefig(save_folder+"activity_heatmap.pdf", type="pdf")
 
     # plot activity of example neuron
+    ex_index = 100
     fig, ax = pl.subplots()
-    ax.plot(trial_time, dff(t_avg_on)[10, :])
+    ax.plot(trial_time, dff(t_avg_on)[ex_index, :])
     ax.set_xlabel("Time [s]")
     ax.set_xticks([0, 30, 60, 90, 120, 150])
     ax.set_ylabel("dF/F0")
     sns.despine(fig, ax)
     fig.savefig(save_folder+"neuron_example_trace.pdf", type="pdf")
+    # also plot this neurons imaging plane projection as well as the ROI
+    on = np.logical_and(mship_nonan > -1, mship_nonan < 4)
+    sfile = [sf for i, sf in enumerate(sourceFiles) if on[i]][ex_index][0]
+    vertices = [vs for i, vs in enumerate(verts) if on[i]][ex_index]
+    tstack = OpenStack(sfile)
+    tstack = np.sum(tstack, 0)
+    tstack = cutOutliers(tstack, 99.9)
+    projection = np.zeros((tstack.shape[0], tstack.shape[1], 3))
+    projection[:, :, 0] = tstack * 0.8
+    projection[:, :, 1] = tstack * 0.8
+    projection[:, :, 2] = tstack * 0.8
+    for v in vertices:
+        projection[v[0], v[1], 1] = 0.651
+        projection[v[0], v[1], 2] = 0.318
+    fig, ax = pl.subplots()
+    ax.imshow(projection)
+    fig.savefig(save_folder+"example_neuron_location.pdf", type="pdf", dpi=300)
 
     # plot example trail-trace
     mot_trial_time = np.linspace(0, trial_time.max(), int(trial_time.max() * 100), endpoint=False)
     fig, ax = pl.subplots()
-    ax.plot(mot_trial_time, mc_all_raw.tdd[sourceFiles[10]].cumAngles[:mot_trial_time.size])
+    ax.plot(mot_trial_time, mc_all_raw.tdd[sourceFiles[ex_index]].cumAngles[:mot_trial_time.size])
     ax.set_xlabel("Time [s]")
     ax.set_xticks([0, 30, 60, 90, 120, 150])
     ax.set_ylabel("Tail angle [deg]")
