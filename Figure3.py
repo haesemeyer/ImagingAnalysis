@@ -67,6 +67,23 @@ if __name__ == "__main__":
     sns.despine(right=False)
     fig.savefig(save_folder+"stimulus.pdf", type="pdf")
 
+    # plot stimulus inset split into heat and tap times
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]}, sharey=True)
+    ax_heat.plot(rep_time[rep_time < 125], t_at_samp[rep_time < 125])
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("Temperature [C]")
+    ax_heat.set_xticks([0, 30, 60, 90, 120])
+    ax_heat.set_ylim(23, 29)
+    ax_tap.plot(rep_time[rep_time >= 125], t_at_samp[rep_time >= 125])
+    ax_tap.set_xlabel("Time [s]")
+    ax_tap.set_ylabel("Temperature [C]")
+    ax_tap.set_xticks([125, 130, 135])
+    ax_tap.plot([129.9, 129.9], [23, 29], "k--")
+    ax_tap.set_ylim(23, 29)
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "stimulus_inset.pdf", type="pdf")
+
     # plot overall motor output
     fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]})
     ax_heat.plot(rep_time[rep_time < 125], avg_motor[rep_time < 125])
@@ -132,31 +149,31 @@ if __name__ == "__main__":
     fig.savefig(save_folder + "tap_cells.pdf", type="pdf")
 
     # plot stimulus representation preference
-    plot_order = ["TG", "Rh_6", "HB", "Cerebellum", "Hab", "Pallium"]
+    plot_order = ["TG", "Pallium", "Hab", "Cerebellum", "Rh_6"]
     heat_pi = {}
     tap_pi = {}
     pure_heat = all_rl[stim_units][np.logical_and(act_sign[stim_units] != 0, p_tap[stim_units] < cut_neg)]
     pure_tap = all_rl[tap_only]
     mixed = all_rl[stim_units][np.logical_and(act_sign[stim_units] != 0, p_tap[stim_units] > cut_pos)]
     for i, r in enumerate(np.unique(all_rl)):
-        if r == "" or r == "vMB":
+        if r == "" or r == "vMB" or r == "HB":
             continue
         phr = np.sum(pure_heat == r)
         ptr = np.sum(pure_tap == r)
         mr = np.sum(mixed == r)
-        heat_pi[r] = [(phr - mr) / (phr + mr)]
-        tap_pi[r] = [(ptr - mr) / (ptr + mr)]
+        heat_pi[r] = [phr / (phr + mr)]
+        tap_pi[r] = [ptr / (ptr + mr)]
 
     fig, ax = pl.subplots()
     sns.barplot(data=pandas.DataFrame(tap_pi), order=plot_order, ax=ax)
-    ax.set_ylim(-1, 1)
-    ax.set_ylabel("Preference tap only")
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Fraction tap only")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "pi_tap.pdf", type="pdf")
 
     fig, ax = pl.subplots()
     sns.barplot(data=pandas.DataFrame(heat_pi), order=plot_order, ax=ax)
-    ax.set_ylim(-1, 1)
-    ax.set_ylabel("Preference heat only")
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Fraction heat only")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "pi_heat.pdf", type="pdf")
