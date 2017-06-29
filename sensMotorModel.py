@@ -252,11 +252,14 @@ def run_model(laser_stimulus, model_results):
     tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
     tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
     tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
-    fast_on_prediction = model_results["Fast_ON"].predict(tg_out_prediction)
+    # first the slow Rh6 types which are created via direct input from the trigeminal types
     slow_on_prediction = model_results["Slow_ON"].predict(tg_out_prediction)
-    fast_off_prediction = model_results["Fast_OFF"].predict(tg_out_prediction)
     slow_off_prediction = model_results["Slow_OFF"].predict(tg_out_prediction)
-    del_off_prediction = model_results["Delayed_OFF"].predict(tg_out_prediction)
+    off_inh_out = np.hstack((tg_on_prediction[:, None], slow_off_prediction[:, None]))
+    fast_on_prediction = model_results["Fast_ON"].predict(off_inh_out)
+    fast_off_prediction = model_results["Fast_OFF"].predict(off_inh_out)
+    on_inh_out = np.hstack((slow_on_prediction[:, None], tg_off_prediction[:, None]))
+    del_off_prediction = model_results["Delayed_OFF"].predict(on_inh_out)
     rh6_out_prediction = np.hstack((fast_on_prediction[:, None], slow_on_prediction[:, None],
                                     fast_off_prediction[:, None], slow_off_prediction[:, None],
                                     del_off_prediction[:, None]))
@@ -409,16 +412,22 @@ if __name__ == "__main__":
     print("R2 TG OFF prediction = ", r2(tg_off_prediction, tg_off))
     model_results["TG_OFF"] = ModelResult(stim_in[:, None], lr.coef_, on_off_filter(t_on, t_off), "CUBIC", (a, b, c, d))
 
-    # fit of Rh6 units from trigeminal inputs
+    # fit of slow Rh6 units from trigeminal inputs
     filter_length = 22
     tg_out = np.hstack((tg_on[:, None], tg_off[:, None]))
     response_names = ["Fast_ON", "Slow_ON", "Fast_OFF", "Slow_OFF", "Delayed_OFF"]
     fig, ax = pl.subplots()
     filter_time = np.arange(filter_length) / -5.0
-    for i in range(region_results["Rh6"].full_averages.shape[1]):
+
+    for i in [1, 3]:
         output = standardize(trial_average(region_results["Rh6"].full_averages[:, i]))
         resid_fun, p0 = make_dexp_residual_function(tg_out, output, filter_length)
-        params = least_squares(resid_fun, p0/10).x
+        # for trigeminal since cells are glutamatergic only allow positive activations
+        tg_bounds_upper = np.full(p0.size, np.Inf)
+        tg_bounds_lower = np.full(p0.size, -np.Inf)
+        tg_bounds_lower[-2] = 0
+        tg_bounds_lower[-1] = 0
+        params = least_squares(resid_fun, p0/10, bounds=(tg_bounds_lower, tg_bounds_upper)).x
         print("Type {0} coefficients: {1}".format(i, params[-tg_out.shape[1]:]))
         f = dexp_f(np.arange(filter_length), *params[:-2])
         ax.plot(filter_time, f)
@@ -429,14 +438,42 @@ if __name__ == "__main__":
         print("Type {0} R2: {1}".format(i, r2(prediction, output)))
         n = response_names[i]
         model_results[n] = ModelResult(tg_out, params[-tg_out.shape[1]:], f, "CUBIC", nl_params)
-        # test contribution of tg components
-        for j in range(tg_out.shape[1]):
-            comp = tg_out[:, j]
-            lrs = comp * params[-tg_out.shape[1]:][j]
-            fout = np.convolve(lrs, f)[:tg_off_prediction.size]
-            nlp = curve_fit(cubic_nonlin, fout, output)[0]
-            red_pred = cubic_nonlin(fout, *nlp)
-            print("Type {0} with tg component {1} R2: {2}".format(i, j, r2(red_pred, output)))
+
+    # fit of fastON and fastOFF Rh6 types as they both require OFF type inhibition
+    rh6_slow_off = standardize(trial_average(region_results["Rh6"].full_averages[:, 3]))[:, None]
+    off_inh_out = np.hstack((tg_on[:, None], rh6_slow_off))
+    for i in [0, 2]:
+        output = standardize(trial_average(region_results["Rh6"].full_averages[:, i]))
+        resid_fun, p0 = make_dexp_residual_function(off_inh_out, output, filter_length)
+        params = least_squares(resid_fun, p0/10).x
+        print("Type {0} coefficients: {1}".format(i, params[-tg_out.shape[1]:]))
+        f = dexp_f(np.arange(filter_length), *params[:-2])
+        ax.plot(filter_time, f)
+        lr_sum = np.sum(off_inh_out * params[-off_inh_out.shape[1]:][None, :], 1)
+        filtered_out = np.convolve(lr_sum, f)[:tg_on_prediction.size]
+        nl_params = curve_fit(cubic_nonlin, filtered_out, output)[0]
+        prediction = cubic_nonlin(filtered_out, *nl_params)
+        print("Type {0} R2: {1}".format(i, r2(prediction, output)))
+        n = response_names[i]
+        model_results[n] = ModelResult(off_inh_out, params[-off_inh_out.shape[1]:], f, "CUBIC", nl_params)
+
+    # fit of delayed OFF type which requires ON type inhibition
+    rh6_slow_on = standardize(trial_average(region_results["Rh6"].full_averages[:, 1]))[:, None]
+    on_inh_out = np.hstack((rh6_slow_on, tg_off[:, None]))
+    for i in [4]:
+        output = standardize(trial_average(region_results["Rh6"].full_averages[:, i]))
+        resid_fun, p0 = make_dexp_residual_function(on_inh_out, output, filter_length)
+        params = least_squares(resid_fun, p0/10).x
+        print("Type {0} coefficients: {1}".format(i, params[-tg_out.shape[1]:]))
+        f = dexp_f(np.arange(filter_length), *params[:-2])
+        ax.plot(filter_time, f)
+        lr_sum = np.sum(on_inh_out * params[-on_inh_out.shape[1]:][None, :], 1)
+        filtered_out = np.convolve(lr_sum, f)[:tg_on_prediction.size]
+        nl_params = curve_fit(cubic_nonlin, filtered_out, output)[0]
+        prediction = cubic_nonlin(filtered_out, *nl_params)
+        print("Type {0} R2: {1}".format(i, r2(prediction, output)))
+        n = response_names[i]
+        model_results[n] = ModelResult(on_inh_out, params[-on_inh_out.shape[1]:], f, "CUBIC", nl_params)
 
     # fit of motor type rates from Rh6 cells - since we do not fit activity traces but rates do not fit filters
     motor_store = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/motor_system.hdf5", "r")
