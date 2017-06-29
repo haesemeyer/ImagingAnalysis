@@ -123,8 +123,8 @@ if __name__ == "__main__":
         region_sens_mi[tl] = si_entropy + act_entropy - s_jnt_entropy
 
     # plot motor mutual information for regions
-    motor_mi_gain = {k: [region_motor_mi[k] - sens_motor_mi] for k in region_motor_mi.keys()}
-    df = pandas.DataFrame(motor_mi_gain)
+    motor_mi = {k: [region_motor_mi[k]] for k in region_motor_mi.keys()}
+    df = pandas.DataFrame(motor_mi)
     plot_order = ["stimulus"] + test_labels + ["motor cells", "motor out"]
     fig, ax = pl.subplots()
     sns.barplot(data=df, order=plot_order)
