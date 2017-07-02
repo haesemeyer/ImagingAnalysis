@@ -52,6 +52,7 @@ class ModelResult:
         self.predictors = lr_inputs
         self.lr_factors = lr_factors
         self.filter_coefs = filter_coefs
+        self.trace_object = None
 
     def predict_original(self):
         """
