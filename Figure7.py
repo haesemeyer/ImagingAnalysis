@@ -30,7 +30,7 @@ if __name__ == "__main__":
         region_results[k] = (pickle.loads(np.array(storage[k])))
     storage.close()
     # load model results
-    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model.hdf5', 'r')
+    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170702.hdf5', 'r')
     model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
     stim_in = np.array(model_file["stim_in"])
     m_in = np.array(model_file["m_in"])
