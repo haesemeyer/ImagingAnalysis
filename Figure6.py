@@ -18,6 +18,45 @@ def col_std(m):
     return (m - avg) / s
 
 
+def plot_filter(mr: ModelResult, ax, ci=95, alpha=0.4):
+    """
+    Plots the model's filter with confidence intervals
+    Args:
+        mr: The ModelResult for which to plot the filter
+        ax: Axis object on which to plot
+        ci: The size of the confidence interval in percent to include
+        alpha: The alpha value of the shaded error
+    Returns:
+        axis object
+    """
+    if ax is None:
+        fig, ax = pl.subplots()
+    p_lower = (100 - ci) / 2
+    p_upper = 100 - p_lower
+    e_lower = np.percentile(mr.trace_object["f"], p_lower, 0).ravel()[::-1]
+    e_upper = np.percentile(mr.trace_object["f"], p_upper, 0).ravel()[::-1]
+    m = np.mean(mr.trace_object["f"], 0).ravel()[::-1]
+    time = np.arange(m.size) / 5
+    ax.fill_between(time, e_lower, e_upper, alpha=alpha)
+    ax.plot(time, m)
+    return ax
+
+
+def plot_lr_factors(factor_matrix, ax, ci=95):
+    if ax is None:
+        fig, ax = pl.subplots()
+    p_lower = (100 - ci) / 2
+    p_upper = 100 - p_lower
+    e_lower = np.percentile(factor_matrix, p_lower, 0)
+    e_upper = np.percentile(factor_matrix, p_upper, 0)
+    m = np.mean(factor_matrix, 0)
+    ix = np.arange(m.size)
+    ax.bar(ix, m, color="C1")
+    for i in range(m.size):
+        ax.plot([ix[i], ix[i]], [e_lower[i], e_upper[i]], color="k")
+    return ax
+
+
 if __name__ == "__main__":
     save_folder = "./HeatImaging/Figure6/"
     sns.reset_orig()
