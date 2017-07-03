@@ -176,3 +176,41 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     ax.set_ylabel("Cell average mututal information [bits]")
     fig.savefig(save_folder + "sh_stim_mutual_information.pdf", type="pdf")
+
+    # plot detail char behavioral output split into swims and flicks as well as ON OFF activity heatmap
+    dfile = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/detailChar_data.hdf5", "r")
+    avg_swim = trial_average(np.array(dfile['swim_raw']), n_trials=25).ravel() * 5
+    avg_flick = trial_average(np.array(dfile['flick_raw']), n_trials=25).ravel() * 5
+    rep_time = np.array(dfile["rep_time"])
+    dt_act = np.array(dfile["all_activity"])
+    stim_units = np.array(dfile["stim_units"])
+    act_sign = np.array(dfile["act_sign"])
+    dfile.close()
+
+    fig, (ax_heat, ax_tap) = pl.subplots(ncols=2, gridspec_kw={'width_ratios': [4, 1]})
+    ax_heat.plot(rep_time[rep_time < 125], avg_swim[rep_time < 125])
+    ax_heat.plot(rep_time[rep_time < 125], avg_flick[rep_time < 125])
+    ax_heat.set_xlabel("Time [s]")
+    ax_heat.set_ylabel("Bout frequency [Hz]")
+    ax_heat.set_xticks([0, 30, 60, 90, 120])
+    ax_tap.plot(rep_time[rep_time >= 125], avg_swim[rep_time >= 125])
+    ax_tap.plot(rep_time[rep_time >= 125], avg_flick[rep_time >= 125])
+    ax_tap.set_xlabel("Time [s]")
+    ax_tap.set_ylabel("Bout frequency [Hz]")
+    ax_tap.set_xticks([125, 130, 135])
+    # ax_tap.plot([129.8, 129.8], [0, 5], "k--")
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "dtchar_motor_output.pdf", type="pdf")
+
+
+    def dff(ts):
+        # f0 = np.percentile(ts, 10, axis=1, keepdims=True)
+        f0 = np.mean(ts[:, 10 * 5:20 * 5], axis=1, keepdims=True)
+        f0[f0 < 0.05] = 0.05
+        return (ts - f0) / f0
+    act_to_plot = dff(trial_average(dt_act[stim_units, :], n_trials=25))
+    fig, ax = pl.subplots()
+    sns.heatmap(act_to_plot[np.argsort(act_sign[stim_units])[::-1], :], xticklabels=150, yticklabels=100, vmin=-2.5,
+                vmax=2.5, ax=ax, rasterized=True)
+    fig.savefig(save_folder + "dtchar_activity_heatmap.pdf", type="pdf")
