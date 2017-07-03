@@ -52,8 +52,13 @@ def plot_lr_factors(factor_matrix, ax, ci=95):
     m = np.mean(factor_matrix, 0)
     ix = np.arange(m.size)
     ax.bar(ix, m, color="C1")
-    for i in range(m.size):
-        ax.plot([ix[i], ix[i]], [e_lower[i], e_upper[i]], color="k")
+    if m.size > 1:
+        for i in range(m.size):
+            ax.plot([ix[i], ix[i]], [e_lower[i], e_upper[i]], color="k")
+    else:
+        ax.plot([ix, ix], [e_lower, e_upper], color="k")
+    max_val = max([np.max(e_upper), -1*np.min(e_lower)])
+    ax.set_ylim(-max_val, max_val)
     return ax
 
 
@@ -69,7 +74,7 @@ if __name__ == "__main__":
         region_results[k] = (pickle.loads(np.array(storage[k])))
     storage.close()
     # load model results
-    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model.hdf5', 'r')
+    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170702.hdf5', 'r')
     model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
     stim_in = np.array(model_file["stim_in"])
     model_file.close()
@@ -88,7 +93,7 @@ if __name__ == "__main__":
     for i, n in enumerate(names_tg):
         act_real = region_results["Trigeminal"].full_averages[:, i]
         act_real = standardize(trial_average(act_real)).ravel()
-        model_fit = model_results[n].predict(stim_in)
+        model_fit = model_results[n].predict_original()
         # prediction
         fig, ax = pl.subplots()
         ax.plot(trial_time, act_real, '--')
@@ -100,23 +105,19 @@ if __name__ == "__main__":
         fig.savefig(save_folder + n + "_prediction.pdf", type="pdf")
         # filter
         fig, ax = pl.subplots()
-        ft = np.arange(model_results[n].filter_coefs.size) / 5
-        ax.plot(ft, model_results[n].filter_coefs, 'k')
+        plot_filter(model_results[n], ax, 99)
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_filter.pdf", type="pdf")
         # coefficients
-        coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results[n].lr_factors)})
         fig, ax = pl.subplots()
-        sns.barplot(data=coefs, color=(150/255, 150/255, 150/255))
-        ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+        plot_lr_factors(model_results[n].trace_object["beta"][:, i], ax, 99)
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_lr_coefs.pdf", type="pdf")
 
-    tg_out = col_std(trial_average(region_results["Trigeminal"].full_averages.T).T)
     for i, n in enumerate(names_rh6):
         act_real = region_results["Rh6"].full_averages[:, i]
         act_real = standardize(trial_average(act_real)).ravel()
-        model_fit = model_results[n].predict(tg_out)
+        model_fit = model_results[n].predict_original()
         # prediction
         fig, ax = pl.subplots()
         ax.plot(trial_time, act_real, '--')
@@ -128,25 +129,26 @@ if __name__ == "__main__":
         fig.savefig(save_folder + n + "_prediction.pdf", type="pdf")
         # filter
         fig, ax = pl.subplots()
-        ft = np.arange(model_results[n].filter_coefs.size) / 5
-        ax.plot(ft, model_results[n].filter_coefs, 'k')
+        plot_filter(model_results[n], ax, 99)
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_filter.pdf", type="pdf")
         # coefficients
-        coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results[n].lr_factors)})
         fig, ax = pl.subplots()
-        sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
-        ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+        if i == 1 or i == 3:
+            plot_lr_factors(model_results[n].trace_object["beta"], ax, 99)
+        else:
+            beta = np.hstack((model_results[n].trace_object["beta_on"][:, None],
+                              model_results[n].trace_object["beta_off"][:, None]))
+            plot_lr_factors(beta, ax, 99)
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_lr_coefs.pdf", type="pdf")
 
-    rh6_out = col_std(trial_average(region_results["Rh6"].full_averages.T).T)
     for i, n in enumerate(motor_res_names):
         act_real = motor_type_regs[:, i]
-        model_fit = model_results[n].predict(rh6_out)
+        model_fit = model_results[n].predict_original()
         # prediction
         fig, ax = pl.subplots()
-        ax.scatter(model_fit, act_real, s=2)
+        ax.scatter(model_fit, act_real, s=1)
         mn = min(model_fit.min(), act_real.min())
         ma = max(model_fit.max(), act_real.max())
         # add identity line
@@ -156,17 +158,15 @@ if __name__ == "__main__":
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_prediction.pdf", type="pdf")
         # coefficients
-        coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results[n].lr_factors)})
         fig, ax = pl.subplots()
-        sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
-        ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+        plot_lr_factors(model_results[n].trace_object["beta"], ax, 99)
         sns.despine(fig, ax)
         fig.savefig(save_folder + n + "_lr_coefs.pdf", type="pdf")
 
-    swim_fit = model_results["swim_out"].predict(motor_type_regs)
+    swim_fit = model_results["swim_out"].predict_original()
     # prediction
     fig, ax = pl.subplots()
-    ax.scatter(swim_fit, swim_out, s=2)
+    ax.scatter(swim_fit, swim_out, s=1)
     mn = min(swim_fit.min(), swim_out.min())
     ma = max(swim_fit.max(), swim_out.max())
     # add identity line
@@ -176,17 +176,15 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     fig.savefig(save_folder + "swimout_prediction.pdf", type="pdf")
     # coefficients
-    coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results["swim_out"].lr_factors)})
     fig, ax = pl.subplots()
-    sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
-    ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+    plot_lr_factors(model_results["swim_out"].trace_object["beta"], ax, 99)
     sns.despine(fig, ax)
     fig.savefig(save_folder + "swimout_lr_coefs.pdf", type="pdf")
 
-    flick_fit = model_results["flick_out"].predict(motor_type_regs)
+    flick_fit = model_results["flick_out"].predict_original()
     # prediction
     fig, ax = pl.subplots()
-    ax.scatter(flick_fit, flick_out, s=2)
+    ax.scatter(flick_fit, flick_out, s=1)
     mn = min(flick_fit.min(), flick_out.min())
     ma = max(flick_fit.max(), flick_out.max())
     # add identity line
@@ -198,7 +196,6 @@ if __name__ == "__main__":
     # coefficients
     coefs = pandas.DataFrame({i: [f] for i, f in enumerate(model_results["flick_out"].lr_factors)})
     fig, ax = pl.subplots()
-    sns.barplot(data=coefs, color=(150 / 255, 150 / 255, 150 / 255))
-    ax.set_ylim(-np.max(np.abs(coefs.values)), np.max(np.abs(coefs.values)))
+    plot_lr_factors(model_results["flick_out"].trace_object["beta"], ax, 99)
     sns.despine(fig, ax)
     fig.savefig(save_folder + "flickout_lr_coefs.pdf", type="pdf")
