@@ -12,11 +12,11 @@ from multiExpAnalysis import dff
 from scipy.stats import mode
 
 
-def trial_average(m: np.ndarray, sum_it=False):
+def trial_average(m: np.ndarray, sum_it=False, n_trials=3):
     if m.ndim == 2:
-        m_t = np.reshape(m, (m.shape[0], 3, m.shape[1]//3))
+        m_t = np.reshape(m, (m.shape[0], n_trials, m.shape[1]//n_trials))
     elif m.ndim == 1:
-        m_t = np.reshape(m, (1, 3, m.shape[0] // 3))
+        m_t = np.reshape(m, (1, n_trials, m.shape[0] // n_trials))
     else:
         raise ValueError("m has to be either 1 or 2-dimensional")
     if sum_it:
