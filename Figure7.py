@@ -149,7 +149,11 @@ if __name__ == "__main__":
     # Fast ON
     fig, ax = pl.subplots()
     ax.plot(t_time_dtChar, standardize(rh6_dtCh[:, 0]), 'k')
-    ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 0, :], 0)), "C3")
+    # ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 0, :], 0)), "C3")
+    num = 0
+    m_act = np.mean(activity_sig_corrs[mclust.labels_ == num, :], 0)
+    m, s = np.mean(m_act), np.std(m_act)
+    sns.tsplot((activity_sig_corrs[mclust.labels_ == num, :]-m)/s, t_time_dtChar, color="C3", ax=ax)
     ax.plot([129.9, 129.9], [-1, 3], 'k--')
     ax.set_xticks([0, 30, 60, 90, 120])
     ax.set_xlabel("Time [s]")
@@ -159,7 +163,11 @@ if __name__ == "__main__":
     # Slow ON
     fig, ax = pl.subplots()
     ax.plot(t_time_dtChar, standardize(rh6_dtCh[:, 1]), 'k')
-    ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 1, :], 0)), "C1")
+    # ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 1, :], 0)), "C1")
+    num = 1
+    m_act = np.mean(activity_sig_corrs[mclust.labels_ == num, :], 0)
+    m, s = np.mean(m_act), np.std(m_act)
+    sns.tsplot((activity_sig_corrs[mclust.labels_ == num, :]-m)/s, t_time_dtChar, color="C1", ax=ax)
     ax.plot([129.9, 129.9], [-1, 3], 'k--')
     ax.set_xticks([0, 30, 60, 90, 120])
     ax.set_xlabel("Time [s]")
@@ -169,7 +177,11 @@ if __name__ == "__main__":
     # Fast OFF
     fig, ax = pl.subplots()
     ax.plot(t_time_dtChar, standardize(rh6_dtCh[:, 2]), 'k')
-    ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 2, :], 0)), "C2")
+    # ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 2, :], 0)), "C2")
+    num = 2
+    m_act = np.mean(activity_sig_corrs[mclust.labels_ == num, :], 0)
+    m, s = np.mean(m_act), np.std(m_act)
+    sns.tsplot((activity_sig_corrs[mclust.labels_ == num, :]-m)/s, t_time_dtChar, color="C2", ax=ax)
     ax.plot([129.9, 129.9], [-1, 3], 'k--')
     ax.set_xticks([0, 30, 60, 90, 120])
     ax.set_xlabel("Time [s]")
@@ -179,7 +191,11 @@ if __name__ == "__main__":
     # Slow OFF
     fig, ax = pl.subplots()
     ax.plot(t_time_dtChar, standardize(rh6_dtCh[:, 3]), 'k')
-    ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 3, :], 0)), "C0")
+    # ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 3, :], 0)), "C0")
+    num = 3
+    m_act = np.mean(activity_sig_corrs[mclust.labels_ == num, :], 0)
+    m, s = np.mean(m_act), np.std(m_act)
+    sns.tsplot((activity_sig_corrs[mclust.labels_ == num, :]-m)/s, t_time_dtChar, color="C0", ax=ax)
     ax.plot([129.9, 129.9], [-1, 3], 'k--')
     ax.set_xticks([0, 30, 60, 90, 120])
     ax.set_xlabel("Time [s]")
@@ -189,7 +205,11 @@ if __name__ == "__main__":
     # Delayed OFF
     fig, ax = pl.subplots()
     ax.plot(t_time_dtChar, standardize(rh6_dtCh[:, 4]), 'k')
-    ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 4, :], 0)), "C5")
+    # ax.plot(t_time_dtChar, standardize(np.mean(activity_sig_corrs[mclust.labels_ == 4, :], 0)), "C5")
+    num = 4
+    m_act = np.mean(activity_sig_corrs[mclust.labels_ == num, :], 0)
+    m, s = np.mean(m_act), np.std(m_act)
+    sns.tsplot((activity_sig_corrs[mclust.labels_ == num, :]-m)/s, t_time_dtChar, color="C5", ax=ax)
     ax.plot([129.9, 129.9], [-1, 3], 'k--')
     ax.set_xticks([0, 30, 60, 90, 120])
     ax.set_xlabel("Time [s]")
