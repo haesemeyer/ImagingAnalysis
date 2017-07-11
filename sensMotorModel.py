@@ -238,12 +238,13 @@ def make_dexp_residual_function(inputs: np.ndarray, output: np.ndarray, f_len):
     return residuals, p0
 
 
-def run_model(laser_stimulus, model_results):
+def run_model(laser_stimulus, model_results, exclude = []):
     """
     Run model on stimulus predicting from input to motor output
     Args:
         laser_stimulus: The stimulus temperature, standardized
         model_results: Dictionary of model fits
+        exclude: Outputs of types listed in excluded will be set to 0
 
     Returns:
         [0]: Swim prediction (conv. with Ca kernel by model)
@@ -251,24 +252,48 @@ def run_model(laser_stimulus, model_results):
         [2]: Prediction of activity in Rh6
     """
     tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
+    if "TG_ON" in exclude:
+        tg_on_prediction[:] = 0
     tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
+    if "TG_OFF" in exclude:
+        tg_off_prediction[:] = 0
     tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
     # first the slow Rh6 types which are created via direct input from the trigeminal types
     slow_on_prediction = model_results["Slow_ON"].predict(tg_out_prediction)
+    if "Slow_ON" in exclude:
+        slow_on_prediction[:] = 0
     slow_off_prediction = model_results["Slow_OFF"].predict(tg_out_prediction)
+    if "Slow_OFF" in exclude:
+        slow_off_prediction[:] = 0
     off_inh_out = np.hstack((tg_on_prediction[:, None], slow_off_prediction[:, None]))
     fast_on_prediction = model_results["Fast_ON"].predict(off_inh_out)
+    if "Fast_ON" in exclude:
+        fast_on_prediction[:] = 0
     fast_off_prediction = model_results["Fast_OFF"].predict(off_inh_out)
+    if "Fast_OFF" in exclude:
+        fast_off_prediction[:] = 0
     on_inh_out = np.hstack((slow_on_prediction[:, None], tg_off_prediction[:, None]))
     del_off_prediction = model_results["Delayed_OFF"].predict(on_inh_out)
+    if "Delayed_OFF" in exclude:
+        del_off_prediction[:] = 0
     rh6_out_prediction = np.hstack((fast_on_prediction[:, None], slow_on_prediction[:, None],
                                     fast_off_prediction[:, None], slow_off_prediction[:, None],
                                     del_off_prediction[:, None]))
     m_all_p = model_results["M_All"].predict(rh6_out_prediction)
+    if "M_All" in exclude:
+        m_all_p[:] = 0
     m_fl_p = model_results["M_Flick"].predict(rh6_out_prediction)
+    if "M_Flick" in exclude:
+        m_fl_p[:] = 0
     m_sw_p = model_results["M_Swim"].predict(rh6_out_prediction)
+    if "M_Swim" in exclude:
+        m_sw_p[:] = 0
     m_so_p = model_results["M_StimOn"].predict(rh6_out_prediction)
+    if "M_StimOn" in exclude:
+        m_so_p[:] = 0
     m_ns_p = model_results["M_NoStim"].predict(rh6_out_prediction)
+    if "M_NoStim" in exclude:
+        m_ns_p[:] = 0
     motor_out_prediction = np.hstack((m_all_p[:, None], m_fl_p[:, None], m_sw_p[:, None], m_so_p[:, None],
                                       m_ns_p[:, None]))
     swim_prediction = model_results["swim_out"].predict(motor_out_prediction)
