@@ -199,3 +199,23 @@ if __name__ == "__main__":
     plot_lr_factors(model_results["flick_out"].trace_object["beta"], ax, 99)
     sns.despine(fig, ax)
     fig.savefig(save_folder + "flickout_lr_coefs.pdf", type="pdf")
+
+    # for illustration plot different stages of TG-ON fit
+    to_plot = np.logical_and(trial_time > 55, trial_time < 120)
+    fig, axes = pl.subplots(2, 2)
+    axes[0, 0].plot(trial_time[to_plot], stim_in[to_plot])
+    axes[0, 0].set_ylim(-1.5, 2)
+    axes[0, 0].set_title("Stimulus")
+    mr = model_results["TG_ON"]
+    axes[0, 1].plot(trial_time[to_plot], mr.lr_result(mr.predictors)[to_plot])
+    axes[0, 1].set_ylim(-1.5, 2)
+    axes[0, 1].set_title("Linear result")
+    axes[1, 0].plot(trial_time[to_plot], mr.filtered_result(mr.predictors)[to_plot])
+    axes[1, 0].set_ylim(-1.5, 2)
+    axes[1, 0].set_title("Convolved result")
+    axes[1, 1].plot(trial_time[to_plot], mr.predict_original()[to_plot])
+    axes[1, 1].set_ylim(-1.5, 2)
+    axes[1, 1].set_title("Final result")
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "model_steps_illus.pdf", type="pdf")
