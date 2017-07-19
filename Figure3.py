@@ -150,8 +150,9 @@ if __name__ == "__main__":
 
     # plot stimulus representation preference
     plot_order = ["TG", "Pallium", "Hab", "Cerebellum", "Rh_6"]
-    heat_pi = {}
-    tap_pi = {}
+    heat_frac = {}
+    tap_frac = {}
+    multi_mod_frac = {}
     pure_heat = all_rl[stim_units][np.logical_and(act_sign[stim_units] != 0, p_tap[stim_units] < cut_neg)]
     pure_tap = all_rl[tap_only]
     mixed = all_rl[stim_units][np.logical_and(act_sign[stim_units] != 0, p_tap[stim_units] > cut_pos)]
@@ -161,19 +162,19 @@ if __name__ == "__main__":
         phr = np.sum(pure_heat == r)
         ptr = np.sum(pure_tap == r)
         mr = np.sum(mixed == r)
-        heat_pi[r] = [phr / (phr + mr)]
-        tap_pi[r] = [ptr / (ptr + mr)]
+        sm = phr + ptr + mr
+        heat_frac[r] = phr / sm
+        tap_frac[r] = ptr / sm
+        multi_mod_frac[r] = mr / sm
 
     fig, ax = pl.subplots()
-    sns.barplot(data=pandas.DataFrame(tap_pi), order=plot_order, ax=ax)
+    indices = np.arange(len(plot_order))
+    ax.bar(indices, [heat_frac[k] for k in plot_order], 0.7, color="C3")
+    ax.bar(indices, [tap_frac[k] for k in plot_order], 0.7, color="C0", bottom=[heat_frac[k] for k in plot_order])
+    ax.bar(indices, [multi_mod_frac[k] for k in plot_order], 0.7, color="C4",
+           bottom=[heat_frac[k]+tap_frac[k] for k in plot_order])
+    pl.xticks(indices, tuple(po for po in plot_order))
     ax.set_ylim(0, 1)
-    ax.set_ylabel("Fraction tap only")
+    ax.set_ylabel("Fraction of responsive cells")
     sns.despine(fig, ax)
-    fig.savefig(save_folder + "pi_tap.pdf", type="pdf")
-
-    fig, ax = pl.subplots()
-    sns.barplot(data=pandas.DataFrame(heat_pi), order=plot_order, ax=ax)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Fraction heat only")
-    sns.despine(fig, ax)
-    fig.savefig(save_folder + "pi_heat.pdf", type="pdf")
+    fig.savefig(save_folder + "response_fractions.pdf", type="pdf")
