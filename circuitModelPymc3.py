@@ -34,7 +34,8 @@ def make_firstTier_Rh6_model(tg_on, tg_off, rh6_activity, filter_len=22):
     on_in = tg_on[ix]
     off_in = tg_off[ix]
     model_out = rh6_activity[indexing_frames[cf:]][:, None]
-    frames = np.arange(filter_len).astype(float)[::-1][None, :]
+    # frames = np.arange(filter_len).astype(float)[::-1][None, :]
+    frames = np.arange(filter_len).astype(float)[::-1][:, None]
     model = pm.Model()
     with model:
         # linear factors
@@ -50,7 +51,8 @@ def make_firstTier_Rh6_model(tg_on, tg_off, rh6_activity, filter_len=22):
         pm.Deterministic("f", f)
         # expected value of outcome
         linear_sum = beta[0] * on_in + beta[1] * off_in
-        mu = pm.math.sum(linear_sum * f, 1).ravel()
+        # mu = pm.math.sum(linear_sum * f, 1).ravel()
+        mu = pm.math.dot(linear_sum, f).ravel()
         # likelihood (sampling distributions) of observations
         Y_obs = pm.Normal("Y_obs", mu=mu, sd=sigma, observed=model_out.ravel())
     return model
@@ -74,7 +76,7 @@ def make_offInhibited_Rh6_model(tg_on, slow_off, rh6_activity, filter_len=22):
     on_in = tg_on[ix]
     off_in = slow_off[ix]
     model_out = rh6_activity[indexing_frames[cf:]][:, None]
-    frames = np.arange(filter_len).astype(float)[::-1][None, :]
+    frames = np.arange(filter_len).astype(float)[::-1][:, None]
     model = pm.Model()
     with model:
         # linear factors
@@ -91,7 +93,7 @@ def make_offInhibited_Rh6_model(tg_on, slow_off, rh6_activity, filter_len=22):
         pm.Deterministic("f", f)
         # expected value of outcome
         linear_sum = beta_on * on_in + beta_off * off_in
-        mu = pm.math.sum(linear_sum * f, 1).ravel()
+        mu = pm.math.dot(linear_sum, f).ravel()
         # likelihood (sampling distributions) of observations
         Y_obs = pm.Normal("Y_obs", mu=mu, sd=sigma, observed=model_out.ravel())
     return model
@@ -115,7 +117,7 @@ def make_onInhibited_Rh6_model(slow_on, tg_off, rh6_activity, filter_len=22):
     on_in = slow_on[ix]
     off_in = tg_off[ix]
     model_out = rh6_activity[indexing_frames[cf:]][:, None]
-    frames = np.arange(filter_len).astype(float)[::-1][None, :]
+    frames = np.arange(filter_len).astype(float)[::-1][:, None]
     model = pm.Model()
     with model:
         # linear factors
@@ -132,7 +134,7 @@ def make_onInhibited_Rh6_model(slow_on, tg_off, rh6_activity, filter_len=22):
         pm.Deterministic("f", f)
         # expected value of outcome
         linear_sum = beta_on * on_in + beta_off * off_in
-        mu = pm.math.sum(linear_sum * f, 1).ravel()
+        mu = pm.math.dot(linear_sum, f).ravel()
         # likelihood (sampling distributions) of observations
         Y_obs = pm.Normal("Y_obs", mu=mu, sd=sigma, observed=model_out.ravel())
     return model
