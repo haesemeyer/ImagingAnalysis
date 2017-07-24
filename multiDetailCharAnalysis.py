@@ -72,7 +72,7 @@ if __name__ == "__main__":
     var_scores[np.isnan(var_scores)] = 0
     # create motor containers
     i_time = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
-    tc = exp_data[0].caTimeConstant
+    tc = 1.7  # exp_data[0].caTimeConstant
     mc_all = MotorContainer(source_files, i_time, tc)
     mc_high_bias = MotorContainer(source_files, i_time, tc, high_bias_bouts, tdd=mc_all.tdd)
     mc_low_bias = MotorContainer(source_files, i_time, tc, unbiased_bouts, tdd=mc_all.tdd)
