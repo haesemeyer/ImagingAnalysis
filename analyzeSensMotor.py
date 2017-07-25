@@ -384,10 +384,16 @@ if __name__ == "__main__":
     no_nan_aa = np.array(dfile['no_nan_aa'])
     mship_nonan = membership[no_nan_aa]
     all_activity = np.array(dfile['all_activity'])
-    # # rotate each line in all_activity
-    # for i in range(all_activity.shape[0]):
-    #     r = np.random.randint(30 * 5, 120 * 5)
-    #     all_activity[i, :] = np.roll(all_activity[i, :], r)
+    # # shuffle all_activity - trials get shuffled individually
+    # rolls = np.zeros(all_activity.shape[0], dtype=np.int16)
+    # tlen = all_activity.shape[1] // 3
+    # for i, row in enumerate(all_activity):
+    #     for tnum in range(3):
+    #         tact = row[tlen * tnum: tlen * (tnum + 1)]
+    #         r = np.random.randint(0, tlen)
+    #         shuff = np.roll(tact, r)
+    #         row[tlen * tnum: tlen * (tnum + 1)] = shuff
+    #     all_activity[i, :] = row
     pstream = np.array(dfile['exp_data_pickle'])
     exp_data = pickle.loads(pstream)  # type: List[SLHRepeatExperiment]
     del pstream
@@ -496,41 +502,48 @@ if __name__ == "__main__":
                 # lreg = LinearRegression()
                 # lreg.fit(regs, all_motor)
         # Plot prediction of low and high bias side-by-side
-        fig, (ax_h, ax_l) = pl.subplots(ncols=2)
-        sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=clust_labels,
-                    yticklabels=clust_labels)
-        ax_h.set_title("Prediction of strong flicks")
-        sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l, xticklabels=clust_labels,
-                    yticklabels=clust_labels)
-        ax_l.set_title("Prediction of swims {0}".format(test_labels[k]))
-        fig.tight_layout()
+        if resmat_high.size > 0:
+            fig, (ax_h, ax_l) = pl.subplots(ncols=2)
+            sns.heatmap(resmat_high, 0, 1, cmap="RdBu_r", annot=True, ax=ax_h, xticklabels=clust_labels,
+                        yticklabels=clust_labels)
+            ax_h.set_title("Prediction of strong flicks")
+            sns.heatmap(resmat_low, 0, 1, cmap="RdBu_r", annot=True, ax=ax_l, xticklabels=clust_labels,
+                        yticklabels=clust_labels)
+            ax_l.set_title("Prediction of swims {0}".format(test_labels[k]))
+            fig.tight_layout()
 
-        # plot regressor-regressor correlations
-        fig, ax = pl.subplots()
-        sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=clust_labels,
-                    yticklabels=clust_labels, ax=ax)
-        ax.set_title(test_labels[k])
+        if regressors.shape[1] > 1:
+            # plot regressor-regressor correlations
+            fig, ax = pl.subplots()
+            sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=clust_labels,
+                        yticklabels=clust_labels, ax=ax)
+            ax.set_title(test_labels[k])
         analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
         analysis_result.full_averages = full_averages
         # compute regression results on full data not repeat-averaged
-        r2, coef, icepts = regression_CV(full_averages, mo, n_boot)
-        region_boot_coefs.append(coef)
-        region_boot_icepts.append(coef)
-        region_r2[:, k] = r2
+        if full_averages.size > 0:
+            r2, coef, icepts = regression_CV(full_averages, mo, n_boot)
+            region_boot_coefs.append(coef)
+            region_boot_icepts.append(coef)
+            region_r2[:, k] = r2
+        else:
+            region_r2[:, k] = 0
         # compute mutual information of region regressors with motor output
-        region_entropy = jknife_entropy(full_averages, 10)
-        joint_entropy = jknife_entropy(np.hstack((full_averages, mo)), 10)
-        region_mi[k] = mo_entropy + region_entropy - joint_entropy
+        if full_averages.size > 0:
+            region_entropy = jknife_entropy(full_averages, 10)
+            joint_entropy = jknife_entropy(np.hstack((full_averages, mo)), 10)
+            region_mi[k] = mo_entropy + region_entropy - joint_entropy
+        else:
+            region_mi[k] = 0
 
         # save new analysis into our file
         l = test_labels[k]
-        if l in storage:
-            del storage[l]
-        stream = pickle.dumps(analysis_result)
-        storage.create_dataset(l, data=np.void(stream))
-        # flush new data to disk
-        storage.flush()
-        del stream
+        if l not in storage:
+            stream = pickle.dumps(analysis_result)
+            storage.create_dataset(l, data=np.void(stream))
+            # flush new data to disk
+            storage.flush()
+            del stream
         del analysis_result
 
         print("{0} out of {1} done.".format(k+1, len(test_regions)))
