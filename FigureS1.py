@@ -105,24 +105,51 @@ if __name__ == "__main__":
                 rasterized=True)
     fig.savefig(save_folder + "sh_activity_heatmap.pdf", type="pdf")
 
+    # plot heatmap of RFP stabilized data sorted by membership
+    dfile = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/RFP_stabilized.hdf5', 'r')
+    rfp_mem = np.array(dfile['membership'])
+    rfp_nonanaa = np.array(dfile['no_nan_aa'])
+    rfp_memnn = rfp_mem[rfp_nonanaa]
+    rfp_act = np.array(dfile["all_activity"])
+    dfile.close()
+    rfp_active = np.logical_and(rfp_memnn > -1, rfp_memnn < 6)
+    mship_active = rfp_memnn[rfp_active]
+    act_to_plot = dff(trial_average(rfp_act[rfp_active, :], n_trials=2))  # these expts. only have 2 trials
+    fig, ax = pl.subplots()
+    sns.heatmap(act_to_plot[np.argsort(mship_active), :], xticklabels=250, yticklabels=250, vmin=-3, vmax=3, ax=ax,
+                rasterized=True)
+    fig.savefig(save_folder + "rfp_stable_activity_heatmap.pdf", type="pdf")
+
     # compare average mutual information between real and shuffled cells and sensory stimulus
     active_cells = np.logical_and(mship_nonan > -1, mship_nonan < 6)
     ent_sens = jknife_entropy(t_at_samp, 20)  # stimulus entropy
     mi_real = np.zeros(active_cells.sum())
     mi_shuffled = np.zeros(sh_active_cells.sum())
+    mi_null = np.zeros(active_cells.sum())
+    tlen = all_activity.shape[1] // 3
     for i, row in enumerate(all_activity[active_cells, :]):
         # compute entropy of cell
         ent_cell = jknife_entropy(row, 20)
         # compute joint entropy
         ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
         mi_real[i] = (ent_sens + ent_cell) - ent_joint
+        # compute null-model joint
+        null_cell = row.copy()
+        for tnum in range(3):
+            tact = row[tlen * tnum: tlen * (tnum + 1)]
+            r = np.random.randint(0, tlen)
+            shuff = np.roll(tact, r)
+            null_cell[tlen * tnum: tlen * (tnum + 1)] = shuff
+        ent_null = jknife_entropy(null_cell, 20)
+        ent_joint = jknife_entropy(np.hstack((null_cell[:, None], t_at_samp[:, None])), 20)
+        mi_null[i] = (ent_sens + ent_null) - ent_joint
     for i, row in enumerate(sh_all_activity[sh_active_cells, :]):
         ent_cell = jknife_entropy(row, 20)
         # compute joint entropy
         ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
         mi_shuffled[i] = (ent_sens + ent_cell) - ent_joint
 
-    d = {"Real": mi_real.tolist(), "Shuffled": mi_shuffled.tolist()}
+    d = {"Real": mi_real.tolist(), "Shuffled": mi_shuffled.tolist(), "Null": mi_null.tolist()}
     dframe = DataFrame(dict([(k, Series(d[k])) for k in d]))
 
     fig, ax = pl.subplots()
