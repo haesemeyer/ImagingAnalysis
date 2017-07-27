@@ -73,52 +73,6 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     fig.savefig(save_folder + "Stabilization_Correlation.pdf", type="pdf")
 
-    # plot example tail-traces of bouts with different biases
-    def plot_bout(ix, ax):
-        fname, index = lookup_table["filename"][ix], lookup_table["index"][ix]
-        td = mc_all_raw.tdd[fname]
-        b = td.bouts[index, :].astype(int)
-        ca = td.cumAngles[b[0]-20:b[1]+21]
-        t = (np.arange(ca.size)-20) / 100
-        ax.plot(t, ca)
-
-    biases = []
-    lookup_table = {"filename": [], "index": []}
-    # make sure mc_all_raw's dictionary is set up
-    mc_all_raw.avg_motor_output
-    for k in mc_all_raw.tdd.fileNames:
-        td = mc_all_raw.tdd[k]
-        mca = mode(td.cumAngles)[0]
-        if td.bouts is not None:
-            for i, b in enumerate(td.bouts.astype(int)):
-                biases.append(bias(b[0], b[1]+1, td.cumAngles, mca))
-                lookup_table["filename"].append(k)
-                lookup_table["index"].append(i)
-    biases = np.array(biases)
-    lfl = np.nonzero(biases > 0.9)[0]
-    rfl = np.nonzero(biases < -0.9)[0]
-    sw_l = np.nonzero(np.logical_and(biases < 0.5, biases > 0.3))[0]
-    sw_r = np.nonzero(np.logical_and(biases > -0.5, biases < -0.3))[0]
-    mid = np.nonzero(np.logical_and(biases > -0.1, biases < 0.1))[0]
-    fig, axes = pl.subplots(nrows=3, ncols=3, sharey=True, sharex=True)
-    plot_bout(np.random.choice(lfl), axes[0, 0])
-    plot_bout(np.random.choice(lfl), axes[1, 0])
-    plot_bout(np.random.choice(lfl), axes[2, 0])
-    # plot_bout(np.random.choice(sw_l), axes[0, 1])
-    # plot_bout(np.random.choice(sw_l), axes[1, 1])
-    # plot_bout(np.random.choice(sw_l), axes[2, 1])
-    plot_bout(np.random.choice(mid), axes[0, 1])
-    plot_bout(np.random.choice(mid), axes[1, 1])
-    plot_bout(np.random.choice(mid), axes[2, 1])
-    # plot_bout(np.random.choice(sw_r), axes[0, 3])
-    # plot_bout(np.random.choice(sw_r), axes[1, 3])
-    # plot_bout(np.random.choice(sw_r), axes[2, 3])
-    plot_bout(np.random.choice(rfl), axes[0, 2])
-    plot_bout(np.random.choice(rfl), axes[1, 2])
-    plot_bout(np.random.choice(rfl), axes[2, 2])
-    sns.despine(fig)
-    fig.tight_layout()
-
     # plot example stabilizer movement
     stable_example_folder = "E:/Dropbox/2P_Data/H2BGc6s_MidHB_3Rep_161111"
     flist = os.listdir(stable_example_folder)
