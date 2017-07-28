@@ -115,10 +115,29 @@ if __name__ == "__main__":
     rfp_active = np.logical_and(rfp_memnn > -1, rfp_memnn < 6)
     mship_active = rfp_memnn[rfp_active]
     act_to_plot = dff(trial_average(rfp_act[rfp_active, :], n_trials=2))  # these expts. only have 2 trials
+    act_to_plot_gcamp = dff(trial_average(all_activity, n_trials=3))
     fig, ax = pl.subplots()
     sns.heatmap(act_to_plot[np.argsort(mship_active), :], xticklabels=250, yticklabels=250, vmin=-3, vmax=3, ax=ax,
                 rasterized=True)
     fig.savefig(save_folder + "rfp_stable_activity_heatmap.pdf", type="pdf")
+
+    # plot Gcamp and RFP cluster averages
+    time = np.arange(act_to_plot.shape[1]) / 5.0
+    fig, axes = pl.subplots(nrows=6, ncols=2, sharex=True, sharey=True)
+    for i, c in enumerate(np.unique(mship_active)):
+        sns.tsplot(act_to_plot[mship_active == c, :], time, ax=axes[i, 1], color="C3")
+        if i < 4:
+            sns.tsplot(act_to_plot_gcamp[mship_nonan == c, :], time, ax=axes[i, 0], color="C2")
+        else:
+            sns.tsplot(act_to_plot_gcamp[mship_nonan == c, :], time, ax=axes[i, 0], color="C4")
+        axes[i, 0].set_ylabel("dF/F0")
+    axes[5, 0].set_xlabel("Time [s]")
+    axes[5, 1].set_xlabel("Time [s]")
+    axes[5, 0].set_xticks([0, 30, 60, 90, 120, 150])
+    axes[5, 1].set_xticks([0, 30, 60, 90, 120, 150])
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "rfp_stable_activity_clusterAvgs.pdf", type="pdf")
 
     # compare average mutual information between real and shuffled cells and sensory stimulus
     active_cells = np.logical_and(mship_nonan > -1, mship_nonan < 6)
