@@ -47,12 +47,29 @@ class ModelResult:
             self.nonlin_type = "EXP"
             self.nonlin_params = nonlin_params
             self.nonlin_function = exp_nonlin
+        elif nonlin_type.upper() == "SIG":
+            self.nonlin_type = "SIG"
+            self.nonlin_params = nonlin_params
+            self.nonlin_function = sig_nonlin
         else:
-            raise ValueError("Did not recognize nonlin type. Should be 'CUBIC' or 'EXP'")
+            raise ValueError("Did not recognize nonlin type. Should be 'CUBIC' or 'EXP' or 'SIG'")
         self.predictors = lr_inputs
         self.lr_factors = lr_factors
         self.filter_coefs = filter_coefs
         self.trace_object = None
+
+    def lr_result(self, model_in):
+        if self.lr_factors.size > 1:
+            return np.dot(model_in, self.lr_factors.T).ravel()
+        else:
+            return (model_in * self.lr_factors).ravel()
+
+    def filtered_result(self, model_in):
+        lr_res = self.lr_result(model_in)
+        if self.filter_coefs is None:
+            return lr_res
+        else:
+            return np.convolve(lr_res, self.filter_coefs)[:lr_res.size]
 
     def predict_original(self):
         """
@@ -71,18 +88,10 @@ class ModelResult:
         Returns:
             The predicted timeseries
         """
-        if self.lr_factors.size > 1:
-            lr_res = np.dot(model_in, self.lr_factors.T).ravel()
-        else:
-            lr_res = (model_in * self.lr_factors).ravel()
-        if self.filter_coefs is None:
-            filt_res = lr_res
-        else:
-            filt_res = np.convolve(lr_res, self.filter_coefs)[:lr_res.size]
         if self.nonlin_type is None:
-            return filt_res
+            return self.filtered_result(model_in)
         else:
-            return self.nonlin_function(filt_res, *self.nonlin_params)
+            return self.nonlin_function(self.filtered_result(model_in), *self.nonlin_params)
 
 
 def exp_filter(f_scale, f_decay):
@@ -149,6 +158,22 @@ def cubic_nonlin(x, a, b, c, d):
     Parametrization of a cubic nonlinearity applied to x
     """
     return a*(x**3) + b*(x**2) + c*x + d
+
+
+def sig_nonlin(x, s, tau, dt, o):
+    """
+    Parametrization of a sigmoid nonlinearity applied to x
+    Args:
+        x: The input
+        s: The scale of the sigmoid
+        tau: The timescale of the transition
+        dt: The position of the halfway point
+        o: Offset term
+
+    Returns:
+        The sigmoid transformation of x
+    """
+    return s * (1 / (1+np.exp(-tau*(x-dt))) + o)
 
 
 def exp_nonlin(x, offset, rate, scale):
