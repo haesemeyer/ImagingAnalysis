@@ -113,15 +113,15 @@ if __name__ == "__main__":
     activity_sig_corrs = dff(ta_rh6_act[sig_cells, :])
     mclust = max_cluster(np.argmax(dt_sig_corrs, 1))
     # plot clusters
+    plot_corrs = []
+    for c in np.unique(mclust.labels_):
+        plot_corrs.append(dt_sig_corrs[mclust.labels_ == c, :])
+        # append "spacer" - NOTE: This means that y-axis becomes meaningless
+        plot_corrs.append(np.full((25, dt_sig_corrs.shape[1]), np.nan))
     fig, ax = pl.subplots()
-    sns.heatmap(dt_sig_corrs[np.argsort(mclust.labels_), :], yticklabels=50,
-                xticklabels=["Fast ON", "Slow ON", "Fast OFF", "Slow OFF", "Dld. OFF"], ax=ax)
-    # plot cluster boundaries
-    covered = 0
-    for i in range(pred_reg_corr_mat.shape[1]):
-        covered += np.sum(mclust.labels_ == i)
-        ax.plot([0, dt_sig_corrs.shape[1] + 1], [mclust.labels_.size - covered, mclust.labels_.size - covered], 'k')
-    ax.set_ylabel("Cells")
+    sns.heatmap(np.vstack(plot_corrs), yticklabels=False,
+                xticklabels=["Fast ON", "Slow ON", "Fast OFF", "Slow OFF", "Dld. OFF"],
+                ax=ax, vmin=-1, vmax=1, center=0)
     fig.savefig(save_folder + "DetailChar_Rh6_clustering.pdf", type="pdf")
 
     # plot average ON cluster activity

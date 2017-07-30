@@ -149,7 +149,7 @@ if __name__ == "__main__":
         plot_corrs.append(np.full((250, motor_corrs_sig.shape[1]), np.nan))
     fig, ax = pl.subplots()
     sns.heatmap(np.vstack(plot_corrs), vmin=0, vmax=1, yticklabels=False,
-                xticklabels=labels, cmap="inferno", rasterized=True)
+                xticklabels=labels, center=0, rasterized=True)
     fig.savefig(save_folder + "Motor_correlations.pdf", type="pdf", dpi=150)
 
     # plot whole-brain overview of motor related cells

@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
         # plot regressor-regressor correlations
         fig, ax = pl.subplots()
-        sns.heatmap(np.corrcoef(ar.regressors.T), vmax=1, annot=True, ax=ax)
+        sns.heatmap(np.corrcoef(ar.regressors.T), vmax=1, vmin=-1, center=0, annot=True, ax=ax)
         fig.savefig(save_folder + "regTOregCorrs_" + dl + ".pdf", type="pdf")
 
         # plot prediction of swims and flicks

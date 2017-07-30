@@ -97,7 +97,7 @@ if __name__ == "__main__":
         plot_corrs.append(np.full((25, motor_corrs_sig.shape[1]), np.nan))
     fig, ax = pl.subplots()
     sns.heatmap(np.vstack(plot_corrs), vmin=0, vmax=1, yticklabels=False,
-                xticklabels=labels, cmap="inferno", rasterized=True)
+                xticklabels=labels, center=0, rasterized=True)
     fig.savefig(save_folder + "sh_Motor_correlations.pdf", type="pdf", dpi=150)
 
     tailstore = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/taildata.hdf5', 'r')
