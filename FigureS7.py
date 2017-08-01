@@ -8,7 +8,7 @@ import matplotlib as mpl
 from Figure3 import trial_average
 from analyzeSensMotor import RegionResults
 from typing import Dict
-from sensMotorModel import ModelResult, standardize
+from sensMotorModel import ModelResult, standardize, run_model
 
 
 def col_std(m):
@@ -28,8 +28,8 @@ if __name__ == "__main__":
     for k in test_labels:
         region_results[k] = (pickle.loads(np.array(storage[k])))
     storage.close()
-    # load model results
-    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170702.hdf5', 'r')
+    # load rh6-no-filter model results
+    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_noRh6Filts.hdf5', 'r')
     model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
     stim_in = np.array(model_file["stim_in"])
     m_in = np.array(model_file["m_in"])
@@ -53,6 +53,47 @@ if __name__ == "__main__":
     dt_t_at_samp = (dt_t_at_samp-m_in) / s_in
     stim_file.close()
     t_time_dtChar = np.arange(dt_t_at_samp.size) / 5.0
+
+    # plot prediction of swims and flicks in the absence of any temporal filtering in Rh6
+
+    # sine-lo-hi
+    sw_sinLH, fl_sinLH = run_model(stim_in, model_results)[:2]
+    fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
+    ax_sw.plot(t_time_sinLH, swim_out, 'k', label="Swims")
+    ax_sw.plot(t_time_sinLH, standardize(sw_sinLH), "C0", label="Swim prediction")
+    ax_sw.set_xlabel("Time [s]")
+    ax_sw.set_ylabel("Motor output [AU]")
+    ax_sw.set_title("R2 = {0:.2}".format(np.corrcoef(sw_sinLH, swim_out)[0, 1] ** 2))
+    ax_sw.legend()
+    ax_flk.plot(t_time_sinLH, flick_out, 'k', label="Flicks")
+    ax_flk.plot(t_time_sinLH, standardize(fl_sinLH), "C1", label="Flick prediction")
+    ax_flk.set_xlabel("Time [s]")
+    ax_flk.set_title("R2 = {0:.2}".format(np.corrcoef(fl_sinLH, flick_out)[0, 1] ** 2))
+    ax_flk.legend()
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "SineLH_noRh6filt_motPred.pdf", type="pdf")
+
+    # detail char experiments
+    detChar_swims = np.load("detailChar_swims.npy")
+    detChar_flicks = np.load("detailChar_flicks.npy")
+    sw_dtCh, fl_dtCh, rh6_dtCh = run_model(dt_t_at_samp, model_results)
+    no_tap_inf = np.logical_and(t_time_dtChar > 10, t_time_dtChar < 128)
+    fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
+    ax_sw.plot(t_time_dtChar[no_tap_inf], standardize(detChar_swims[no_tap_inf]), 'k', label="Swims")
+    ax_sw.plot(t_time_dtChar[no_tap_inf], standardize(sw_dtCh[no_tap_inf]), "C0", label="Swim prediction")
+    ax_sw.set_xlabel("Time [s]")
+    ax_sw.set_ylabel("Motor output [AU]")
+    ax_sw.set_title("R2 = {0:.2}".format(np.corrcoef(detChar_swims[no_tap_inf], sw_dtCh[no_tap_inf])[0, 1] ** 2))
+    ax_sw.legend()
+    ax_flk.plot(t_time_dtChar[no_tap_inf], standardize(detChar_flicks[no_tap_inf]), 'k', label="Flicks")
+    ax_flk.plot(t_time_dtChar[no_tap_inf], standardize(fl_dtCh[no_tap_inf]), "C1", label="Flick prediction")
+    ax_flk.set_xlabel("Time [s]")
+    ax_flk.set_title("R2 = {0:.2}".format(np.corrcoef(detChar_flicks[no_tap_inf], fl_dtCh[no_tap_inf])[0, 1] ** 2))
+    ax_flk.legend()
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "DetailChar_noRh6filt_motPred.pdf", type="pdf")
 
     # use fourier transform to compare stimulus dynamics raw and after filtering by our trigeminal filter
     dt_t_at_samp -= np.mean(dt_t_at_samp)
