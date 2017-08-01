@@ -13,6 +13,7 @@ from typing import Dict
 from sensMotorModel import ModelResult, standardize
 import pymc3 as pm
 from mh_2P import IndexingMatrix
+from Figure6 import plot_lr_factors
 
 
 def plot_nonlin(mresult: ModelResult, act_real: np.ndarray, ax: pl.Axes):
@@ -41,6 +42,9 @@ if __name__ == "__main__":
     model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
     stim_in = np.array(model_file["stim_in"])
     model_file.close()
+    mf_nofilt = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_noRh6Filts.hdf5', 'r')
+    mr_nofilt = pickle.loads(np.array(mf_nofilt["model_results"]))  # type: Dict[str, ModelResult]
+    mf_nofilt.close()
     names_tg = ["TG_ON", "TG_OFF"]
     names_rh6 = ["Fast_ON", "Slow_ON", "Fast_OFF", "Slow_OFF", "Delayed_OFF"]
 
@@ -127,3 +131,23 @@ if __name__ == "__main__":
     ax.set_ylabel("Filter coefficients")
     sns.despine(fig, ax)
     fig.savefig(save_folder + "simulation_freal_fderived.pdf", type="pdf")
+
+    # plot prediction / fit comparisons in Rh6 for comparison model without temporal filters
+    for i, n in enumerate(names_rh6):
+        act_real = region_results["Rh6"].full_averages[:, i]
+        act_real = standardize(trial_average(act_real)).ravel()
+        model_fit = mr_nofilt[n].predict_original()
+        # prediction
+        fig, ax = pl.subplots()
+        ax.plot(trial_time, act_real, '--')
+        ax.plot(trial_time, model_fit)
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Activity [AU]")
+        ax.set_xticks([0, 30, 60, 90, 120, 150])
+        sns.despine(fig, ax)
+        fig.savefig(save_folder + n + "_nofilt_prediction.pdf", type="pdf")
+        # coefficients
+        fig, ax = pl.subplots()
+        plot_lr_factors(mr_nofilt[n].trace_object["beta"], ax, 99)
+        sns.despine(fig, ax)
+        fig.savefig(save_folder + n + "_nofilt_lr_coefs.pdf", type="pdf")
