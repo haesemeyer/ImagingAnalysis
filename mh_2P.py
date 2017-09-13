@@ -1394,8 +1394,8 @@ class DetailCharExperiment(ImagingData):
         """
         frames = np.arange(self.totalSeconds // self.n_repeats * self.frameRate, dtype=int)
         time = frames / self.frameRate
-        pre_frames = frames[np.logical_and(time >= 35, time <= 39)]
-        stim_frames = frames[np.logical_and(time >= 42, time <= 45)]
+        pre_frames = frames[np.logical_and(time >= 35, time <= 40)]
+        stim_frames = frames[np.logical_and(time >= 43, time <= 46)]
         return pre_frames, stim_frames
 
     def get_tap_pre_stim_ix(self):
