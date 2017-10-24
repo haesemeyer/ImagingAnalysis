@@ -16,3 +16,5 @@ test*
 *.sln
 .idea/
 *.autosave
+*.nrrd
+*.hdf5
