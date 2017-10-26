@@ -2497,7 +2497,7 @@ def ComputeAlignmentShift(stack, index, sum_stack):
     # remove current slice from the sum
     sum_stack -= stack[index, :, :]
 
-    exp_x, exp_y = stack.shape[1]//2, stack.shape[2]//2  # these are the indices in the cross-correlation matrix that correspond to 0 shift
+    exp_x, exp_y = (stack.shape[1])//2, (stack.shape[2])//2  # these are the indices in the cross-correlation matrix that correspond to 0 shift
     c = cv2.filter2D(ms(sum_stack), -1, ms(stack[index, :, :]))
     # NOTE: Center of mass instead of maximum may be better IFF the eye has been
     # masked out of the stack. But it seems to lead to quite large distortions
@@ -2513,7 +2513,7 @@ def ComputeAlignmentShift(stack, index, sum_stack):
     return shift_x, shift_y, sum_stack
 
 
-def ReAlign(stack, maxShift):
+def ReAlign(stack, maxShift, co_stack=None):
     """
     Re-positions every slice in stack by the following iterative
     procedure:
@@ -2542,6 +2542,9 @@ def ReAlign(stack, maxShift):
             target = (0, size)
         return source, target
 
+    if co_stack is not None:
+        if co_stack.shape != stack.shape:
+            raise ValueError("Stack to be co-aligned needs to have same dimensions as main stack")
     total_max_shift = 0
     maxShift = int(maxShift)
     x_shifts = np.zeros(stack.shape[0])
@@ -2549,7 +2552,9 @@ def ReAlign(stack, maxShift):
     re_aligned = stack.copy()
     # compute initial sum
     sum_stack = np.sum(re_aligned, 0)
-    for t in range(re_aligned.shape[0]):
+    all_t = np.arange(re_aligned.shape[0])
+    np.random.shuffle(all_t)
+    for t in all_t:
         xshift, yshift, sum_stack = ComputeAlignmentShift(re_aligned, t, sum_stack)
         x_shifts[t] = xshift
         y_shifts[t] = yshift
@@ -2576,10 +2581,17 @@ def ReAlign(stack, maxShift):
         re_aligned[t, :, :] = newImage
         # add re-aligned image to sumStack
         sum_stack += newImage
+        if co_stack is not None:
+            newImage = np.zeros((re_aligned.shape[1], re_aligned.shape[2]), dtype=np.float32)
+            newImage[xt[0]:xt[1], yt[0]:yt[1]] = co_stack[t, xs[0]:xs[1], ys[0]:ys[1]]
+            co_stack[t, :, :] = newImage
     # report back how many slices in total had to be maximally shifted
     percent_max = total_max_shift/re_aligned.shape[0]*100
     print("A total of {0} slices, or {1}% needed maximum shift".format(total_max_shift, percent_max))
-    return re_aligned, percent_max, x_shifts, y_shifts
+    if co_stack is not None:
+        return re_aligned, percent_max, x_shifts, y_shifts, co_stack
+    else:
+        return re_aligned, percent_max, x_shifts, y_shifts
 
 
 def CorrelationControl(stack, nFrames):
