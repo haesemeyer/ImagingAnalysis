@@ -4,6 +4,7 @@ from PIL import Image
 import pickle
 
 from collections import Counter
+import itertools
 import h5py
 import matplotlib.pyplot as pl
 import matplotlib.path as mpath
@@ -3110,3 +3111,36 @@ def IndexingMatrix(trigger_frames, f_past, f_future, input_length):
         return indexMat[cutFront:-1 * cutBack, :].astype(int), cutFront, cutBack
     else:
         return indexMat[cutFront::, :].astype(int), cutFront, cutBack
+
+
+def trial_to_trial_correlations(mat, n_trials):
+    """
+    Computes trial to trial correlations of all traces in matrix
+    Args:
+        mat: nSamples x nTimepoints matrix of activity or behavior etc.
+        n_trials: The number of trials in the dataset (mat.shape[1] % n_trials == 0)
+
+    Returns:
+        m.shape[0] long vector of average trial_to_trial correlations
+    """
+    def mat_mat_corr(m1: np.ndarray, m2: np.ndarray):
+        """
+        Computes pairwise correlations between corresponding rows in m1 and m2
+        """
+        ms1 = m1.copy() - np.mean(m1, 1, keepdims=True)
+        ms2 = m2.copy() - np.mean(m2, 1, keepdims=True)
+        norm1 = np.linalg.norm(ms1, axis=1, keepdims=True)
+        norm2 = np.linalg.norm(ms2, axis=1, keepdims=True)
+        return np.sum(ms1 * ms2, axis=1, keepdims=True) / (norm1 * norm2)
+
+    if mat.shape[1] % n_trials != 0:
+        raise ValueError("Axis 1 of mat has to be evenly divisible by n_trials")
+    t_len = mat.shape[1] // n_trials
+    t_mats = []  # list of per-trial matrices
+    for i in range(n_trials):
+        t_mats.append(mat[:, i*t_len:(i+1)*t_len])
+    tests = set(itertools.combinations(range(n_trials), 2))
+    corrs = np.zeros(mat.shape[0])
+    for t in tests:
+        corrs += mat_mat_corr(t_mats[t[0]], t_mats[t[1]]).ravel()
+    return corrs / n_trials
