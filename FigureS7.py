@@ -5,10 +5,11 @@ import seaborn as sns
 import h5py
 import pickle
 import matplotlib as mpl
-from Figure3 import trial_average
+from Figure3 import trial_average, dff
 from analyzeSensMotor import RegionResults
 from typing import Dict
 from sensMotorModel import ModelResult, standardize, run_model
+from multiExpAnalysis import max_cluster
 
 
 def col_std(m):
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     # detail char experiments
     detChar_swims = np.load("detailChar_swims.npy")
     detChar_flicks = np.load("detailChar_flicks.npy")
-    sw_dtCh, fl_dtCh, rh6_dtCh = run_model(dt_t_at_samp, model_results)
+    sw_dtCh, fl_dtCh, rh6_dtCh_noFilt = run_model(dt_t_at_samp, model_results)
     no_tap_inf = np.logical_and(t_time_dtChar > 10, t_time_dtChar < 128)
     fig, (ax_sw, ax_flk) = pl.subplots(ncols=2, sharex=True, sharey=True)
     ax_sw.plot(t_time_dtChar[no_tap_inf], standardize(detChar_swims[no_tap_inf]), 'k', label="Swims")
@@ -94,6 +95,60 @@ if __name__ == "__main__":
     sns.despine(fig)
     fig.tight_layout()
     fig.savefig(save_folder + "DetailChar_noRh6filt_motPred.pdf", type="pdf")
+
+    # use both real and no-filter model predictions to compare identified cells
+    dfile = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/detailChar_data.hdf5", "r")
+    dt_act = np.array(dfile["all_activity"])
+    dt_regions = pickle.loads(np.array(dfile["all_rl_pickle"]))
+    dfile.close()
+    # load full model results
+    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170702.hdf5', 'r')
+    model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
+    model_file.close()
+    rh6_dtCh = run_model(dt_t_at_samp, model_results)[2]
+    rh6_act = dt_act[(dt_regions == "Rh_6").ravel(), :]
+    # create trial averages of rh6 activity
+    ta_rh6_act = np.mean(rh6_act.reshape((rh6_act.shape[0], 25, rh6_act.shape[1] // 25)), 1)
+    # create correlation matrix for correlations of real activity to predicted rh6 activity as regressors
+    pred_reg_corr_mat = np.zeros((ta_rh6_act.shape[0], rh6_dtCh.shape[1]))
+    pred_reg_corr_mat_noFilt = np.zeros_like(pred_reg_corr_mat)
+    for i in range(rh6_dtCh.shape[1]):
+        reg = rh6_dtCh[:, i]
+        reg_nofilt = rh6_dtCh_noFilt[:, i]
+        for j, a in enumerate(ta_rh6_act):
+            pred_reg_corr_mat[j, i] = np.corrcoef(a, reg)[0, 1]
+            pred_reg_corr_mat_noFilt[j, i] = np.corrcoef(a, reg_nofilt)[0, 1]
+    sig_cells = (np.sum(pred_reg_corr_mat >= 0.6, 1) > 0)
+    dt_sig_corrs = pred_reg_corr_mat[sig_cells, :]
+    mclust = max_cluster(np.argmax(dt_sig_corrs, 1))
+    membership_full = np.full(ta_rh6_act.shape[0], -1)
+    membership_full[sig_cells] = mclust.labels_
+    sig_cells = (np.sum(pred_reg_corr_mat_noFilt >= 0.6, 1) > 0)
+    dt_sig_corrs = pred_reg_corr_mat_noFilt[sig_cells, :]
+    mclust = max_cluster(np.argmax(dt_sig_corrs, 1))
+    membership_nofilt = np.full_like(membership_full, -1)
+    membership_nofilt[sig_cells] = mclust.labels_
+    # create matrix that in row a column b lists which fraction of cells in the original cluster b are made up from
+    # cells now assigned to cluster a when no filter is present (including -1)
+    recovery_mat = np.zeros((6, 5))
+    for i, c_no_filt in enumerate([0, 1, 2, 3, 4, -1]):
+        for c_full in range(5):
+            recovery_mat[i, c_full] = np.sum(np.logical_and(membership_nofilt == c_no_filt,
+                                                                      membership_full == c_full))
+    # convert to fractions
+    recovery_mat = recovery_mat / np.sum(recovery_mat, 0)
+    xloc = np.arange(5)
+    fig, ax = pl.subplots()
+    for i, c_no_filt in enumerate([0, 1, 2, 3, 4]):
+        if i == 0:
+            ax.bar(xloc, recovery_mat[i, :], 0.7, label=c_no_filt)
+        else:
+            ax.bar(xloc, recovery_mat[i, :], 0.7, bottom=np.sum(recovery_mat[:i, :], 0), label=c_no_filt)
+    ax.set_ylabel("Recovered fraction")
+    ax.set_ylim(0, 1)
+    ax.legend()
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "DetailChar_noRh6filt_recoveredClusters.pdf", type="pdf")
 
     # use fourier transform to compare stimulus dynamics raw and after filtering by our trigeminal filter
     dt_t_at_samp -= np.mean(dt_t_at_samp)
