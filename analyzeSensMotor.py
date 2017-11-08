@@ -366,12 +366,13 @@ def jknife_entropy(data, nbins=10):
 
 
 class RegionResults:
-    def __init__(self, name, activities, membership, regressors, original_labels):
+    def __init__(self, name, activities, membership, regressors, original_labels, region_indices):
         self.name = name
         self.region_acts = activities
         self.region_mem = membership
         self.regressors = regressors
         self.regs_clust_labels = original_labels
+        self.region_indices = region_indices
         self.full_averages = None
 
 
@@ -480,7 +481,7 @@ if __name__ == "__main__":
 
     for k, regions in enumerate(test_regions):
         print("Processing ", test_labels[k])
-        region_act, region_mem = build_region_clusters(regions, plTitle=test_labels[k])[:2]
+        region_act, region_mem, region_ind = build_region_clusters(regions, plTitle=test_labels[k])
         regressors, clust_labels = build_regressors(trial_average(region_act), region_mem)
         full_averages = build_regressors(region_act, region_mem)[0]
         # create prediction matrices
@@ -518,7 +519,7 @@ if __name__ == "__main__":
             sns.heatmap(np.corrcoef(regressors.T), vmax=1, annot=True, xticklabels=clust_labels,
                         yticklabels=clust_labels, ax=ax)
             ax.set_title(test_labels[k])
-        analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels)
+        analysis_result = RegionResults(test_labels[k], region_act, region_mem, regressors, clust_labels, region_ind)
         analysis_result.full_averages = full_averages
         # compute regression results on full data not repeat-averaged
         if full_averages.size > 0:
