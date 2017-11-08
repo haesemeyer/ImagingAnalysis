@@ -263,23 +263,36 @@ def make_dexp_residual_function(inputs: np.ndarray, output: np.ndarray, f_len):
     return residuals, p0
 
 
-def run_model(laser_stimulus, model_results, exclude = []):
+def run_model(laser_stimulus, model_results: Dict[str, ModelResult], exclude=None, noTGFilter=False):
     """
     Run model on stimulus predicting from input to motor output
     Args:
         laser_stimulus: The stimulus temperature, standardized
         model_results: Dictionary of model fits
         exclude: Outputs of types listed in excluded will be set to 0
+        noTGFilter: If set to true, inputs to TG units won't be filtered by the TG kernel
 
     Returns:
         [0]: Swim prediction (conv. with Ca kernel by model)
         [1]: Flick prediction (conv. with Ca kernel by model)
         [2]: Prediction of activity in Rh6
     """
-    tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
+    if exclude is None:
+        exclude = []
+    if noTGFilter:
+        fsum = np.sum(model_results["TG_ON"].filter_coefs)
+        tg_on_prediction = model_results["TG_ON"].lr_result(laser_stimulus)
+        tg_on_prediction *= fsum
+    else:
+        tg_on_prediction = model_results["TG_ON"].predict(laser_stimulus)
     if "TG_ON" in exclude:
         tg_on_prediction[:] = 0
-    tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
+    if noTGFilter:
+        fsum = np.sum(model_results["TG_OFF"].filter_coefs)
+        tg_off_prediction = model_results["TG_OFF"].lr_result(laser_stimulus)
+        tg_off_prediction *= fsum
+    else:
+        tg_off_prediction = model_results["TG_OFF"].predict(laser_stimulus)
     if "TG_OFF" in exclude:
         tg_off_prediction[:] = 0
     tg_out_prediction = np.hstack((tg_on_prediction[:, None], tg_off_prediction[:, None]))
