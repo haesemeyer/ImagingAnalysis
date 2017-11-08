@@ -737,33 +737,33 @@ class ImagingData:
     def NUnits(self):
         return self.RawData.shape[0]
 
-    @property
-    def AvgUnitBrightness(self):
-        """
-        The average brightness of each unit in the experiment
-        """
-        if len(self.graph_info) == 0:
-            return None
-        avg_brightness = np.zeros(len(self.graph_info), dtype=np.float32)
-        projection_dict = {}
-        for i, gi in enumerate(self.graph_info):
-            sf = gi[0]
-            if sf in projection_dict:
-                projection = projection_dict[sf]
-            else:
-                # first attempt to load aligned stack
-                stackFile = sf[:-4]+"_stack.npy"
-                if os.path.exists(stackFile):
-                    stack = np.load(stackFile).astype(np.float32)
-                else:
-                    stack = OpenStack(sf).astype(np.float32)
-                projection = np.sum(stack, 0)
-                projection_dict[sf] = projection
-            bsum = 0
-            for v in gi[1]:
-                bsum += projection[v[0], v[1]]
-            avg_brightness[i] = bsum / len(gi[1])
-        return avg_brightness
+    # @property
+    # def AvgUnitBrightness(self):
+    #     """
+    #     The average brightness of each unit in the experiment
+    #     """
+    #     if len(self.graph_info) == 0:
+    #         return None
+    #     avg_brightness = np.zeros(len(self.graph_info), dtype=np.float32)
+    #     projection_dict = {}
+    #     for i, gi in enumerate(self.graph_info):
+    #         sf = gi[0]
+    #         if sf in projection_dict:
+    #             projection = projection_dict[sf]
+    #         else:
+    #             # first attempt to load aligned stack
+    #             stackFile = sf[:-4]+"_stack.npy"
+    #             if os.path.exists(stackFile):
+    #                 stack = np.load(stackFile).astype(np.float32)
+    #             else:
+    #                 stack = OpenStack(sf).astype(np.float32)
+    #             projection = np.sum(stack, 0)
+    #             projection_dict[sf] = projection
+    #         bsum = 0
+    #         for v in gi[1]:
+    #             bsum += projection[v[0], v[1]]
+    #         avg_brightness[i] = bsum / len(gi[1])
+    #     return avg_brightness
 
     def motorCorrelation(self, nrolls=0, rollMin=0, rollMax=None):
         """
@@ -1061,6 +1061,53 @@ class RepeatExperiment(ImagingData):
         var_blockAvg = np.var(np.mean(byBlock, 2), 1)
         avg_blockVar = np.mean(np.var(byBlock, 1), 1)
         return var_blockAvg / avg_blockVar
+
+    def get_raw_unit_traces(self, indices):
+        """
+        Compute summed activity traces for given graphs in the original aligned stack interpolated appropriately
+        Args:
+            indices: List of indices for which to return traces
+
+        Returns:
+            len(indices) x n_timepoints matrix of original traces (interpolated to the frequency of the dataset)
+        """
+        if self.original_time_per_frame == 0:
+            raise ValueError("Cannot interpolate if original_time_per_frame is not set on class")
+        raw = []
+        # for efficiency (as long as indices are ordered) we store the last accessed stack since it is
+        # probably that the next index refers to a unit in the same slice
+        last_name = ""
+        last_stack = None
+        try:
+            for i in indices:
+                sf = self.graph_info[i][0]
+                if sf == last_name:
+                    stack = last_stack
+                else:
+                    # first attempt to load aligned stack
+                    stackFile = sf[:-4] + "_stack.npy"
+                    if os.path.exists(stackFile):
+                        stack = np.load(stackFile).astype(np.float32)
+                    else:
+                        stack = OpenStack(sf).astype(np.float32)
+                last_name = sf
+                last_stack = stack
+                bsum = np.zeros((1, stack.shape[0]), dtype=np.float32)
+                for v in self.graph_info[i][1]:
+                    bsum += stack[:, v[0], v[1]]
+                raw.append(bsum)
+        except TypeError:
+            print("indices argument should be iterable attribute")
+            raise
+        lens = [r.size for r in raw]
+        ml = min(lens)
+        raw = np.vstack([r[0, :ml] for r in raw])
+        # interpolate raw data
+        nframes_interp = (self.preFrames + self.stimFrames + self.postFrames) * self.nRepeats
+        interp_times = np.arange(nframes_interp) / self.frameRate
+        frame_times = np.arange(raw.shape[1]) * self.original_time_per_frame
+        ipol = lambda y: np.interp(interp_times, frame_times, y[:frame_times.size])
+        return np.vstack([ipol(row) for row in raw])
 
 
 class SOORepeatExperiment(RepeatExperiment):
@@ -3111,6 +3158,30 @@ def IndexingMatrix(trigger_frames, f_past, f_future, input_length):
         return indexMat[cutFront:-1 * cutBack, :].astype(int), cutFront, cutBack
     else:
         return indexMat[cutFront::, :].astype(int), cutFront, cutBack
+
+
+def trial_average(m: np.ndarray, n_trials, sum_it=False):
+    """
+    Compute trial average for each trace in m
+    Args:
+        m: n_cells x m_timepoints matrix of activity traces
+        sum_it: If true traces get summed instead of averaged
+        n_trials: The number of trials
+
+    Returns:
+        n_cells x (m_timepoints // n_trials) matrix of trial averages
+    """
+    if m.shape[1] % n_trials != 0:
+        raise ValueError("axis 1 of m has to be evenly divisible into the requested {0} trials".format(n_trials))
+    if m.ndim == 2:
+        m_t = np.reshape(m, (m.shape[0], n_trials, m.shape[1]//n_trials))
+    elif m.ndim == 1:
+        m_t = np.reshape(m, (1, n_trials, m.shape[0] // n_trials))
+    else:
+        raise ValueError("m has to be either 1 or 2-dimensional")
+    if sum_it:
+        return np.sum(m_t, 1)
+    return np.mean(m_t, 1)
 
 
 def trial_to_trial_correlations(mat, n_trials):
