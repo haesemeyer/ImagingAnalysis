@@ -18,13 +18,13 @@ avg_blen_frames = np.round(avg_bout_len_ms / 1000 * frame_rate)
 # behavioral distributions from real gradient data used for swims
 # all assumed to be independent of temperature
 sw_da_mean = -1
-sw_da_sd = 41
+sw_da_sd = 20  # 41
 sw_disp_k = 2.63  # = alpha of gamma
 sw_disp_theta = 1/0.138  # = 1/beta of gamma
 
 # flick related parameters are not based on data but just meant to reflect a steep in-place turn
-fl_da_mean = 45
-fl_da_sd = 10
+fl_da_mean = 60
+fl_da_sd = 5
 fl_disp_mean = 0
 fl_disp_sd = 0
 
@@ -175,7 +175,7 @@ class ModelSimulation:
                 if model_in.size > 100:
                     model_in = model_in[-100:]
                 model_in = (model_in - m_in) / s_in
-                psw, pfl = run_model(model_in, self.mr)[:2]
+                psw, pfl = run_model(model_in, self.mr, noTGFilter=True)[:2]
                 if sw_eq_fl:
                     psw = (psw + pfl) / 2
                     pfl = psw
@@ -198,24 +198,43 @@ class ModelSimulation:
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
-    # load model results
-    model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170713.hdf5', 'r')
-    model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
-    stim_in = np.array(model_file["stim_in"])
-    m_in = np.array(model_file["m_in"])
-    s_in = np.array(model_file["s_in"])
-    model_file.close()
-    sim = ModelSimulation(model_results)
-    n_steps = 1000000
-    res_full = sim.do_simulation(n_steps)
-    print("Full simulation completed")
-    res_cont = sim.do_simulation(n_steps, control=True)
-    print("Control simulation completed")
-    res_eq = sim.do_simulation(n_steps, sw_eq_fl=True)
-    print("Swim=Flick simulation completed")
-    r_full = np.sqrt(res_full[0] ** 2 + res_full[1] ** 2)
-    r_cont = np.sqrt(res_cont[0] ** 2 + res_cont[1] ** 2)
-    r_eq = np.sqrt(res_eq[0] ** 2 + res_eq[1] ** 2)
+    # try to load simulation results from file if possible
+    try:
+        simFile = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_sim_data.hdf5','r')
+    except OSError:
+        simFile = None
+    if simFile is not None:
+        print("File with simulation data found.")
+        ans = ""
+        while ans != "y" and ans != "n":
+            ans = input("Run new simulation? [y/n]")
+        if ans == "y":
+            simFile.close()
+    else:
+        ans = "y"
+    if ans == "y":
+        # load model results
+        model_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/model_170713.hdf5', 'r')
+        model_results = pickle.loads(np.array(model_file["model_results"]))  # type: Dict[str, ModelResult]
+        stim_in = np.array(model_file["stim_in"])
+        m_in = np.array(model_file["m_in"])
+        s_in = np.array(model_file["s_in"])
+        model_file.close()
+        sim = ModelSimulation(model_results)
+        n_steps = 10000000
+        res_full = sim.do_simulation(n_steps)
+        print("Full simulation completed")
+        res_cont = sim.do_simulation(n_steps, control=True)
+        print("Control simulation completed")
+        res_eq = sim.do_simulation(n_steps, sw_eq_fl=True)
+        print("Swim=Flick simulation completed")
+        r_full = np.sqrt(res_full[0] ** 2 + res_full[1] ** 2)
+        r_cont = np.sqrt(res_cont[0] ** 2 + res_cont[1] ** 2)
+        r_eq = np.sqrt(res_eq[0] ** 2 + res_eq[1] ** 2)
+    else:
+        r_full = np.array(simFile['r_full'])
+        r_cont = np.array(simFile['r_cont'])
+        r_eq = np.array(simFile['r_eq'])
 
     pl.figure()
     sns.distplot(r_cont, label="Control")
