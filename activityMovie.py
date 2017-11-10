@@ -9,13 +9,14 @@ from typing import List
 import pickle
 
 
-def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
+def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1, radius=3):
     """
     Create a (refernce) stack with given centroids marked as single dots
     Args:
         centroids_um: The (x,y,z) centroid coordinates in um
         stack_type: Either "MAIN" or "TG" to obtain overall dimensions and resolution
         brightness: Either a scalar btw. 0 and 1 defining the brightness of all points or array with value per centroid
+        radius: Radius of the ball drawn around each centroid in um
 
     Returns:
         [0]: Stack
@@ -23,7 +24,7 @@ def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
     """
     if not np.isscalar(brightness):
         if brightness.size != centroids_um.shape[0]:
-            raise ValueError("Brightness either needs to be scaler of have one element per centroid")
+            raise ValueError("Brightness either needs to be scalar or have one element per centroid")
     res_z = 2.5  # all our stacks have 2.5 um z-resolution
     if stack_type == "MAIN":
         res_xy = 500/512/1.5
@@ -33,6 +34,16 @@ def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
         shape = (512, 512, 30)
     else:
         raise ValueError("stack_type has to be one of 'MAIN' or 'TG'")
+    # build ball offsets
+    max_xy = int((radius + 1) // res_xy)
+    max_z = int((radius + 1) // res_z)
+    ball_offset_list = []
+    for x in range(-max_xy, max_xy+1):
+        for y in range(-max_xy, max_xy+1):
+            for z in range(-max_z, max_z+1):
+                d = np.sqrt((x*res_xy)**2 + (y*res_xy)**2 + (z*res_z)**2)
+                if d <= radius:
+                    ball_offset_list.append((x, y, z))
     stack = np.zeros(shape, dtype=np.uint8)
     header = MakeNrrdHeader(stack, res_xy, res_z)
     for i, cents in enumerate(centroids_um):
@@ -42,7 +53,10 @@ def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1):
             b = int(255 * brightness)
         else:
             b = int(255 * brightness[i])
-        stack[int(cents[0] / res_xy), int(cents[1] / res_xy), int(cents[2] / res_z)] = b
+        pixel_centroid = (int(cents[0] / res_xy), int(cents[1] / res_xy), int(cents[2] / res_z))
+        stack[pixel_centroid[0], pixel_centroid[1], pixel_centroid[2]] = b
+        for bo in ball_offset_list:
+            stack[pixel_centroid[0]+bo[0], pixel_centroid[1]+bo[1], pixel_centroid[2]+bo[2]] = b
     return stack, header
 
 
