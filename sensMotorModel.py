@@ -339,6 +339,37 @@ def run_model(laser_stimulus, model_results: Dict[str, ModelResult], exclude=Non
     return swim_prediction, flick_prediction, rh6_out_prediction
 
 
+def compute_dBehavior_dRh56(model: Dict[str, ModelResult]):
+    """
+    Computes the partial derivatives of flick and swim probabilities with respect to each cell type in Rh5/6
+    Args:
+        model: The model description
+
+    Returns:
+        [0]: 5 element vector of partial derivatives of flick probability
+        [1]: 5 element vector of partial derivatives of swim probability
+    """
+    motor_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/motor_output.hdf5', 'r')
+    flicks_out = np.array(motor_file["flicks_out"])
+    swims_out = np.array(motor_file["swims_out"])
+    motor_file.close()
+    # to rescale our derivatives into bout probability space
+    sd_flick = np.std(flicks_out)
+    sd_swim = np.std(swims_out)
+    rh56_to_mcells = np.zeros((5, 5))
+    mcells = ["M_All", "M_Flick", "M_Swim", "M_StimOn", "M_NoStim"]
+    for m, name in enumerate(mcells):
+        rh56_to_mcells[:, m] = model[name].lr_factors
+    mcells_to_behav = np.zeros((5, 2))
+    behav = ["flick_out", "swim_out"]
+    for b, name in enumerate(behav):
+        mcells_to_behav[:, b] = model[name].lr_factors
+    partial_derivs = np.dot(rh56_to_mcells, mcells_to_behav)
+    partial_derivs[:, 0] *= sd_flick
+    partial_derivs[:, 1] *= sd_swim
+    return partial_derivs[:, 0], partial_derivs[:, 1]
+
+
 if __name__ == "__main__":
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
