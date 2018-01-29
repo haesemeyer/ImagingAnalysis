@@ -632,7 +632,7 @@ class CorrelationGraph(GraphBase):
         self.Timeseries = timeseries  # the summed pixel-timeseries of the graph
 
     @staticmethod
-    def CorrelationConnComps(stack, im_ncorr, corr_thresh, predicate, norm8=True, limit=None, seed_limit=0):
+    def CorrelationConnComps(stack, im_ncorr, corr_thresh, predicate, norm8=True, limit=None, seed_limit=0, maxsize=np.inf):
         """
         Builds connected component graphs whereby components are
         determined based on pixel-timeseries correlations. Pixels
@@ -652,11 +652,12 @@ class CorrelationGraph(GraphBase):
               which correlations should be computed
             seed_limit: For a pixel to be considered a valid seed, it's
               neighborhood correlation needs to exceed this value
+            maxsize: Maximal allowed size of each graph
             RETURNS:
                 [0]: List of connected component graphs
                 [1]: Image numerically identifying each pixel of each graph
         """
-        def BFS(stack, thresh, visited, sourceX, sourceY, color, norm8, predicate):
+        def BFS(stack, thresh, visited, sourceX, sourceY, color, norm8, predicate, maxsize):
             """
             Performs breadth first search on image
             given (sourceX,sourceY) as starting pixel
@@ -685,7 +686,7 @@ class CorrelationGraph(GraphBase):
                             continue
                         # compute correlation of considered pixel's timeseries to full graphs timeseries
                         c = np.corrcoef(pg.Timeseries[limit[0]:limit[1]], stack[limit[0]:limit[1], xn, yn])[0, 1]
-                        if c >= thresh:
+                        if c >= thresh and len(pg.V) <= maxsize:
                             Q.append((xn, yn, v[2]+1))  # add non-visited above threshold neighbor
                             visited[xn, yn] = color  # mark as visited
             return pg
@@ -703,7 +704,7 @@ class CorrelationGraph(GraphBase):
         curr_color = 1  # id counter of connected components
         while np.max(im_ncorr * (visited == 0)) > seed_limit:
             (x, y) = np.unravel_index(np.argmax(im_ncorr * (visited == 0)), im_ncorr.shape)
-            conn_comps.append(BFS(stack, corr_thresh, visited, x, y, curr_color, norm8, predicate))
+            conn_comps.append(BFS(stack, corr_thresh, visited, x, y, curr_color, norm8, predicate, maxsize))
             curr_color += 1
         return conn_comps, visited
 # class CorrelationGraph
