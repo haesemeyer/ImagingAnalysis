@@ -2,14 +2,14 @@
 
 import numpy as np
 import nrrd
-from mh_2P import MakeNrrdHeader, SLHRepeatExperiment
+from mh_2P import MakeNrrdHeader, SLHRepeatExperiment, UiGetFile, OpenStack
 import h5py
 from multiExpAnalysis import dff, get_stack_types
 from typing import List
 import pickle
 
 
-def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1, radius=3):
+def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1, radius=2):
     """
     Create a (refernce) stack with given centroids marked as single dots
     Args:
@@ -60,6 +60,30 @@ def create_centroid_stack(centroids_um, stack_type="MAIN", brightness=1, radius=
     return stack, header
 
 
+def draw_temp_inset():
+    def box_coords(t):
+        y_bottom = 100
+        x_left = 50
+        x_right = 75
+        y_size = int((t - 22) / 7 * 75)
+        y_top = y_bottom - y_size
+        return x_left, x_right, y_top, y_bottom
+
+    print("Load movie stack", flush=True)
+    sfile = UiGetFile()
+    stk_shape = OpenStack(sfile).shape
+    inset_stack = np.zeros((stk_shape[2], stk_shape[1], stk_shape[0]), dtype=np.uint8)
+    header = MakeNrrdHeader(inset_stack, 1)
+    tmp_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/stimFile.hdf5', 'r')
+    temperature = np.array(tmp_file["sine_L_H_temp"])
+    tmp_file.close()
+
+    for i in range(stk_shape[0]):
+        xl, xr, yt, yb = box_coords(temperature[i*4])
+        inset_stack[xl:xr+1, yt:yb+1, i] = 255
+    nrrd.write("./HeatImaging/TInset/" + "temp_inset.nrrd", inset_stack, header)
+
+
 if __name__ == "__main__":
     save_folder = "./HeatImaging/ActMovie/"
     # load data
@@ -79,10 +103,27 @@ if __name__ == "__main__":
     dff_max = 3
 
     active = np.logical_and(mship_nonan > -1, mship_nonan < 6)
+    on = np.logical_and(mship_nonan > -1, mship_nonan < 4)
+    off = np.logical_and(mship_nonan > 3, mship_nonan < 6)
+    # motor = mship_nonan > 5
+    main_on = np.logical_and(on, stack_types == "MAIN")
+    main_off = np.logical_and(off, stack_types == "MAIN")
+    # main_motor = np.logical_and(motor, stack_types == "MAIN")
     main_active = np.logical_and(active, stack_types == "MAIN")
 
     cells = dff(all_activity[main_active, :])
+    # select 2 ON and 2 OFF example cells to show in brain as well as activity insets
+    rh_6_l_on = 15048
+    rh_6_l_off = 15104
+    hab_r_on = 254
+    hab_r_off = 5373
     cents = tf_centroids[main_active, :]
+    # save one stack with example ON cells and one stack with example OFF cells
+    data, header = create_centroid_stack(cents[[rh_6_l_on, hab_r_on], :], radius=4)
+    nrrd.write(save_folder + "ON_Cells.nrrd", data, header)
+    data, header = create_centroid_stack(cents[[rh_6_l_off, hab_r_off], :], radius=4)
+    nrrd.write(save_folder + "OFF_Cells.nrrd", data, header)
+
     # compute brighness values
     cells[cells < dff_min] = dff_min
     cells[cells > dff_max] = dff_max
@@ -90,8 +131,16 @@ if __name__ == "__main__":
     assert cells.min() >= 0
     assert cells.max() <= 1
 
+    # # save one stack each with all ON and all OFF cells
+    # data, header = create_centroid_stack(tf_centroids[main_on, :][np.random.rand(main_on.sum()) < 0.2, :])
+    # nrrd.write(save_folder + "ON_Cells.nrrd", data, header)
+    # data, header = create_centroid_stack(tf_centroids[main_off, :][np.random.rand(main_off.sum()) < 0.2, :])
+    # nrrd.write(save_folder + "OFF_Cells.nrrd", data, header)
+    # data, header = create_centroid_stack(tf_centroids[main_motor, :][np.random.rand(main_motor.sum()) < 0.2, :])
+    # nrrd.write(save_folder + "Motor_Cells.nrrd", data, header)
+
     # loop over timepoints and create and save stack for each
     for i in range(cells.shape[1]):
         data, header = create_centroid_stack(cents, "MAIN", cells[:, i])
         nrrd.write(save_folder + "ON_OFF_Activity{0:03d}.nrrd".format(i), data, header)
-        print("{0} completed".format(i))
+        print("{0} / {1} completed".format(i+1, cells.shape[1]))
