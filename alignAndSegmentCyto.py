@@ -1,4 +1,4 @@
-from os import path
+from os import path, makedirs
 
 import numpy as np
 
@@ -8,7 +8,7 @@ import nrrd
 
 import pickle
 
-from mh_2P import ReAlign, UiGetFile,  OpenStack, MakeNrrdHeader, CellGraph, CellHelper
+from mh_2P import ReAlign, UiGetFile,  OpenStack, MakeNrrdHeader, CellGraph, cutOutliers
 
 from scipy.ndimage import gaussian_filter
 
@@ -38,6 +38,12 @@ if __name__ == "__main__":
     fnames = UiGetFile(multiple=True)
 
     for i, f in enumerate(fnames):
+        contFolder = path.dirname(f)  # the containing folder
+        stackName = path.split(f)[1]
+        save_dir = contFolder + "/projections"
+        if not path.exists(save_dir):
+            makedirs(save_dir)
+            print("Created projections directory", flush=True)
         # try to load realigned stack if present, otherwise re-aling and save
         aligned_file = f[:-4] + "_stack.npy"
         if path.exists(aligned_file):
@@ -62,6 +68,9 @@ if __name__ == "__main__":
                 nrrd.write(out_name, out_stack, header)
             print("Realigned stack", flush=True)
         print("Resolution: ", resolution, " um/pixel", flush=True)
+        projection = np.sum(stack, 0)
+        projection = cutOutliers(projection, 99.9) * (2 ** 16 - 1)
+        cv2.imwrite(save_dir + "/" + "MAX_" + stackName, projection.astype(np.uint16))
         cell_diam = 5 / resolution  # assume 5 um cell diameter
         # downsample stack in time-dimension before correlation based segmentation
         ds_by = 4
