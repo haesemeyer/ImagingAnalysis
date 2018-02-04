@@ -55,11 +55,14 @@ if __name__ == "__main__":
     avg_flicks = mc_flicks.avg_motor_output
 
     # plot motor raster plot
-    motor_raster = np.vstack([mc_all_raw.traces[k][None, :] for k in mc_all_raw.traces.keys()])
-    motor_raster = trial_average(motor_raster, True)
+    flick_raster = np.vstack([mc_flicks.traces[k][None, :] for k in mc_flicks.traces.keys()])
+    flick_raster = trial_average(flick_raster, True)
+    swim_raster = np.vstack([mc_swims.traces[k][None, :] for k in mc_swims.traces.keys()])
+    swim_raster = trial_average(swim_raster, True)
     fig, ax = pl.subplots()
-    trial_time = np.arange(motor_raster.shape[1]) / 5
-    raster_plot(motor_raster, trial_time, ax, 1)
+    trial_time = np.arange(flick_raster.shape[1]) / 5
+    raster_plot(flick_raster, trial_time, ax, 1, color="C1")
+    raster_plot(swim_raster, trial_time, ax, 1, color="C0")
     ax.set_yticks([0, 250, 500, 750, 1000])
     ax.set_xticks([0, 30, 60, 90, 120, 150])
     ax.set_xlim(0)
