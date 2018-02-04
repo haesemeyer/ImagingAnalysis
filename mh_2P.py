@@ -3094,7 +3094,7 @@ def assign_region_label(centroids, region_list, res_xy, res_z=2.5):
     return np.array(rnames)
 
 
-def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
+def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, color=None, **kwargs):
     """
     Creates a raster plot (as in spike raster plots)
     Args:
@@ -3102,6 +3102,7 @@ def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
         time: Optionally a vector to indicate timings of each column in the events matrix
         ax: The plot axis, a new plot will be created and the axis returned otherwise
         ticklength: The length of each tick
+        color: Color of the ticks
         **kwargs: Additional arguments passed to vlines
 
     Returns:
@@ -3113,7 +3114,10 @@ def raster_plot(events: np.ndarray, time=None, ax=None, ticklength=1, **kwargs):
         time = np.arange(events.shape[1])
     for ith, trial in enumerate(events):
         trial = time[trial > 0]
-        ax.vlines(trial, ith + ticklength/2, ith + 1.5*ticklength, **kwargs)
+        if color is None:
+            ax.vlines(trial, ith + ticklength/2, ith + 1.5*ticklength, **kwargs)
+        else:
+            ax.vlines(trial, ith + ticklength / 2, ith + 1.5 * ticklength, colors=color, **kwargs)
     ax.set_ylim(ticklength/2, events.shape[0] + ticklength/2)
     return ax
 
