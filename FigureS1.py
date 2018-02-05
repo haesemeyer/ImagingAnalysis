@@ -1,26 +1,18 @@
 # Script to aggregate plots for  Supplemental Figure 1 of Heat-Imaging paper
-# A) Image stabilization pipeline
-# B) Stabilizer movements (either RFP or gcamp experiments??)
-# C) Effect of image stabilization on stimulus correlations in RFP stacks
-# D) Tail angle examples of swims and flicks
-# E) Activity heatmap after activity shuffle
-# F) Comparison of average MI with stimulus for cells in original and shuffled
+
 
 import matplotlib.pyplot as pl
 import seaborn as sns
 import matplotlib as mpl
 import h5py
 import numpy as np
-from motorPredicates import bias
 from mh_2P import MotorContainer, SLHRepeatExperiment
 import pickle
-from typing import List
-from scipy.stats import mode
+from typing import List, Dict
 import os
 from multiExpAnalysis import dff
 from Figure1 import trial_average
-from analyzeSensMotor import jknife_entropy
-from pandas import DataFrame, Series
+from analyzeSensMotor import RegionResults
 
 if __name__ == "__main__":
     save_folder = "./HeatImaging/FigureS1/"
@@ -139,43 +131,61 @@ if __name__ == "__main__":
     fig.tight_layout()
     fig.savefig(save_folder + "rfp_stable_activity_clusterAvgs.pdf", type="pdf")
 
-    # compare average mutual information between real and shuffled cells and sensory stimulus
-    active_cells = np.logical_and(mship_nonan > -1, mship_nonan < 6)
-    ent_sens = jknife_entropy(t_at_samp, 20)  # stimulus entropy
-    mi_real = np.zeros(active_cells.sum())
-    mi_shuffled = np.zeros(sh_active_cells.sum())
-    mi_null = np.zeros(active_cells.sum())
-    tlen = all_activity.shape[1] // 3
-    for i, row in enumerate(all_activity[active_cells, :]):
-        # compute entropy of cell
-        ent_cell = jknife_entropy(row, 20)
-        # compute joint entropy
-        ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
-        mi_real[i] = (ent_sens + ent_cell) - ent_joint
-        # compute null-model joint
-        null_cell = row.copy()
-        for tnum in range(3):
-            tact = row[tlen * tnum: tlen * (tnum + 1)]
-            r = np.random.randint(0, tlen)
-            shuff = np.roll(tact, r)
-            null_cell[tlen * tnum: tlen * (tnum + 1)] = shuff
-        ent_null = jknife_entropy(null_cell, 20)
-        ent_joint = jknife_entropy(np.hstack((null_cell[:, None], t_at_samp[:, None])), 20)
-        mi_null[i] = (ent_sens + ent_null) - ent_joint
-    for i, row in enumerate(sh_all_activity[sh_active_cells, :]):
-        ent_cell = jknife_entropy(row, 20)
-        # compute joint entropy
-        ent_joint = jknife_entropy(np.hstack((row[:, None], t_at_samp[:, None])), 20)
-        mi_shuffled[i] = (ent_sens + ent_cell) - ent_joint
-
-    d = {"Real": mi_real.tolist(), "Shuffled": mi_shuffled.tolist(), "Null": mi_null.tolist()}
-    dframe = DataFrame(dict([(k, Series(d[k])) for k in d]))
-
-    fig, ax = pl.subplots()
-    sns.barplot(data=dframe, ax=ax)
-    sns.despine(fig, ax)
-    ax.set_ylabel("Cell average mututal information [bits]")
-    fig.savefig(save_folder + "sh_stim_mutual_information.pdf", type="pdf")
+    # plot region example calcium traces
+    test_labels = ["Trigeminal", "Rh6", "Pallium"]
+    region_results = {}  # type: Dict[str, RegionResults]
+    storage = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/regiondata.hdf5', 'r')
+    for k in test_labels:
+        region_results[k] = (pickle.loads(np.array(storage[k])))
+    storage.close()
+    # plot trigeminal example activity
+    rr = region_results["Trigeminal"]
+    fig, axes = pl.subplots(nrows=2, ncols=2, sharex=True)
+    axes = axes.ravel()
+    axes[0].plot(time, trial_average(rr.region_acts[rr.region_mem == 0, :])[10, :], "C2")
+    axes[1].plot(time, trial_average(rr.region_acts[rr.region_mem == 0, :])[50, :], "C2")
+    axes[2].plot(time, trial_average(rr.region_acts[rr.region_mem == 3, :])[6, :], "C4")
+    axes[3].plot(time, trial_average(rr.region_acts[rr.region_mem == 3, :])[58, :], "C4")
+    for i, a in enumerate(axes):
+        if i > 1:
+            a.set_xlabel("Trial time [s]")
+        if i % 2 == 0:
+            a.set_ylabel("dF/F0")
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "TG_Example_Acts.pdf", type="pdf")
+    # plot rh5/6 example activity
+    rr = region_results["Rh6"]
+    fig, axes = pl.subplots(nrows=2, ncols=2, sharex=True)
+    axes = axes.ravel()
+    axes[0].plot(time, trial_average(rr.region_acts[rr.region_mem == 0, :])[13, :], "C2")
+    axes[1].plot(time, trial_average(rr.region_acts[rr.region_mem == 1, :])[50, :], "C2")
+    axes[2].plot(time, trial_average(rr.region_acts[rr.region_mem == 3, :])[6, :], "C4")
+    axes[3].plot(time, trial_average(rr.region_acts[rr.region_mem == 5, :])[30, :], "C4")
+    for i, a in enumerate(axes):
+        if i > 1:
+            a.set_xlabel("Trial time [s]")
+        if i % 2 == 0:
+            a.set_ylabel("dF/F0")
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "Rh56_Example_Acts.pdf", type="pdf")
+    # plot pallium example activity
+    rr = region_results["Pallium"]
+    fig, axes = pl.subplots(nrows=2, ncols=2, sharex=True)
+    axes = axes.ravel()
+    axes[0].plot(time, trial_average(rr.region_acts[rr.region_mem == 0, :])[13, :], "C2")
+    axes[1].plot(time, trial_average(rr.region_acts[rr.region_mem == 3, :])[5, :], "C2")
+    axes[2].plot(time, trial_average(rr.region_acts[rr.region_mem == 4, :])[6, :], "C4")
+    axes[3].plot(time, trial_average(rr.region_acts[rr.region_mem == 5, :])[30, :], "C4")
+    for i, a in enumerate(axes):
+        if i > 1:
+            a.set_xlabel("Trial time [s]")
+        if i % 2 == 0:
+            a.set_ylabel("dF/F0")
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(save_folder + "Pallium_Example_Acts.pdf", type="pdf")
 
     # plot detail char behavioral output split into swims and flicks as well as ON OFF activity heatmap
     dfile = h5py.File("H:/ClusterLocations_170327_clustByMaxCorr/detailChar_data.hdf5", "r")
@@ -214,3 +224,5 @@ if __name__ == "__main__":
     sns.heatmap(act_to_plot[np.argsort(act_sign[stim_units])[::-1], :], xticklabels=150, yticklabels=100, vmin=-2.5,
                 vmax=2.5, ax=ax, rasterized=True)
     fig.savefig(save_folder + "dtchar_activity_heatmap.pdf", type="pdf")
+
+    # NOTE: Trial-to-trial correlation plots are created by "analyzeTrialCorrelations.py" script
