@@ -69,7 +69,7 @@ def all_across_correlations(data: np.ndarray, ix_1: np.ndarray, ix_2: np.ndarray
 
 
 if __name__ == "__main__":
-    # save_folder = "./HeatImaging/Figure1/"
+    save_folder = "./HeatImaging/FigureS1/"
     sns.reset_orig()
     mpl.rcParams['pdf.fonttype'] = 42
     # load data
@@ -128,25 +128,6 @@ if __name__ == "__main__":
     ax.set_ylabel("Density")
     sns.despine(fig, ax)
 
-    # for each experiment determine its average behavior
-    # exp_behavs = []
-    # for e in exp_data:
-    #     # create motor container which only contains this experiment and add its average behavior
-    #     sfiles = [(g[0], e.original_time_per_frame) for g in e.graph_info]
-    #     mc_all_raw = MotorContainer(sfiles, itime, 0, tdd=motor_all_raw.tdd)
-    #     exp_behavs.append(mc_all_raw.avg_motor_output)
-    # exp_behavs = np.vstack(exp_behavs)
-    # ta_e_behavs = trial_average(exp_behavs.copy())
-    # tests = set(itertools.combinations(range(exp_behavs.shape[0]), 2))
-    # exp_exp_motor_corrs = [np.corrcoef(ta_e_behavs[t[0], :], ta_e_behavs[t[1], :])[0, 1] for t in tests]
-    # t_t_motor_corrs = trial_to_trial_correlations(exp_behavs, 3)
-    # fig, ax = pl.subplots()
-    # sns.kdeplot(t_t_motor_corrs, ax=ax, label="Trial to trial")
-    # sns.kdeplot(exp_exp_motor_corrs, ax=ax, label="Fish to fish")
-    # ax.set_xlabel("Behavior correlation")
-    # ax.set_ylabel("Density")
-    # sns.despine(fig, ax)
-
     # analyze heat-cell trial-to-trial correlations by region
     test_labels = ["Trigeminal", "Rh6", "Rh2", "Cerebellum", "Habenula", "Pallium", "SubPallium", "POA"]
     region_results = {}  # type: Dict[str, RegionResults]
@@ -172,10 +153,6 @@ if __name__ == "__main__":
         else:
             raw_file = h5py.File('H:/ClusterLocations_170327_clustByMaxCorr/raw_regions.hdf5', 'x')
         rr = region_results[k]
-        # c1 = trial_to_trial_correlations(rr.region_acts[rr.region_mem > -1, :], 3)
-        # noise_data[k] = c1
-        # order.append(k)
-        # obtain data corresponding to raw traces and create our shot-noise model
         ix_region = rr.region_indices[rr.region_mem > -1]
         if k in raw_file:
             rtm = np.array(raw_file[k])
