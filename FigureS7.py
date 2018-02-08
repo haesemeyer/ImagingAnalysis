@@ -10,6 +10,7 @@ from analyzeSensMotor import RegionResults
 from typing import Dict
 from sensMotorModel import ModelResult, standardize, run_model
 from multiExpAnalysis import max_cluster
+from pandas import DataFrame
 
 
 def col_std(m):
@@ -183,3 +184,31 @@ if __name__ == "__main__":
     sns.despine(fig)
     fig.tight_layout()
     fig.savefig(save_folder + "Stimulus_spectrum_compare.pdf", type="pdf")
+
+    # compare fraction of originally identified cell types in Rh5-6 with fractions of cells assigned to types
+    # by our model regression identification on detail char data
+    frac_dict = {"Cell type": [], "Stimulus": [], "Fraction": []}
+    response_names = ["Fast_ON", "Slow_ON", "Fast_OFF", "Slow_OFF", "Delayed_OFF"]
+    # our original clusters should be sorted by response_names above at creation
+    c_ids = np.unique(region_results["Rh6"].region_mem)
+    c_ids = c_ids[c_ids != -1]
+    assert c_ids.size == len(response_names)
+    for i, c in enumerate(c_ids):
+        f = np.sum(region_results["Rh6"].region_mem == c) / np.sum(region_results["Rh6"].region_mem > -1)
+        frac_dict["Cell type"].append(response_names[i])
+        frac_dict["Stimulus"].append("Fit")
+        frac_dict["Fraction"].append(f)
+    # now for the test experiments
+    c_ids = np.unique(membership_full)
+    c_ids = c_ids[c_ids != -1]
+    assert c_ids.size == len(response_names)
+    for i, c in enumerate(c_ids):
+        f = np.sum(membership_full == c) / np.sum(membership_full > -1)
+        frac_dict["Cell type"].append(response_names[i])
+        frac_dict["Stimulus"].append("Test")
+        frac_dict["Fraction"].append(f)
+    frac_frame = DataFrame(frac_dict)
+    fig, ax = pl.subplots()
+    sns.barplot(x="Cell type", y="Fraction", hue="Stimulus", data=frac_frame, order=response_names, ax=ax)
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Rh56_type_fraction_compare.pdf", type="pdf")
