@@ -10,6 +10,7 @@ from mh_2P import MotorContainer, SLHRepeatExperiment, CaConvolve
 from analyzeSensMotor import RegionResults, jknife_entropy
 from typing import Dict, List
 from sklearn.linear_model import LinearRegression
+from sklearn.decomposition import PCA
 from motorPredicates import high_bias_bouts, unbiased_bouts
 import pandas
 
@@ -111,16 +112,49 @@ if __name__ == "__main__":
     joint_ent = jknife_entropy(np.hstack((motor_output, motor_type_regs)), 10)
     motor_motorsys_mi = mo_entropy + motor_sys_entropy - joint_ent
     joint_ent = jknife_entropy(np.hstack((t_at_samp[:, None], motor_type_regs)), 10)
-    sens_motorsys_mi = si_entropy + motor_sys_entropy - joint_ent
     region_motor_mi = {"stimulus": sens_motor_mi, "motor cells": motor_motorsys_mi, "motor out": mo_entropy}
-    region_sens_mi = {"motor out": sens_motor_mi, "motor cells": sens_motorsys_mi}
+    all_full_averages = []
     for tl in test_labels:
         ar = region_results[tl]
         act_entropy = jknife_entropy(ar.full_averages, 10)
+        all_full_averages.append(ar.full_averages)
         m_jnt_entropy = jknife_entropy(np.hstack((ar.full_averages, motor_output)), 10)
-        s_jnt_entropy = jknife_entropy(np.hstack((ar.full_averages, t_at_samp[:, None])), 10)
         region_motor_mi[tl] = mo_entropy + act_entropy - m_jnt_entropy
-        region_sens_mi[tl] = si_entropy + act_entropy - s_jnt_entropy
+    # for memory reasons we cannot compute mutual information with all region averages - so perform PCA and then
+    # compute on as many components as we need to capture at least 95% of the total variance
+    all_full_averages = np.hstack(all_full_averages)
+    pca = PCA()
+    pca.fit(all_full_averages)
+    cum_var = np.cumsum(pca.explained_variance_ratio_)
+    exp_95 = np.nonzero(cum_var >= 0.95)[0][0]
+    t_formed_95 = pca.transform(all_full_averages)[:, :exp_95+1]
+    pca_entropy = jknife_entropy(t_formed_95, 10)
+    m_jnt_entropy = jknife_entropy(np.hstack((t_formed_95, motor_output)), 10)
+    pca_motor_mi = mo_entropy + pca_entropy - m_jnt_entropy
+    print("{0} components explain {1}% of the total variance".format(exp_95+1, cum_var[exp_95]))
+    print("Mutual information of 95% variance PCA with motor outoutp = {0} bits".format(pca_motor_mi))
+
+    # the following 2 plots are created here for efficiency but are added to the supplemental figure
+    fig, ax = pl.subplots()
+    ax.plot(np.arange(cum_var.size)+1, cum_var * 100, 'ko')
+    for i in range(exp_95+1):
+        ax.plot(i+1, cum_var[i]*100, color="C{0}".format(i), marker='o')
+    ax.plot([1, cum_var.size], [95, 95], "k--")
+    ax.set_ylim(0, 110)
+    ax.set_yticks([0, 25, 50, 75, 100])
+    ax.set_xlabel("Number of components")
+    ax.set_ylabel("Cumulative explained variance [%]")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "supp_pca_exp_var.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    for i in range(exp_95+1):
+        ax.plot(rep_time, trial_average(t_formed_95.T)[i, :])
+    ax.set_xticks([0, 30, 60, 90, 120, 150])
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Component activation [AU]")
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "supp_pca_components.pdf", type="pdf")
 
     # plot motor mutual information for regions
     motor_mi = {k: [region_motor_mi[k]] for k in region_motor_mi.keys()}
