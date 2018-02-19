@@ -45,6 +45,7 @@ def build_all_region_labels():
             raise ValueError()
     return np.array(labels)
 
+
 if __name__ == "__main__":
     save_folder = "./HeatImaging/FigureS4/"
     sns.reset_orig()

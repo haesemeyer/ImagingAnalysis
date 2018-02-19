@@ -201,6 +201,41 @@ if __name__ == "__main__":
     sns.despine(fig, ax)
     fig.savefig(save_folder + "Motor_Stim_NoStim.pdf", type="pdf")
 
+    # plot both trigeminal ganglia top-down
+    fig, ax = pl.subplots()
+    in_tleft = all_rl == "TG_L"
+    hull = ConvexHull(tf_centroids[in_tleft, :2])
+    ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "TG_LEFT"]
+    ix_bground = np.random.choice(ix_bground, ix_bground.size // 3, False)
+    tleft_cells = np.logical_and(tf_centroids[:, 2] >= np.min(tf_centroids[all_rl == "TG_L", 2]),
+                                 tf_centroids[:, 2] <= np.max(tf_centroids[all_rl == "TG_L", 2]))
+    tleft_cells = np.logical_and(tleft_cells, stack_types == "TG_LEFT")
+    ax.scatter(tf_centroids[ix_bground, 0], tf_centroids[ix_bground, 1], s=1, alpha=0.2, c='k', label="")
+    ax.scatter(tf_centroids[np.logical_and(stack_types == "TG_LEFT", membership_motor > -1), 0],
+               tf_centroids[np.logical_and(stack_types == "TG_LEFT", membership_motor > -1), 1], s=4, alpha=0.3, c='C1')
+    for simplex in hull.simplices:
+        ax.plot(tf_centroids[in_tleft, :][simplex, 0], tf_centroids[in_tleft, :][simplex, 1], 'C0')
+    ax.set_aspect('equal', 'datalim')
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Motor_TG_Left_Top.pdf", type="pdf")
+
+    fig, ax = pl.subplots()
+    in_tright = all_rl == "TG_R"
+    hull = ConvexHull(tf_centroids[in_tright, :2])
+    ix_bground = np.arange(tf_centroids.shape[0])[stack_types == "TG_RIGHT"]
+    ix_bground = np.random.choice(ix_bground, ix_bground.size // 3, False)
+    tright_cells = np.logical_and(tf_centroids[:, 2] >= np.min(tf_centroids[all_rl == "TG_R", 2]),
+                                  tf_centroids[:, 2] <= np.max(tf_centroids[all_rl == "TG_R", 2]))
+    tright_cells = np.logical_and(tright_cells, stack_types == "TG_RIGHT")
+    ax.scatter(tf_centroids[ix_bground, 0], tf_centroids[ix_bground, 1], s=1, alpha=0.2, c='k', label="")
+    ax.scatter(tf_centroids[np.logical_and(tright_cells, membership_motor > -1), 0],
+               tf_centroids[np.logical_and(tright_cells, membership_motor > -1), 1], s=4, alpha=0.3, c='C1')
+    for simplex in hull.simplices:
+        ax.plot(tf_centroids[in_tright, :][simplex, 0], tf_centroids[in_tright, :][simplex, 1], 'C0')
+    ax.set_aspect('equal', 'datalim')
+    sns.despine(fig, ax)
+    fig.savefig(save_folder + "Motor_TG_Right_Top.pdf", type="pdf")
+
     # plot map of motor-responsive fraction for different example regions - NOTE: ordered from ventral to dorsal
     # but ncMLF last!
     r_to_plot = ["D_FB_L", "D_FB_R", "Hab_L", "Hab_R", "Tect_L", "Tect_R", "A_HB_L", "A_HB_R",
