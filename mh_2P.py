@@ -3219,4 +3219,4 @@ def trial_to_trial_correlations(mat, n_trials):
     corrs = np.zeros(mat.shape[0])
     for t in tests:
         corrs += mat_mat_corr(t_mats[t[0]], t_mats[t[1]]).ravel()
-    return corrs / n_trials
+    return corrs / len(tests)
