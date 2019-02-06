@@ -713,6 +713,17 @@ if __name__ == "__main__":
         data.Vigor = None
         source_files += [g[0] for g in data.graph_info]
 
+    # shuffle all_activity - trials get shuffled individually
+    # rolls = np.zeros(all_activity.shape[0], dtype=np.int16)
+    # tlen = all_activity.shape[1] // 3
+    # for i, row in enumerate(all_activity):
+    #     for tnum in range(3):
+    #         tact = row[tlen*tnum: tlen*(tnum+1)]
+    #         r = np.random.randint(0, tlen)
+    #         shuff = np.roll(tact, r)
+    #         row[tlen * tnum: tlen * (tnum + 1)] = shuff
+    #     all_activity[i, :] = row
+
     # create our motor event containers
     i_time = np.linspace(0, all_activity.shape[1] / 5, all_activity.shape[1] + 1)
     tc = exp_data[0].caTimeConstant
