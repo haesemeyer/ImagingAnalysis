@@ -111,7 +111,13 @@ if __name__ == "__main__":
     interp_times = np.linspace(0, (s_pre+s_stim+s_post)*n_repeats, (n_pre+n_stim+n_post)*n_repeats, endpoint=False)
 
     # interpolate calcium data
-    ipol = lambda y: np.interp(interp_times, frame_times, y[:frame_times.size])
+    def ipol(y):
+        # function to interpolate y "fixing" both oblong tiff stacks and those short by a frame
+        if y.size >= frame_times.size:
+            return np.interp(interp_times, frame_times, y[:frame_times.size])
+        else:
+            y = np.r_[y[:100].mean(), y]
+            return np.interp(interp_times, frame_times, y[:frame_times.size])
     interp_data = np.vstack([ipol(g.RawTimeseries) for g in graph_list])
 
     # interpolate convolved bout starts (means interpolating down from original 100Hz trace)
